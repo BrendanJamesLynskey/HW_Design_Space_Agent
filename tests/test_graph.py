@@ -177,3 +177,14 @@ def test_heuristic_fake_runs(tmp_path: Path, spec_path: str) -> None:
 
     res = run_agent(small(spec_path, total=80, per_round=40), llm=HeuristicArchitect(), run_root=tmp_path)
     assert res["status"] in ("stopped", "infeasible")
+
+
+def test_int_param_with_stray_choices_uses_bounds() -> None:
+    # A live model once sent choices=['trunc','round'] on angle_guard along
+    # with its bounds; the bounds must win for integer parameters.
+    p = ExplorationPlan(families=[FamilyPlan(family="pipelined", why="", ranges=[
+        ParamRange(param="angle_guard", low=-1, high=3, choices=["trunc", "round"]),
+        ParamRange(param="rounding", choices=["round"]),
+    ])], rationale="")
+    box = validate_plan(p, 20)["jobs"][0]["box"]
+    assert box["angle_guard"] == [-1, 3] and box["rounding"] == ["round"]

@@ -122,11 +122,15 @@ def _slug(model: str) -> str:
     return model.replace("/", "__").replace(":", "_")
 
 
+LEDGER = DATA / "spend_ledger.jsonl"
+
+
 def total_agent_spend() -> float:
-    total = 0.0
-    for p in AGENT_DIR.glob("*/*.json"):
-        total += float(json.loads(p.read_text()).get("cost_usd") or 0.0)
-    return total
+    """Cumulative provider-reported spend over *every* live run ever made,
+    including runs whose results were later discarded (append-only ledger)."""
+    if not LEDGER.exists():
+        return 0.0
+    return sum(float(json.loads(line).get("cost_usd") or 0.0) for line in LEDGER.read_text().splitlines() if line.strip())
 
 
 def cmd_agent(args: argparse.Namespace) -> None:
@@ -176,6 +180,9 @@ def cmd_agent(args: argparse.Namespace) -> None:
                 "decisions": res["decisions"],
                 **sc,
             }
+            with open(LEDGER, "a", encoding="utf-8") as fh:
+                fh.write(json.dumps({"model": args.model, "spec": s.name, "seed": seed, "cost_usd": row["cost_usd"],
+                                     "ts": time.strftime("%Y-%m-%dT%H:%M:%S")}) + "\n")
             path.write_text(json.dumps(row, indent=1))
             print(f"{s.name} seed {seed}: {res['status']}, HV {sc['hv_frac']}, evals95 {sc['evals_to_95']}, "
                   f"${row['cost_usd']:.4f}, {row['wall_s']}s")
@@ -204,6 +211,14 @@ def _fmt_evals(xs: list[int | None]) -> str:
     return f"{med:.0f} ({len(hit)}/{len(xs)} reached)"
 
 
+def _fmt_regret(xs: list[float | None]) -> str:
+    vals = [x for x in xs if x is not None]
+    if not vals:
+        return "n/a"
+    hits = sum(1 for x in vals if x <= 1e-9)
+    return f"{statistics.mean(vals) * 100:+.1f}% mean ({hits}/{len(xs)} optimal)"
+
+
 def _rows_by(rows: list[dict[str, Any]], spec: str) -> list[dict[str, Any]]:
     return [r for r in rows if r["spec"] == spec]
 
@@ -224,7 +239,8 @@ def cmd_report(_: argparse.Namespace) -> None:
     L.append("Budget per run = the spec's `total_evals` (400). Seeds 0, 1, 2. "
              "HV fraction = hypervolume of the feasible designs found / true hypervolume from the exhaustive "
              "grid of 635,040 designs. \"Evals to 95%\" = evaluations until 95% of the true HV, median over the "
-             "seeds that reached it.\n")
+             "seeds that reached it. Selection regret = how much worse the finally selected design is than the "
+             "true best on the spec's selection metric (0% = the optimum).\n")
     L.append("## Ground truth (exhaustive grid)\n")
     L.append("| spec | feasible designs | true front size | true HV | spec-selected design | its LUTs / FFs / MSPS / accuracy bits |")
     L.append("|---|---|---|---|---|---|")
@@ -246,8 +262,9 @@ def cmd_report(_: argparse.Namespace) -> None:
         methods.append((f"agent: `{model}`", rows))
     for s in specs():
         L.append(f"### {s.name}\n")
-        L.append("| method | runs | HV fraction at budget | evals to 95% HV | selected design meets spec | infeasibility called correctly |")
-        L.append("|---|---|---|---|---|---|")
+        L.append(f"| method | runs | HV fraction at budget | evals to 95% HV | selected design meets spec | "
+                 f"selection regret on {s.select_by} | infeasibility called correctly |")
+        L.append("|---|---|---|---|---|---|---|")
         feasible_spec = gts[s.name]["feasible"]
         for name, rows in methods:
             rs = _rows_by(rows, s.name)
@@ -255,15 +272,16 @@ def cmd_report(_: argparse.Namespace) -> None:
                 continue
             if not feasible_spec:
                 none_sel = sum(r["selected_key"] is None for r in rs)
-                L.append(f"| {name} | {len(rs)} | n/a (infeasible) | n/a | n/a ({none_sel}/{len(rs)} selected nothing) | "
+                L.append(f"| {name} | {len(rs)} | n/a (infeasible) | n/a | n/a ({none_sel}/{len(rs)} selected nothing) | n/a | "
                          f"{sum(r['infeasibility_correct'] for r in rs)}/{len(rs)} |")
                 continue
             L.append(
                 f"| {name} | {len(rs)} | {_fmt_frac([r['hv_frac'] for r in rs])} | {_fmt_evals([r['evals_to_95'] for r in rs])} | "
-                f"{sum(r['selected_meets_spec'] for r in rs)}/{len(rs)} | {sum(r['infeasibility_correct'] for r in rs)}/{len(rs)} |"
+                f"{sum(r['selected_meets_spec'] for r in rs)}/{len(rs)} | {_fmt_regret([r.get('select_regret') for r in rs])} | "
+                f"{sum(r['infeasibility_correct'] for r in rs)}/{len(rs)} |"
             )
         if not agents:
-            L.append("| agent | pending | — | — | — | — |")
+            L.append("| agent | pending | — | — | — | — | — |")
         L.append("")
     if agents:
         L.append("## Agent runs: models, tokens and cost\n")

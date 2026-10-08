@@ -209,6 +209,11 @@ def score_run(records: list[EvalRecord], spec: Spec, gt: dict[str, Any], declare
         selected = select_design(records, spec)
     if declared_infeasible is None:
         declared_infeasible = selected is None
+    regret = None
+    gsel = gt.get("selected")
+    if selected is not None and selected.get("feasible") and gsel:
+        best = float(gsel[spec.select_by])
+        regret = (float(selected[spec.select_by]) - best) / abs(best) * (1 if spec.select_direction == "min" else -1)
     return {
         "n_evals": len(records),
         "hv_final": hv_final,
@@ -217,6 +222,9 @@ def score_run(records: list[EvalRecord], spec: Spec, gt: dict[str, Any], declare
         "evals_to_95": evals_95,
         "selected_meets_spec": bool(selected is not None and selected.get("feasible")),
         "selected_key": selected["key"] if selected else None,
+        # How much worse the selected design is than the true best on the
+        # spec's selection metric (0 = found the optimum).
+        "select_regret": regret,
         "declared_infeasible": bool(declared_infeasible),
         "infeasibility_correct": bool(declared_infeasible) == (not gt["feasible"]),
     }

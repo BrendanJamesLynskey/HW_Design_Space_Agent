@@ -188,7 +188,11 @@ def make_llm(provider: str | None = None, model: str | None = None, tracer: Trac
     provider = (provider or os.environ.get("HW_DSE_PROVIDER") or "fake").lower()
     tracer = tracer or Tracer()
     temperature = float(os.environ.get("HW_DSE_TEMPERATURE", "0.3"))
-    method = method or os.environ.get("HW_DSE_STRUCTURED_METHOD") or "function_calling"
+    # OpenRouter: use the provider's structured_outputs (JSON schema) mode.
+    # Forced tool_choice is rejected by some routes (e.g. Claude Sonnet 5.5
+    # with extended thinking), while JSON-schema output works for every model
+    # we evaluate. Other providers default to tool calling.
+    method = method or os.environ.get("HW_DSE_STRUCTURED_METHOD") or ("json_schema" if provider == "openrouter" else "function_calling")
 
     if provider == "fake":
         return HeuristicArchitect(tracer=tracer)
@@ -205,7 +209,7 @@ def make_llm(provider: str | None = None, model: str | None = None, tracer: Trac
             base_url=OPENROUTER_BASE_URL,
             api_key=os.environ["OPENROUTER_API_KEY"],
             temperature=temperature,
-            max_tokens=int(os.environ.get("HW_DSE_MAX_TOKENS", "6000")),
+            max_tokens=int(os.environ.get("HW_DSE_MAX_TOKENS", "16000")),  # room for reasoning tokens
             timeout=180,
             max_retries=2,
             extra_body=openrouter_extra_body(reasoning),

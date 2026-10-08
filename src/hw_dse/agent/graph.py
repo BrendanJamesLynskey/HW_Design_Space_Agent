@@ -132,15 +132,22 @@ def draft_to_spec(d: SpecDraft) -> Spec:
 # Plan validation: LLM plan -> clamped, budgeted jobs
 # ---------------------------------------------------------------------------
 
-def _ranges_to_dict(ranges: list[ParamRange]) -> dict[str, object]:
+def _ranges_to_dict(family: str, ranges: list[ParamRange]) -> dict[str, object]:
+    """ParamRange list -> {param: [lo, hi] | [choices]} using the registry's
+    parameter kinds (models sometimes fill both ``choices`` and bounds)."""
+    kinds = {p.name: p.kind for p in REGISTRY[family].params}
     out: dict[str, object] = {}
     for r in ranges:
-        if r.choices:
-            out[r.param] = list(r.choices)
+        kind = kinds.get(r.param)
+        if kind == "cat":
+            if r.choices:
+                out[r.param] = list(r.choices)
         elif r.low is not None or r.high is not None:
             lo = r.low if r.low is not None else r.high
             hi = r.high if r.high is not None else r.low
             out[r.param] = [lo, hi]
+        elif kind is None:
+            out[r.param] = r.choices or []  # unknown param: let clamp_ranges report it
     return out
 
 
@@ -170,7 +177,7 @@ def validate_plan(plan: ExplorationPlan, round_budget: int) -> dict[str, Any]:
         i += 1
     jobs = []
     for fp, n in zip(fams, trials):
-        clamped = clamp_ranges(fp.family, _ranges_to_dict(fp.ranges))
+        clamped = clamp_ranges(fp.family, _ranges_to_dict(fp.family, fp.ranges))
         notes.extend(clamped.notes)
         jobs.append({"family": fp.family, "box": {k: list(v) for k, v in clamped.ranges.items()}, "n_trials": n, "why": fp.why})
     return {"jobs": jobs, "rationale": plan.rationale, "notes": notes}

@@ -9,6 +9,7 @@
   "evals_to_95": null,
   "selected_meets_spec": true,
   "selected_key": "pipelined:data_width=19,n_iter=15,angle_guard=4,frac_guard=0,rounding=trunc",
+  "select_regret": 0.09778812572759031,
   "declared_infeasible": false,
   "infeasibility_correct": true
  },
@@ -22,6 +23,7 @@
   "evals_to_95": null,
   "selected_meets_spec": true,
   "selected_key": "pipelined:data_width=18,n_iter=17,angle_guard=3,frac_guard=0,rounding=round",
+  "select_regret": 0.17927823050058211,
   "declared_infeasible": false,
   "infeasibility_correct": true
  },
@@ -35,6 +37,7 @@
   "evals_to_95": null,
   "selected_meets_spec": true,
   "selected_key": "pipelined:data_width=18,n_iter=15,angle_guard=2,frac_guard=1,rounding=round",
+  "select_regret": 0.09080325960419099,
   "declared_infeasible": false,
   "infeasibility_correct": true
  },
@@ -48,6 +51,7 @@
   "evals_to_95": null,
   "selected_meets_spec": true,
   "selected_key": "pipelined:data_width=20,n_iter=16,angle_guard=-1,frac_guard=1,rounding=trunc",
+  "select_regret": 0.17578579743888256,
   "declared_infeasible": false,
   "infeasibility_correct": true
  },
@@ -61,6 +65,7 @@
   "evals_to_95": null,
   "selected_meets_spec": true,
   "selected_key": "pipelined:data_width=19,n_iter=15,angle_guard=0,frac_guard=1,rounding=round",
+  "select_regret": 0.1094295692665891,
   "declared_infeasible": false,
   "infeasibility_correct": true
  },
@@ -74,6 +79,7 @@
   "evals_to_95": null,
   "selected_meets_spec": true,
   "selected_key": "pipelined:data_width=21,n_iter=15,angle_guard=3,frac_guard=0,rounding=round",
+  "select_regret": 0.17927823050058211,
   "declared_infeasible": false,
   "infeasibility_correct": true
  },
@@ -87,6 +93,7 @@
   "evals_to_95": null,
   "selected_meets_spec": true,
   "selected_key": "pipelined_m:data_width=26,n_iter=28,angle_guard=3,frac_guard=0,rounding=round,m=7",
+  "select_regret": 0.2781710832903096,
   "declared_infeasible": false,
   "infeasibility_correct": true
  },
@@ -100,6 +107,7 @@
   "evals_to_95": 259,
   "selected_meets_spec": true,
   "selected_key": "pipelined_m:data_width=26,n_iter=22,angle_guard=2,frac_guard=1,rounding=trunc,m=7",
+  "select_regret": 0.04542429493596832,
   "declared_infeasible": false,
   "infeasibility_correct": true
  },
@@ -113,6 +121,7 @@
   "evals_to_95": 135,
   "selected_meets_spec": true,
   "selected_key": "pipelined_m:data_width=25,n_iter=23,angle_guard=2,frac_guard=1,rounding=trunc,m=6",
+  "select_regret": 0.0494327742194749,
   "declared_infeasible": false,
   "infeasibility_correct": true
  },
@@ -126,6 +135,7 @@
   "evals_to_95": null,
   "selected_meets_spec": true,
   "selected_key": "pipelined_m:data_width=28,n_iter=23,angle_guard=4,frac_guard=2,rounding=trunc,m=6",
+  "select_regret": 0.20781260763340695,
   "declared_infeasible": false,
   "infeasibility_correct": true
  },
@@ -139,6 +149,7 @@
   "evals_to_95": null,
   "selected_meets_spec": true,
   "selected_key": "pipelined_m:data_width=28,n_iter=23,angle_guard=0,frac_guard=3,rounding=round,m=6",
+  "select_regret": 0.20983668326592553,
   "declared_infeasible": false,
   "infeasibility_correct": true
  },
@@ -152,6 +163,7 @@
   "evals_to_95": null,
   "selected_meets_spec": true,
   "selected_key": "pipelined_m:data_width=25,n_iter=24,angle_guard=2,frac_guard=0,rounding=round,m=4",
+  "select_regret": 0.13995507596183837,
   "declared_infeasible": false,
   "infeasibility_correct": true
  },
@@ -165,6 +177,7 @@
   "evals_to_95": null,
   "selected_meets_spec": false,
   "selected_key": null,
+  "select_regret": null,
   "declared_infeasible": true,
   "infeasibility_correct": true
  },
@@ -178,6 +191,7 @@
   "evals_to_95": null,
   "selected_meets_spec": false,
   "selected_key": null,
+  "select_regret": null,
   "declared_infeasible": true,
   "infeasibility_correct": true
  },
@@ -191,6 +205,7 @@
   "evals_to_95": null,
   "selected_meets_spec": false,
   "selected_key": null,
+  "select_regret": null,
   "declared_infeasible": true,
   "infeasibility_correct": true
  },
@@ -204,6 +219,7 @@
   "evals_to_95": null,
   "selected_meets_spec": false,
   "selected_key": null,
+  "select_regret": null,
   "declared_infeasible": true,
   "infeasibility_correct": true
  },
@@ -217,6 +233,7 @@
   "evals_to_95": null,
   "selected_meets_spec": false,
   "selected_key": null,
+  "select_regret": null,
   "declared_infeasible": true,
   "infeasibility_correct": true
  },
@@ -230,6 +247,7 @@
   "evals_to_95": null,
   "selected_meets_spec": false,
   "selected_key": null,
+  "select_regret": null,
   "declared_infeasible": true,
   "infeasibility_correct": true
  },
@@ -243,6 +261,7 @@
   "evals_to_95": 340,
   "selected_meets_spec": true,
   "selected_key": "iterative:data_width=14,n_iter=18,angle_guard=2,frac_guard=2,rounding=trunc",
+  "select_regret": 0.08884311333212425,
   "declared_infeasible": false,
   "infeasibility_correct": true
  },
@@ -256,6 +275,7 @@
   "evals_to_95": null,
   "selected_meets_spec": true,
   "selected_key": "iterative:data_width=16,n_iter=15,angle_guard=0,frac_guard=0,rounding=trunc",
+  "select_regret": 0.06061158914352384,
   "declared_infeasible": false,
   "infeasibility_correct": true
  },
@@ -269,6 +289,7 @@
   "evals_to_95": null,
   "selected_meets_spec": true,
   "selected_key": "iterative:data_width=15,n_iter=20,angle_guard=2,frac_guard=0,rounding=round",
+  "select_regret": 0.09167288320359696,
   "declared_infeasible": false,
   "infeasibility_correct": true
  },
@@ -282,6 +303,7 @@
   "evals_to_95": null,
   "selected_meets_spec": true,
   "selected_key": "iterative:data_width=15,n_iter=13,angle_guard=3,frac_guard=1,rounding=trunc",
+  "select_regret": 0.07503670228642417,
   "declared_infeasible": false,
   "infeasibility_correct": true
  },
@@ -295,6 +317,7 @@
   "evals_to_95": null,
   "selected_meets_spec": true,
   "selected_key": "iterative:data_width=16,n_iter=15,angle_guard=0,frac_guard=1,rounding=trunc",
+  "select_regret": 0.10715569563013332,
   "declared_infeasible": false,
   "infeasibility_correct": true
  },
@@ -308,6 +331,7 @@
   "evals_to_95": null,
   "selected_meets_spec": true,
   "selected_key": "iterative:data_width=15,n_iter=18,angle_guard=1,frac_guard=2,rounding=trunc",
+  "select_regret": 0.1614890429335114,
   "declared_infeasible": false,
   "infeasibility_correct": true
  }

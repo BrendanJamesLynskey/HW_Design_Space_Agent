@@ -32,6 +32,12 @@ Division of labour (strict):
 Architecture registry (the only families and parameters that exist):
 {registry_table()}
 
+Goal: map the feasible Pareto front over the spec's objectives as well as possible
+within the evaluation budget (scored by hypervolume against the spec's reference
+point); the final design is then picked from that front by the spec's selection
+rule. If no design in the registry can meet the constraints, say so (decision
+`infeasible`) rather than settling for a design that violates them.
+
 Notes:
 - Accuracy depends only on data_width, n_iter, angle_guard, frac_guard and rounding
   (all families compute identical bits); output LSB is 2^-(data_width-2).
