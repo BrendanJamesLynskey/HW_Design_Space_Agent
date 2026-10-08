@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hw-dse"
+version = "0.1.0"
+description = "A LangGraph agent for hardware design-space exploration: spec in, Pareto-optimal architecture out. Milestone 1: CORDIC sin/cos, analytical (L0+L1)."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Brendan Lynskey" }]
+
+dependencies = [
+    "numpy>=1.26",
+    "optuna>=4.0",                        # NSGAIISampler(constraints_func=...) is stable from 3.x
+    "pydantic>=2.7",
+    "pyyaml>=6.0",
+    "matplotlib>=3.8",
+    "langgraph>=0.6",                     # Send, interrupt(), Command(resume=...)
+    "langgraph-checkpoint-sqlite>=2.0",
+    "langchain-core>=0.3.30",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+# Providers are optional and imported lazily by hw_dse.agent.llm.
+openai = ["langchain-openai>=0.3"]       # also used for OpenRouter (OpenAI-compatible)
+openrouter = ["langchain-openai>=0.3"]
+anthropic = ["langchain-anthropic>=0.3"]
+gemini = ["langchain-google-genai>=2.0"]
+ollama = ["langchain-ollama>=0.3"]
+
+[project.scripts]
+hw-dse = "hw_dse.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+hw_dse = ["models/*.yaml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra -q"
