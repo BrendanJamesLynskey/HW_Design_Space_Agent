@@ -140,7 +140,9 @@ def cmd_agent(args: argparse.Namespace) -> None:
 
     accuracy_table.preload()
     gts = load_gt()
-    outdir = AGENT_DIR / _slug(args.model)
+    # Runs with an explicit reasoning setting are kept apart from
+    # provider-default runs of the same model.
+    outdir = AGENT_DIR / (_slug(args.model) + (f"__reasoning-{args.reasoning}" if args.reasoning else ""))
     outdir.mkdir(parents=True, exist_ok=True)
     wanted = set(args.specs.split(",")) if args.specs else None
     for s in specs():
@@ -229,7 +231,8 @@ def cmd_report(_: argparse.Namespace) -> None:
     agents: dict[str, list[dict[str, Any]]] = {}
     for p in sorted(AGENT_DIR.glob("*/*.json")):
         row = json.loads(p.read_text())
-        agents.setdefault(row["model_requested"], []).append(row)
+        label = row["model_requested"] + ("" if row["reasoning"] == "provider default" else f", reasoning {row['reasoning']}")
+        agents.setdefault(label, []).append(row)
 
     L: list[str] = []
     L.append("# Eval results: LLM architect vs plain optimisers\n")
@@ -262,9 +265,9 @@ def cmd_report(_: argparse.Namespace) -> None:
         methods.append((f"agent: `{model}`", rows))
     for s in specs():
         L.append(f"### {s.name}\n")
-        L.append(f"| method | runs | HV fraction at budget | evals to 95% HV | selected design meets spec | "
+        L.append(f"| method | runs | evals used (mean) | HV fraction at end | evals to 95% HV | selected design meets spec | "
                  f"selection regret on {s.select_by} | infeasibility called correctly |")
-        L.append("|---|---|---|---|---|---|---|")
+        L.append("|---|---|---|---|---|---|---|---|")
         feasible_spec = gts[s.name]["feasible"]
         for name, rows in methods:
             rs = _rows_by(rows, s.name)
@@ -272,16 +275,16 @@ def cmd_report(_: argparse.Namespace) -> None:
                 continue
             if not feasible_spec:
                 none_sel = sum(r["selected_key"] is None for r in rs)
-                L.append(f"| {name} | {len(rs)} | n/a (infeasible) | n/a | n/a ({none_sel}/{len(rs)} selected nothing) | n/a | "
+                L.append(f"| {name} | {len(rs)} | {statistics.mean(r['n_evals'] for r in rs):.0f} | n/a (infeasible) | n/a | n/a ({none_sel}/{len(rs)} selected nothing) | n/a | "
                          f"{sum(r['infeasibility_correct'] for r in rs)}/{len(rs)} |")
                 continue
             L.append(
-                f"| {name} | {len(rs)} | {_fmt_frac([r['hv_frac'] for r in rs])} | {_fmt_evals([r['evals_to_95'] for r in rs])} | "
+                f"| {name} | {len(rs)} | {statistics.mean(r['n_evals'] for r in rs):.0f} | {_fmt_frac([r['hv_frac'] for r in rs])} | {_fmt_evals([r['evals_to_95'] for r in rs])} | "
                 f"{sum(r['selected_meets_spec'] for r in rs)}/{len(rs)} | {_fmt_regret([r.get('select_regret') for r in rs])} | "
                 f"{sum(r['infeasibility_correct'] for r in rs)}/{len(rs)} |"
             )
         if not agents:
-            L.append("| agent | pending | — | — | — | — | — |")
+            L.append("| agent | pending | — | — | — | — | — | — |")
         L.append("")
     if agents:
         L.append("## Agent runs: models, tokens and cost\n")
@@ -297,7 +300,9 @@ def cmd_report(_: argparse.Namespace) -> None:
                 f"{sum(r['cost_usd'] for r in rows):.4f} |"
             )
         total = sum(r["cost_usd"] for rows in agents.values() for r in rows)
-        L.append(f"\nTotal agent spend: **${total:.4f}**.\n")
+        L.append(f"\nTotal provider-reported cost of the recorded runs: **${total:.4f}**. This undercounts: calls that "
+                 "failed inside the client (e.g. length-limit errors) return no usage. The authoritative figure is the "
+                 "key's usage on OpenRouter (see the PR description).\n")
         L.append("## Agent decisions per run\n")
         for model, rows in agents.items():
             L.append(f"**`{model}`**\n")
