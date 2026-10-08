@@ -7,6 +7,8 @@ installs both, so this runs on every push.
 
 from __future__ import annotations
 
+import os
+
 import numpy as np
 import pytest
 
@@ -14,6 +16,10 @@ from hw_dse.models import rtl_reference
 from hw_dse.models.cordic_bitexact import REFERENCE, cordic_sincos
 
 available, reason = rtl_reference.rtl_available()
+# CI sets HW_DSE_REQUIRE_RTL=1 so a missing simulator fails loudly instead
+# of silently skipping the one test that ties the model to the hardware.
+if os.environ.get("HW_DSE_REQUIRE_RTL") == "1" and not available:
+    raise RuntimeError(f"HW_DSE_REQUIRE_RTL=1 but RTL simulation unavailable: {reason}")
 pytestmark = pytest.mark.skipif(not available, reason=reason)
 
 ALL_ANGLES = np.arange(-(1 << 15), 1 << 15, dtype=np.int64)
