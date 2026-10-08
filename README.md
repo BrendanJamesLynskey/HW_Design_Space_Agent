@@ -11,6 +11,12 @@ Milestone 1 (this release) covers spec intake and analytical exploration for a
 **CORDIC sin/cos unit on an Artix-7 FPGA**, plus an eval that asks the obvious question:
 *why use an LLM at all?*
 
+**Showcase site:** [hw-design-space-agent.vercel.app](https://hw-design-space-agent.vercel.app/)
+([source](https://github.com/BrendanJamesLynskey/hw-design-space-agent)) presents this
+project with animations driven by this repository's recorded runs and models: the graph
+replayed from the eval traces, Pareto replays, the hypervolume race against the baselines,
+and the LLM cost per run.
+
 ## The design principle
 
 **The LLM is never the optimiser and never produces a PPA or accuracy number.**
