@@ -1,1 +1,7 @@
 {"model": "deepseek/deepseek-v4.1-flash", "spec": "dds_250msps", "seed": 0, "cost_usd": 0.0108, "ts": "2026-10-08T13:01:00", "note": "pre-fix trial run, result discarded"}
+{"model": "anthropic/claude-sonnet-5.5", "spec": "dds_250msps", "seed": 0, "cost_usd": 0.056008, "ts": "2026-10-08T12:59:38"}
+{"model": "anthropic/claude-sonnet-5.5", "spec": "dds_250msps", "seed": 1, "cost_usd": 0.079626, "ts": "2026-10-08T13:00:10"}
+{"model": "anthropic/claude-sonnet-5.5", "spec": "dds_250msps", "seed": 2, "cost_usd": 0.079626, "ts": "2026-10-08T13:00:43"}
+{"model": "anthropic/claude-sonnet-5.5", "spec": "high_precision", "seed": 0, "cost_usd": 0.083598, "ts": "2026-10-08T13:01:22"}
+{"model": "anthropic/claude-sonnet-5.5", "spec": "high_precision", "seed": 1, "cost_usd": 0.05563800000000001, "ts": "2026-10-08T13:01:51"}
+{"model": "anthropic/claude-sonnet-5.5", "spec": "high_precision", "seed": 2, "cost_usd": 0.067388, "ts": "2026-10-08T13:02:29"}
