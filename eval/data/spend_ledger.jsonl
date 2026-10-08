@@ -5,3 +5,6 @@
 {"model": "anthropic/claude-sonnet-5.5", "spec": "high_precision", "seed": 0, "cost_usd": 0.083598, "ts": "2026-10-08T13:01:22"}
 {"model": "anthropic/claude-sonnet-5.5", "spec": "high_precision", "seed": 1, "cost_usd": 0.05563800000000001, "ts": "2026-10-08T13:01:51"}
 {"model": "anthropic/claude-sonnet-5.5", "spec": "high_precision", "seed": 2, "cost_usd": 0.067388, "ts": "2026-10-08T13:02:29"}
+{"model": "anthropic/claude-sonnet-5.5", "spec": "infeasible_dds_400msps", "seed": 0, "cost_usd": 0.035812, "ts": "2026-10-08T13:02:47"}
+{"model": "deepseek/deepseek-v4.1-flash", "spec": "dds_250msps", "seed": 0, "cost_usd": 0.0262014, "ts": "2026-10-08T13:02:59"}
+{"model": "anthropic/claude-sonnet-5.5", "spec": "infeasible_dds_400msps", "seed": 1, "cost_usd": 0.035351999999999995, "ts": "2026-10-08T13:03:06"}
