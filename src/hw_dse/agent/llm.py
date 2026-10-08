@@ -123,7 +123,13 @@ class LangChainLLM:
                 rec.update(latency_s=round(time.time() - t0, 2), error=f"{type(exc).__name__}: {exc}"[:2000], parsed=None)
                 self.tracer.log(rec)
                 last_err = rec["error"]
-                note = ""
+                # Schema validation errors can surface as exceptions (JSON-schema
+                # mode); tell the model what was wrong so the retry can fix it.
+                note = (
+                    "\n\nYour previous reply failed validation against the required schema "
+                    f"({str(exc)[:300]}). Reply again using exactly the required structure."
+                    if "ValidationError" in type(exc).__name__ else ""
+                )
                 continue
             raw = out.get("raw")
             parsed = out.get("parsed")

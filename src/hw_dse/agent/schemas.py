@@ -41,7 +41,7 @@ class FamilyPlan(BaseModel):
         default_factory=list,
         description="ranges to search; omit a parameter to search its full registry range",
     )
-    budget_share: float = Field(1.0, gt=0, description="relative share of this round's evaluations")
+    budget_share: float = Field(1.0, ge=0, description="relative share of this round's evaluations (positive number)")
     why: str = Field(description="one or two sentences: why this family and these ranges")
 
 

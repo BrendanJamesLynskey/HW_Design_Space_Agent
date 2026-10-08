@@ -188,3 +188,17 @@ def test_int_param_with_stray_choices_uses_bounds() -> None:
     ])], rationale="")
     box = validate_plan(p, 20)["jobs"][0]["box"]
     assert box["angle_guard"] == [-1, 3] and box["rounding"] == ["round"]
+
+
+def test_zero_budget_shares_and_propose_fallback(tmp_path: Path) -> None:
+    p = ExplorationPlan(families=[FamilyPlan(family="pipelined", budget_share=0, why=""),
+                                  FamilyPlan(family="iterative", budget_share=0, why="")], rationale="")
+    assert [j["n_trials"] for j in validate_plan(p, 20)["jobs"]] == [10, 10]
+
+    def bad(schema: type, ctx: dict) -> object:  # wrong type -> StructuredOutputError
+        return decide("stop")
+
+    spec = small("specs/low_area_control.yaml", total=40, per_round=40)
+    res = run_agent(spec, llm=ScriptedLLM([bad, decide("stop")]), run_root=tmp_path)
+    assert res["status"] == "stopped" and len(res["evaluations_ordered"]) == 40
+    assert "deterministic fallback" in (Path(res["run_dir"]) / "report.md").read_text()

@@ -166,8 +166,12 @@ def validate_plan(plan: ExplorationPlan, round_budget: int) -> dict[str, Any]:
     if len(fams) > max_fams:
         notes.append(f"budget {round_budget} supports {max_fams} families; dropped {[f.family for f in fams[max_fams:]]}")
         fams = fams[:max_fams]
-    total_share = sum(f.budget_share for f in fams)
-    raw = [round_budget * f.budget_share / total_share for f in fams]
+    shares = [f.budget_share if f.budget_share > 0 else 0.0 for f in fams]
+    if sum(shares) <= 0:
+        shares = [1.0] * len(fams)
+        notes.append("budget shares were all zero; split equally")
+    total_share = sum(shares)
+    raw = [round_budget * sh / total_share for sh in shares]
     trials = [max(MIN_TRIALS_PER_FAMILY, int(math.floor(x))) for x in raw]
     while sum(trials) > round_budget:  # min-per-family may overshoot: trim the largest
         trials[trials.index(max(trials))] -= 1
@@ -252,8 +256,15 @@ def build_graph(llm: StructuredLLM, checkpointer: Any = None) -> Any:
         spec = Spec.model_validate(state["spec"])
         b = spec.budget
         user = prompts.PROPOSE.format(spec=spec.summary(), budget=b.total_evals, per_round=b.evals_per_round, max_rounds=b.max_rounds)
-        plan = llm.structured(ExplorationPlan, prompts.SYSTEM, user, node="propose", context=spec_context(spec))
+        failure = None
+        try:
+            plan = llm.structured(ExplorationPlan, prompts.SYSTEM, user, node="propose", context=spec_context(spec))
+        except StructuredOutputError as exc:
+            failure = f"LLM produced no valid plan ({str(exc)[:200]}); used deterministic fallback: every family, full range"
+            plan = fallback_plan("widen", spec, [], {})
         vp = validate_plan(plan, min(b.evals_per_round, b.total_evals))
+        if failure:
+            vp["notes"].insert(0, failure)
         return {"plan": vp, "round": 0, "budget_used": 0, "hv_history": [], "llm_declared_infeasible": False}
 
     def fan_out(state: DSEState) -> list[Send]:
