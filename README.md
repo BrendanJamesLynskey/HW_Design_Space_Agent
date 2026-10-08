@@ -190,13 +190,79 @@ To run the RTL comparison locally, install Icarus (`apt install iverilog`) and r
 | `high_precision` | ≥ 50 MSPS, error ≤ 2⁻²⁰ | min LUTs+FFs, min power index | `pipelined_m` W=26 N=22 m=6 |
 | `infeasible_dds_400msps` | ≥ 400 MSPS, error ≤ 2⁻¹² | min LUTs, max accuracy bits | **none**: nothing in the registry exceeds 291.5 MSPS under the cost model |
 
-## Worked example
+## Worked example (real LLM run)
 
-*Pending: a real-LLM run will be added to `docs/example_run/` when the live eval completes.*
+[`docs/example_run/`](docs/example_run/report.md) is a complete run with **Claude Sonnet 5.5 via OpenRouter**
+on `high_precision` (seed 0), copied from `runs/eval/`: report, Pareto plot, evaluations CSV and the full LLM
+trace. Rounds as the architect played them:
+
+1. **propose**: rules out `iterative`/`unrolled_k`, reasoning that ~20+ iterations at N+3 cycles per result cannot
+   reach 50 MSPS. Splits 100 evaluations 2:1 between `pipelined_m` (fewer registers, so less area and power) and
+   `pipelined` (as a reference). Code finds 31 feasible designs.
+2. **add_family**: the front is one `pipelined_m` point at 59.9 MSPS. Throughput has headroom, so it spends a
+   small share testing whether a multi-cycle family can scrape 50 MSPS. Code: they top out at 6.6 MSPS.
+3. **refine, refine**: narrows W, N and m around the winning corner, with hypervolume still rising (+1.2%).
+4. **stop**: at the round cap, with +0.0% hypervolume gain.
+
+Selected: `pipelined_m` W=26, N=22, angle_guard=1, frac_guard=1, trunc, m=7, at 1930 LUTs / 406 FFs / 52.0 MSPS
+(*estimates*) with max error 7.83e-07 = 2^-20.28 (*exact*). That is 3.4% more LUTs+FFs than the true optimum
+from the exhaustive grid. Every number in the report was computed by code; the LLM's contribution is the quoted
+plans and rationale.
+
+![Pareto plot of the example run](docs/example_run/pareto.png)
+
 
 ## Eval: why use an LLM at all?
 
-See [`eval/results.md`](eval/results.md). *Agent results pending (live runs in progress); ground truth and baselines are complete.*
+Full table: [`eval/results.md`](eval/results.md) (`python eval/run_eval.py report`). Same budget for every method
+(400 evaluations per spec), 3 seeds, all scored against the exhaustive ground truth (635,040 designs). The agent
+column comes only from **real OpenRouter runs**: `anthropic/claude-sonnet-5.5` (frontier),
+`qwen/qwen3.8-27b` (open weights, with provider-default reasoning and again with reasoning off) and
+`deepseek/deepseek-v4.1-flash` (open-weights MoE). All were confirmed in `/api/v1/models` with `tools` and
+`structured_outputs` before use.
+
+**Hypervolume fraction at the end of the run** (mean of 3 seeds; agents may stop early, see "evals used" in the
+full table):
+
+| spec | NSGA-II | random | Sonnet 5.5 | DeepSeek V4.1 Flash | Qwen3.8-27B | Qwen3.8-27B, reasoning off |
+|---|---|---|---|---|---|---|
+| dds_250msps | **0.800** | 0.752 | 0.256 | 0.695 | 0.382 | 0.369 |
+| high_precision | 0.920 | 0.880 | **0.979** | 0.961 | 0.940 | 0.951 |
+| low_area_control | **0.905** | 0.856 | 0.207 | 0.202 | 0.238 | 0.164 |
+
+**Selection regret**: how much worse the finally selected design is than the true optimum on the spec's
+selection metric (mean of 3 seeds; lower is better):
+
+| spec | NSGA-II | random | Sonnet 5.5 | DeepSeek V4.1 Flash | Qwen3.8-27B | Qwen3.8-27B, reasoning off |
+|---|---|---|---|---|---|---|
+| dds_250msps | +12.3% | +15.5% | +6.1% | +2.2% | **+1.6%** | +4.0% |
+| high_precision | +12.4% | +18.6% | **+3.1%** | +6.0% | +9.1% | +7.5% |
+| low_area_control | +8.0% | +11.5% | +2.9% | **+1.6%** | +4.4% | +12.2% |
+
+**Infeasible spec** (`infeasible_dds_400msps`): every LLM declared `infeasible` itself on all 3 seeds, using 100–200
+evaluations instead of 400, and cited the evidence: throughput is the binding constraint, and the best seen was 273–282 MSPS even from the 1-result-per-cycle `pipelined` family. The baselines "detect"
+infeasibility only in the trivial sense of finding nothing feasible. Every selected design met its spec, for every
+method.
+
+What this says, honestly:
+
+- **The LLM architect is a good *selector*, not a good *front-mapper*.** On every feasible spec it got closer to
+  the spec's optimum than either baseline (regret 1.6–9% vs 8–19%), usually with fewer evaluations. It reads the
+  spec, discards families that cannot meet throughput, and dives at the corner the selection rule cares about.
+- **That same focus costs hypervolume** on specs whose front spans a wide accuracy range (`dds_250msps`,
+  `low_area_control`). There, plain NSGA-II maps the whole trade-off far better, even though the system prompt says
+  hypervolume is the score. The code's HV-gain stopping rule (ε = 1%) then ends the run early once the corner stops
+  improving.
+- **On `high_precision`** (narrow feasible region, near-degenerate front) the agent wins on both counts. Sonnet
+  reached 95% of the true HV after 4, 4 and 70 evaluations on its three seeds; NSGA-II needed 135 and 259 on two
+  seeds and never got there on the third. With a two-point true front, a single near-optimal design already
+  scores >95%, so read this as "found the right corner fast".
+- **Reasoning and structured output**: with provider-default reasoning, Qwen3.8-27B often spent the whole 16k-token
+  budget thinking and never emitted the JSON (17 failed attempts, 7 unrecovered decisions that code turned into
+  `stop`). With `reasoning: {enabled: false}` it had 0 failures and ran ~10× faster and ~8× cheaper, with
+  comparable hypervolume and mixed regret. Both variants are reported.
+- Live-run cost: about **$2.5** of OpenRouter credit in total (key usage), well under the $5 cap.
+
 
 ## Limitations
 

@@ -24,6 +24,7 @@ Budget per run = the spec's `total_evals` (400). Seeds 0, 1, 2. HV fraction = hy
 | agent: `anthropic/claude-sonnet-5.5` | 3 | 333 | 0.256 ± 0.049 | not reached (0/3) | 3/3 | +6.1% mean (0/3 optimal) | 3/3 |
 | agent: `deepseek/deepseek-v4.1-flash` | 3 | 333 | 0.695 ± 0.190 | not reached (0/3) | 3/3 | +2.2% mean (1/3 optimal) | 3/3 |
 | agent: `qwen/qwen3.8-27b` | 3 | 300 | 0.382 ± 0.033 | not reached (0/3) | 3/3 | +1.6% mean (2/3 optimal) | 3/3 |
+| agent: `qwen/qwen3.8-27b, reasoning off` | 3 | 267 | 0.369 ± 0.183 | not reached (0/3) | 3/3 | +4.0% mean (0/3 optimal) | 3/3 |
 
 ### high_precision
 
@@ -34,6 +35,7 @@ Budget per run = the spec's `total_evals` (400). Seeds 0, 1, 2. HV fraction = hy
 | agent: `anthropic/claude-sonnet-5.5` | 3 | 267 | 0.979 ± 0.002 | 4 (3/3 reached) | 3/3 | +3.1% mean (0/3 optimal) | 3/3 |
 | agent: `deepseek/deepseek-v4.1-flash` | 3 | 233 | 0.961 ± 0.022 | 79 (2/3 reached) | 3/3 | +6.0% mean (0/3 optimal) | 3/3 |
 | agent: `qwen/qwen3.8-27b` | 3 | 167 | 0.940 ± 0.017 | 45 (1/3 reached) | 3/3 | +9.1% mean (0/3 optimal) | 3/3 |
+| agent: `qwen/qwen3.8-27b, reasoning off` | 3 | 233 | 0.951 ± 0.031 | 4 (1/3 reached) | 3/3 | +7.5% mean (0/3 optimal) | 3/3 |
 
 ### infeasible_dds_400msps
 
@@ -44,6 +46,7 @@ Budget per run = the spec's `total_evals` (400). Seeds 0, 1, 2. HV fraction = hy
 | agent: `anthropic/claude-sonnet-5.5` | 3 | 100 | n/a (infeasible) | n/a | n/a (3/3 selected nothing) | n/a | 3/3 |
 | agent: `deepseek/deepseek-v4.1-flash` | 3 | 200 | n/a (infeasible) | n/a | n/a (3/3 selected nothing) | n/a | 3/3 |
 | agent: `qwen/qwen3.8-27b` | 3 | 133 | n/a (infeasible) | n/a | n/a (3/3 selected nothing) | n/a | 3/3 |
+| agent: `qwen/qwen3.8-27b, reasoning off` | 3 | 100 | n/a (infeasible) | n/a | n/a (3/3 selected nothing) | n/a | 3/3 |
 
 ### low_area_control
 
@@ -54,6 +57,7 @@ Budget per run = the spec's `total_evals` (400). Seeds 0, 1, 2. HV fraction = hy
 | agent: `anthropic/claude-sonnet-5.5` | 3 | 267 | 0.207 ± 0.049 | not reached (0/3) | 3/3 | +2.9% mean (0/3 optimal) | 3/3 |
 | agent: `deepseek/deepseek-v4.1-flash` | 3 | 267 | 0.202 ± 0.031 | not reached (0/3) | 3/3 | +1.6% mean (0/3 optimal) | 3/3 |
 | agent: `qwen/qwen3.8-27b` | 3 | 133 | 0.238 ± 0.115 | not reached (0/3) | 3/3 | +4.4% mean (0/3 optimal) | 3/3 |
+| agent: `qwen/qwen3.8-27b, reasoning off` | 3 | 333 | 0.164 ± 0.013 | not reached (0/3) | 3/3 | +12.2% mean (1/3 optimal) | 3/3 |
 
 ## Agent runs: models, tokens and cost
 
@@ -62,8 +66,9 @@ Budget per run = the spec's `total_evals` (400). Seeds 0, 1, 2. HV fraction = hy
 | `anthropic/claude-sonnet-5.5` | `anthropic/claude-sonnet-5.5` | provider default | 12 | 41 | 0 | 174,018 | 36,599 | 0.7140 |
 | `deepseek/deepseek-v4.1-flash` | `deepseek/deepseek-v4.1-flash` | provider default | 12 | 45 | 2 | 93,074 | 159,398 | 0.1762 |
 | `qwen/qwen3.8-27b` | `qwen/qwen3.8-27b` | provider default | 12 | 45 | 18 | 56,889 | 304,366 | 0.7503 |
+| `qwen/qwen3.8-27b, reasoning off` | `qwen/qwen3.8-27b` | off | 12 | 40 | 0 | 89,317 | 35,744 | 0.0961 |
 
-Total provider-reported cost of the recorded runs: **$1.6406**. This undercounts: calls that failed inside the client (e.g. length-limit errors) return no usage. The authoritative figure is the key's usage on OpenRouter (see the PR description).
+Total provider-reported cost of the recorded runs: **$1.7367**. This undercounts: calls that failed inside the client (e.g. length-limit errors) return no usage. The authoritative figure is the key's usage on OpenRouter (see the PR description).
 
 ## Agent decisions per run
 
@@ -111,4 +116,19 @@ Total provider-reported cost of the recorded runs: **$1.6406**. This undercounts
 - low_area_control seed 0: stopped; decisions: refine → stop; HV fraction 0.400; run `runs/eval/low_area_control/20261008-130854-a026`
 - low_area_control seed 1: stopped; decisions: stop; HV fraction 0.144; run `runs/eval/low_area_control/20261008-132859-b040`
 - low_area_control seed 2: stopped; decisions: stop; HV fraction 0.172; run `runs/eval/low_area_control/20261008-133900-b693`
+
+**`qwen/qwen3.8-27b, reasoning off`**
+
+- dds_250msps seed 0: converged; decisions: refine → refine → refine; HV fraction 0.155; run `runs/eval/dds_250msps/20261008-143947-eb7e`
+- dds_250msps seed 1: stopped; decisions: refine → refine → stop; HV fraction 0.351; run `runs/eval/dds_250msps/20261008-144033-d8d5`
+- dds_250msps seed 2: converged; decisions: refine → refine; HV fraction 0.601; run `runs/eval/dds_250msps/20261008-144117-a5b7`
+- high_precision seed 0: converged; decisions: refine → refine → refine; HV fraction 0.942; run `runs/eval/high_precision/20261008-143948-a8bd`
+- high_precision seed 1: converged; decisions: refine → refine; HV fraction 0.919; run `runs/eval/high_precision/20261008-144135-35b3`
+- high_precision seed 2: converged; decisions: refine → refine; HV fraction 0.992; run `runs/eval/high_precision/20261008-144227-545b`
+- infeasible_dds_400msps seed 0: infeasible; decisions: infeasible; HV fraction n/a; run `runs/eval/infeasible_dds_400msps/20261008-143948-c157`
+- infeasible_dds_400msps seed 1: infeasible; decisions: infeasible; HV fraction n/a; run `runs/eval/infeasible_dds_400msps/20261008-144006-4206`
+- infeasible_dds_400msps seed 2: infeasible; decisions: infeasible; HV fraction n/a; run `runs/eval/infeasible_dds_400msps/20261008-144030-b0d6`
+- low_area_control seed 0: stopped; decisions: refine → refine → refine → stop; HV fraction 0.179; run `runs/eval/low_area_control/20261008-143947-0a8c`
+- low_area_control seed 1: stopped; decisions: refine → refine → refine → stop; HV fraction 0.148; run `runs/eval/low_area_control/20261008-144056-2ab6`
+- low_area_control seed 2: stopped; decisions: refine → stop; HV fraction 0.165; run `runs/eval/low_area_control/20261008-144158-572c`
 
