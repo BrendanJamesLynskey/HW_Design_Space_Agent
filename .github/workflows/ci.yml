@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      # Icarus Verilog for the golden-model vs RTL bit-exact test.
+      - name: Install Icarus Verilog
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q iverilog
+          iverilog -V | head -1
+
+      # Reference RTL lives in its own public repo; pinned commit.
+      - name: Fetch reference CORDIC RTL
+        run: scripts/fetch_reference_rtl.sh
+
+      # Fully offline: the fake provider only, no API keys. The openrouter
+      # extra is installed so the provider-config test runs too.
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e '.[dev,openrouter]'
+
+      - name: Offline test suite (incl. bit-exact RTL comparison)
+        env:
+          HW_DSE_REQUIRE_RTL: "1"
+        run: python -m pytest -v -rs
+
+      - name: Smoke run with the rule-based fake architect
+        run: |
+          hw-dse run --spec specs/low_area_control.yaml --provider fake --auto-approve --auto-select
+          hw-dse run --spec specs/infeasible_dds_400msps.yaml --provider fake --auto-approve --auto-select

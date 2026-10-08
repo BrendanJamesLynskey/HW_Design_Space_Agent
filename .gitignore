@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+build/
+
+# Secrets: never commit real keys
+.env
+.env.local
+
+# Reference RTL is fetched at a pinned commit by scripts/fetch_reference_rtl.sh
+third_party/
+
+# Simulation scratch
+rtl_harness/build/
+*.vvp
+*.vcd
+
+# Agent run outputs (example runs we want to keep are copied to docs/)
+runs/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
+# Eval scratch (committed results live in eval/results.md and eval/data/)
+eval/scratch/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
