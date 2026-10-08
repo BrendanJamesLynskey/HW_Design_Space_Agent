@@ -119,11 +119,14 @@ class CordicNumerics:
 
     data_width: int = 16
     n_iter: int = 14
-    angle_width: int | None = None  # None means "same as data_width" (reference)
+    angle_width: int | None = None  # None means "same as data_width" (reference); normalised on init
     frac_guard: int = 0
     rounding: Rounding = "trunc"
 
     def __post_init__(self) -> None:
+        # Normalise "same as data width" so equal configurations hash equal.
+        if self.angle_width is None:
+            object.__setattr__(self, "angle_width", self.data_width)
         if not 4 <= self.data_width <= 40:
             raise ValueError(f"data_width {self.data_width} outside 4..40")
         if not 1 <= self.n_iter <= 48:
@@ -301,6 +304,7 @@ def cordic_sincos(theta: np.ndarray, cfg: CordicNumerics = REFERENCE) -> tuple[n
 # Accuracy metrics (provenance: exact)
 # ---------------------------------------------------------------------------
 
+@lru_cache(maxsize=64)
 def sweep_angles(data_width: int) -> tuple[np.ndarray, str]:
     """The angle set used for accuracy metrics, plus a description of it.
 
@@ -308,12 +312,15 @@ def sweep_angles(data_width: int) -> tuple[np.ndarray, str]:
     """
     lo, hi = -(1 << (data_width - 1)), 1 << (data_width - 1)
     if data_width <= EXHAUSTIVE_MAX_WIDTH:
-        return np.arange(lo, hi, dtype=np.int64), f"exhaustive ({hi - lo} angles)"
+        codes = np.arange(lo, hi, dtype=np.int64)
+        codes.setflags(write=False)
+        return codes, f"exhaustive ({hi - lo} angles)"
     stride = (hi - lo) // DENSE_STRIDED
     strided = np.arange(lo, hi, stride, dtype=np.int64)
     rng = np.random.default_rng(DENSE_SEED + data_width)
     rand = rng.integers(lo, hi, size=DENSE_RANDOM, dtype=np.int64)
     codes = np.unique(np.concatenate([strided, rand]))
+    codes.setflags(write=False)
     return codes, f"dense ({codes.size} angles: {strided.size} strided + {DENSE_RANDOM} random, seed {DENSE_SEED}+W)"
 
 
@@ -347,18 +354,48 @@ class Accuracy:
         }
 
 
-@lru_cache(maxsize=1 << 16)
+@lru_cache(maxsize=64)
+def _ideal(data_width: int) -> tuple[np.ndarray, np.ndarray]:
+    """Unquantised cos/sin of the sweep angles, in output-LSB units."""
+    codes, _ = sweep_angles(data_width)
+    phi = codes.astype(np.float64) * (math.pi / float(1 << (data_width - 1)))
+    scale = float(1 << (data_width - 2))
+    return np.cos(phi) * scale, np.sin(phi) * scale
+
+
+_PRELOADED: dict[CordicNumerics, Accuracy] = {}
+
+
+def preload_accuracy(table: dict[CordicNumerics, Accuracy]) -> None:
+    """Seed the accuracy cache from a precomputed table.
+
+    ``eval/`` precomputes every configuration in the registry once (it
+    takes minutes) and stores the table; loading it makes exhaustive-grid
+    and repeated-seed experiments fast. The values are the same exact
+    numbers :func:`accuracy` would compute (``tests/test_eval_harness.py``
+    spot-checks that).
+    """
+    _PRELOADED.update(table)
+
+
 def accuracy(cfg: CordicNumerics) -> Accuracy:
     """Exact accuracy metrics of ``cfg`` over the documented angle sweep.
 
     Cached: the same numeric configuration is shared by every architecture
     family, and the explorers revisit configurations often.
     """
+    hit = _PRELOADED.get(cfg)
+    if hit is not None:
+        return hit
+    return _accuracy(cfg)
+
+
+@lru_cache(maxsize=1 << 16)
+def _accuracy(cfg: CordicNumerics) -> Accuracy:
     codes, sweep = sweep_angles(cfg.data_width)
     cos_c, sin_c = cordic_sincos(codes, cfg)
-    phi = codes.astype(np.float64) * (math.pi / float(1 << (cfg.data_width - 1)))
-    scale = float(1 << (cfg.data_width - 2))
-    err = np.concatenate([cos_c - np.cos(phi) * scale, sin_c - np.sin(phi) * scale])
+    ideal_c, ideal_s = _ideal(cfg.data_width)
+    err = np.concatenate([cos_c - ideal_c, sin_c - ideal_s])
     max_lsb = float(np.max(np.abs(err)))
     rms_lsb = float(np.sqrt(np.mean(err * err)))
     max_abs = max_lsb * cfg.out_lsb

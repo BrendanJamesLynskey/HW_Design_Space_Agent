@@ -124,6 +124,7 @@ def mux_levels(n_inputs: int) -> int:
     return 0 if n_inputs <= 1 else math.ceil(math.log(n_inputs, 4) - 1e-9)
 
 
+@lru_cache(maxsize=None)
 def shifter_luts(width: int, shifts: tuple[int, ...]) -> int:
     """LUTs for one ``width``-bit arithmetic barrel shifter over ``shifts``.
 
@@ -137,6 +138,7 @@ def shifter_luts(width: int, shifts: tuple[int, ...]) -> int:
     return total
 
 
+@lru_cache(maxsize=None)
 def rom_luts(entries: tuple[int, ...]) -> int:
     """LUTs for a small constant ROM read by a counter: one LUT6 per
     non-constant output bit for <= 64 entries."""
