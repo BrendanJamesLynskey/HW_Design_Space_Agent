@@ -38,13 +38,16 @@ For a design x measured by tool T::
   refitted without itself and predicted, the honest measure of how the
   refit generalises.
 
-Known limit of the current data: the two Vivado anchors were synthesised
-from the *reference* RTL, while every other point uses the *generated* RTL,
-and the fit has to treat them as Vivado-on-generated. A one-design Vivado
-spot-check (generated ``pipelined`` W=16 N=14) found LUT/FF within 4% of the
-anchor but Fmax 20% higher, so this assumption does not hold for Fmax. As
-soon as a measured-points CSV has a Vivado row for the generated equivalent
-of an anchor, :func:`refit` uses that row and drops the reference anchor.
+Which rows are fitted (:func:`split_rows`, :func:`refit`):
+
+* The two calibration anchors were synthesised from the *reference* RTL.
+  Vivado gives generated and reference RTL the same area within 4% but not
+  the same Fmax (generated ``iterative`` -13%, ``pipelined`` +20%), so as
+  soon as a CSV has a Vivado row for the generated equivalent of an anchor,
+  that row replaces the anchor in the fit (the anchor is still reported).
+* Vivado rows measured *post-route* are reported, not fitted: the anchors
+  and the default model are on Vivado's post-synthesis timing scale.
+* A design measured twice by the same tool and flow counts once.
 
 Outputs (:func:`refit`, ``python -m hw_dse.synth.recalibrate``):
 
@@ -61,6 +64,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import dataclasses
 import json
 import math
 from dataclasses import dataclass
@@ -319,10 +323,51 @@ def ground_truth_impact(cal_path: Path, specs_dir: Path | None = None) -> dict[s
     return out
 
 
+DUPLICATE_TOLERANCE = 0.005
+"""Relative difference above which a dropped duplicate row is flagged as disagreeing with the kept one."""
+
+
+def is_post_route(p: MeasuredPoint) -> bool:
+    return p.extra.get("fmax_kind", "").strip().lower().startswith("post-route")
+
+
+def split_rows(measured_csvs: list[Path]) -> tuple[list[MeasuredPoint], list[MeasuredPoint], list[dict[str, str]]]:
+    """Load every CSV; return (rows to fit, report-only rows, duplicates dropped).
+
+    * The calibration anchors and the eval's cost model are on Vivado's
+      *post-synthesis* scale, so Vivado rows measured post-route are
+      reported (as tool ``vivado post-route``, no tool factor) but not fitted.
+    * The same design measured twice by the same tool, tool version and flow
+      (e.g. the review's spot-check and the full Vivado run) is counted once:
+      the row from the CSV given first wins. If the two rows disagree by more
+      than :data:`DUPLICATE_TOLERANCE` on any metric, or one row has a metric
+      the other lacks, the report says so.
+    """
+    seen: dict[tuple[str, str, str, str, bool], tuple[str, MeasuredPoint]] = {}
+    fit_rows, report_only, dropped = [], [], []
+    for c in measured_csvs:
+        for p in load(c):
+            k = (p.tool, p.tool_version, p.rtl_source, p.arch.key(), is_post_route(p))
+            if k in seen:
+                kept_csv, kept = seen[k]
+                pairs = (("luts", kept.luts, p.luts), ("ffs", kept.ffs, p.ffs), ("fmax_mhz", kept.fmax_mhz, p.fmax_mhz))
+                diffs = {m: round((b / a - 1) * 100, 2) for m, a, b in pairs if a and b and abs(b / a - 1) > DUPLICATE_TOLERANCE}
+                dropped.append({"tool": f"{p.tool} {p.tool_version}", "key": p.arch.key(), "csv": c.name,
+                                "kept_from": kept_csv, "disagree_pct": diffs,
+                                "missing_in_one": [m for m, a, b in pairs if bool(a) != bool(b)]})
+                continue
+            seen[k] = (c.name, p)
+            if p.tool == REFERENCE_TOOL and is_post_route(p):
+                report_only.append(dataclasses.replace(p, tool=f"{REFERENCE_TOOL} post-route"))
+            else:
+                fit_rows.append(p)
+    return fit_rows, report_only, dropped
+
+
 def refit(measured_csvs: list[Path], name: str, base_path: Path = CALIBRATION_FILE, impact: bool = True,
           include_reference_rtl: bool = False) -> dict[str, Any]:
     base = load_calibration(str(base_path))
-    pts_all = [p for c in measured_csvs for p in load(c)]
+    pts_all, report_only, dropped = split_rows(measured_csvs)
     # Open-source rows synthesised from the *reference* RTL measure Yosys's
     # handling of that RTL, not the generated designs we explore: reported,
     # not fitted (unless asked).
@@ -342,7 +387,7 @@ def refit(measured_csvs: list[Path], name: str, base_path: Path = CALIBRATION_FI
               f"# The default cost model still uses {base_path.name}. Load this one with\n"
               f"#   FpgaCostModel('{out_path.relative_to(REPO_ROOT)}')\n")
     out_path.write_text(header + yaml.safe_dump(cal, sort_keys=False, width=110))
-    eval_pts = anchor_points(base) + pts_all
+    eval_pts = anchor_points(base) + pts_all + report_only
     before = residuals(eval_pts, FpgaCostModel(str(base_path)))
     after = residuals(eval_pts, FpgaCostModel(str(out_path)), f.tau)
     report: dict[str, Any] = {
@@ -352,6 +397,7 @@ def refit(measured_csvs: list[Path], name: str, base_path: Path = CALIBRATION_FI
         "summary_before": summary_by_tool(before), "summary_after": summary_by_tool(after),
         "residuals_before": before, "residuals_after": after,
         "anchors_used": [a.arch.key() for a in anchors],
+        "report_only": [f"{p.tool}: {p.arch.key()}" for p in report_only], "duplicates_dropped": dropped,
         "leave_one_out": loo, "loo_summary": _loo_summary(loo, after, fit_pts, loo_idx),
     }
     if impact:
@@ -364,8 +410,10 @@ def _loo_summary(loo: list[dict[str, Any]], after: list[dict[str, Any]], fit_pts
     """In-sample vs leave-one-out RMS % error per family (generated-RTL points)."""
     ins = {(r["tool"], r["key"], r["rtl_source"]): r for r in after}
     out: dict[str, dict[str, Any]] = {}
-    for fam in ["all", *sorted({r["family"] for r in loo})]:
-        rows = [r for r in loo if fam in ("all", r["family"])]
+    tools = sorted({r["tool"] for r in loo})
+    groups = ["all", *([f"all {t}" for t in tools] if len(tools) > 1 else []), *sorted({r["family"] for r in loo})]
+    for fam in groups:
+        rows = [r for r in loo if fam in ("all", r["family"], f"all {r['tool']}")]
         insample = [ins[(r["tool"], r["key"], "generated")] for r in rows]
         out[fam] = {"n": len(rows), **{f"{m}_in": round(_rms([x[f"{m}_err_pct"] for x in insample]), 1)
                                        for m in ("luts", "ffs", "fmax")},
@@ -387,6 +435,15 @@ def markdown(rep: dict[str, Any]) -> str:
     L.append("\nFit: every tool carries equal total weight; per-family overrides only for c_arith, c_ff and "
              f"t_logic_ns, for families with >= {MIN_FAMILY_POINTS} points. Vivado anchors used: "
              + (", ".join(f"`{k}`" for k in rep.get("anchors_used", [])) or "none (superseded by generated-RTL Vivado rows)"))
+    if rep.get("report_only"):
+        L.append(f"\nReported, not fitted: {len(rep['report_only'])} Vivado post-route rows (tool `vivado post-route`; "
+                 "the anchors and the default model are post-synthesis), shown with no tool factor.")
+    for d in rep.get("duplicates_dropped", []):
+        bad = [f"{m} {v:+.2f}%" for m, v in d.get("disagree_pct", {}).items()]
+        bad += [f"{m} missing in one row" for m in d.get("missing_in_one", [])]
+        agree = "**they disagree**: " + ", ".join(bad) if bad else f"they agree within {DUPLICATE_TOLERANCE:.1%}"
+        L.append(f"\nCounted once: `{d['key']}` ({d['tool']}) is in both `{d['kept_from']}` (kept) and `{d['csv']}` "
+                 f"(dropped); {agree}.")
     if rep.get("loo_summary"):
         L.append("\n## Out-of-sample check: leave-one-out RMS error (generated-RTL points)\n")
         L.append("Each point refitted without itself and predicted on its own tool's scale; in-sample → leave-one-out.\n")
@@ -431,8 +488,9 @@ def main() -> None:  # pragma: no cover - CLI
     args = ap.parse_args()
     rep = refit([Path(m).resolve() for m in args.measured], args.name, impact=not args.no_impact)
     out = REPO_ROOT / "eval" / "data" / f"l5_refit_{args.name}"
-    out.with_suffix(".json").write_text(json.dumps(rep, indent=1))
-    out.with_suffix(".md").write_text(markdown(rep))
+    # not with_suffix(): a name like "vivado-2025.2" already contains a dot
+    out.with_name(out.name + ".json").write_text(json.dumps(rep, indent=1))
+    out.with_name(out.name + ".md").write_text(markdown(rep))
     print(markdown(rep).split("## Residuals")[0])
     if "ground_truth_impact" in rep:
         for s, g in rep["ground_truth_impact"].items():

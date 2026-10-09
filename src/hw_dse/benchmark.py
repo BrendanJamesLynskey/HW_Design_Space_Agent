@@ -65,6 +65,7 @@ class Grid:
     accuracy_bits: np.ndarray
     power_norm: float
     activity: float
+    cost_model: Any  # the model the columns were computed with (set by build_grid, the only constructor)
 
     def __len__(self) -> int:
         return int(self.family.size)
@@ -145,6 +146,7 @@ def build_grid(verbose: bool = False, cost_model: Any = None) -> Grid:
         accuracy_bits=f["bits"],
         power_norm=cm.power_norm,
         activity=cm.src["activity_factor"],
+        cost_model=cm,
     )
 
 
@@ -156,7 +158,11 @@ def _feasible_mask(m: dict[str, np.ndarray], spec: Spec) -> np.ndarray:
 
 
 def ground_truth(grid: Grid, spec: Spec) -> dict[str, Any]:
-    """True feasible set size, Pareto front, HV and auto-selected design."""
+    """True feasible set size, Pareto front, HV and auto-selected design.
+
+    The front and the selected design are re-evaluated with the cost model the
+    grid was built with (``grid.cost_model``), never silently with the default."""
+    cost_model = grid.cost_model
     m = grid.metrics(spec)
     feas = _feasible_mask(m, spec)
     out: dict[str, Any] = {"spec": spec.name, "n_designs": len(grid), "n_feasible": int(feas.sum())}
@@ -172,11 +178,11 @@ def ground_truth(grid: Grid, spec: Spec) -> dict[str, Any]:
     front_local = pareto_front_large(obj)
     front_idx = idx[front_local]
     out["hv_true"] = hypervolume(obj[front_local], reference_point(spec))
-    out["front"] = [evaluate(grid.arch(int(i)), spec) for i in front_idx]
+    out["front"] = [evaluate(grid.arch(int(i)), spec, cost_model) for i in front_idx]
     sel = m[spec.select_by][idx]
     best_val = sel.min() if spec.select_direction == "min" else sel.max()
     ties = idx[np.flatnonzero(sel == best_val)]
-    out["selected"] = select_design([evaluate(grid.arch(int(i)), spec) for i in ties], spec)
+    out["selected"] = select_design([evaluate(grid.arch(int(i)), spec, cost_model) for i in ties], spec)
     return out
 
 

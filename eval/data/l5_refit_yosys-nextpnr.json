@@ -1281,6 +1281,8 @@
  "anchors_used": [
   "iterative:data_width=16,n_iter=14,angle_guard=0,frac_guard=0,rounding=trunc"
  ],
+ "report_only": [],
+ "duplicates_dropped": [],
  "leave_one_out": [
   {
    "family": "iterative",
@@ -1596,6 +1598,24 @@
    "luts_loo": 12.1,
    "ffs_loo": 4.8,
    "fmax_loo": 15.6
+  },
+  "all vivado": {
+   "n": 1,
+   "luts_in": 4.6,
+   "ffs_in": 2.4,
+   "fmax_in": 5.4,
+   "luts_loo": 19.7,
+   "ffs_loo": 8.7,
+   "fmax_loo": 28.5
+  },
+  "all yosys+nextpnr-xilinx": {
+   "n": 37,
+   "luts_in": 11.3,
+   "ffs_in": 4.4,
+   "fmax_in": 14.2,
+   "luts_loo": 11.9,
+   "ffs_loo": 4.7,
+   "fmax_loo": 15.1
   },
   "iterative": {
    "n": 9,

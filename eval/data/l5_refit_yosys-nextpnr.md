@@ -25,6 +25,8 @@ Each point refitted without itself and predicted on its own tool's scale; in-sam
 | family | points | LUT | FF | Fmax |
 |---|---|---|---|---|
 | all | 38 | 11.2 → 12.1% | 4.4 → 4.8% | 14.0 → 15.6% |
+| all vivado | 1 | 4.6 → 19.7% | 2.4 → 8.7% | 5.4 → 28.5% |
+| all yosys+nextpnr-xilinx | 37 | 11.3 → 11.9% | 4.4 → 4.7% | 14.2 → 15.1% |
 | iterative | 9 | 13.3 → 14.0% | 7.4 → 7.8% | 9.7 → 10.2% |
 | pipelined | 11 | 8.1 → 10.3% | 4.5 → 5.4% | 21.2 → 23.8% |
 | pipelined_m | 10 | 2.5 → 2.8% | 0.1 → 0.1% | 10.7 → 12.0% |

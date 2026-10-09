@@ -7,6 +7,9 @@ All offline, on recorded data: the committed L4 sweep
 from __future__ import annotations
 
 import csv
+import filecmp
+import importlib.util
+import json
 from pathlib import Path
 
 import pytest
@@ -31,12 +34,15 @@ def _vivado_csv(path: Path, rows: list[dict[str, object]]) -> Path:
     return path
 
 
-def _row(arch: ArchConfig, luts: float, ffs: float, fmax: float | None, tool: str = "vivado") -> dict[str, object]:
+def _row(arch: ArchConfig, luts: float, ffs: float, fmax: float | None, tool: str = "vivado",
+         kind: str | None = None) -> dict[str, object]:
+    """A measured row; Vivado rows default to post-synthesis (the anchors' flow), others to post-route."""
     p = arch.params()
+    kind = kind or ("post-synthesis (1000/(10-WNS))" if tool == "vivado" else "post-route")
     return {"tool": tool, "tool_version": "2025.2", "part": "xc7a35tcpg236-1", "rtl_source": "generated",
             "family": arch.family, "data_width": p["data_width"], "n_iter": p["n_iter"], "angle_guard": p["angle_guard"],
             "frac_guard": p["frac_guard"], "rounding": p["rounding"], "k": arch.k, "m": arch.m, "luts": luts, "ffs": ffs,
-            "fmax_mhz": "" if fmax is None else fmax, "fmax_kind": "post-route", "source_log": "test"}
+            "fmax_mhz": "" if fmax is None else fmax, "fmax_kind": kind, "source_log": "test"}
 
 
 def test_committed_l4_csv_follows_the_schema() -> None:
@@ -167,8 +173,6 @@ def test_back_annotate_node_runs_in_the_graph(tmp_path: Path) -> None:
 def test_vivado_points_export_and_collect(tmp_path: Path) -> None:
     """The Vivado PR path, offline: export the 8 designs, fake Vivado's reports from
     excerpts of the anchors' real reports, collect into a schema-valid CSV."""
-    import importlib.util
-
     spec_ = importlib.util.spec_from_file_location("vivado_points", ROOT / "scripts" / "vivado_points.py")
     vp = importlib.util.module_from_spec(spec_)
     spec_.loader.exec_module(vp)  # type: ignore[union-attr]
@@ -232,3 +236,121 @@ def test_back_annotation_scaled_diff_and_per_tool_winner_check(tmp_path: Path) -
     assert ys["luts"]["measured_scaled"] == 200.0  # 400 / LUT factor 2.0
     assert ys["fmax_mhz"]["measured_scaled"] == 225.0  # 150 * path factor 1.5
     assert ys["luts"]["diff_pct"] != ys["luts"]["diff_pct_scaled"]
+
+
+def test_post_route_vivado_rows_are_reported_not_fitted_and_duplicates_count_once(tmp_path: Path,
+                                                                                    monkeypatch: pytest.MonkeyPatch) -> None:
+    pipe = ArchConfig.from_params("pipelined", {"data_width": 16, "n_iter": 14})
+    it = ArchConfig.from_params("iterative", {"data_width": 16, "n_iter": 14})
+    full = _vivado_csv(tmp_path / "full.csv", [_row(pipe, 720, 751, 327.4), _row(pipe, 706, 751, 232.2, kind="post-route"),
+                                               _row(it, 175, 96, 172.8), _row(it, 164, 96, 158.1, kind="post-route")])
+    spot = _vivado_csv(tmp_path / "spot.csv", [_row(pipe, 720, 751, 327.4)])
+    fit_rows, report_only, dropped = recalibrate.split_rows([full, L4_CSV, spot])
+    viv = [p for p in fit_rows if p.tool == "vivado"]
+    assert sorted(p.arch.family for p in viv) == ["iterative", "pipelined"]  # spot-check counted once
+    assert dropped == [{"tool": "vivado 2025.2", "key": pipe.key(), "csv": "spot.csv", "kept_from": "full.csv",
+                        "disagree_pct": {}, "missing_in_one": []}]
+    assert {p.tool for p in report_only} == {"vivado post-route"} and len(report_only) == 2
+    cal_dir = tmp_path / "models"
+    cal_dir.mkdir()
+    base = cal_dir / "calibration_artix7.yaml"
+    base.write_text((ROOT / "src/hw_dse/models/calibration_artix7.yaml").read_text())
+    monkeypatch.setattr(recalibrate, "REPO_ROOT", tmp_path)
+    rep = recalibrate.refit([full, L4_CSV, spot], "t", base_path=base, impact=False)
+    assert rep["anchors_used"] == []  # both reference anchors superseded by generated-RTL Vivado rows
+    assert rep["n_fit_points"] == 2 + sum(p.rtl_source == "generated" for p in measured.load(L4_CSV))
+    assert "vivado post-route (generated RTL)" in rep["summary_after"]
+    assert "vivado (reference RTL)" in rep["summary_after"]  # still reported
+    md = recalibrate.markdown(rep)
+    assert "Reported, not fitted: 2 Vivado post-route rows" in md and "they agree within 0.5%" in md
+
+
+def test_duplicates_need_the_same_tool_version_and_disagreement_is_flagged(tmp_path: Path) -> None:
+    pipe = ArchConfig.from_params("pipelined", {"data_width": 16, "n_iter": 14})
+    a = _vivado_csv(tmp_path / "a.csv", [_row(pipe, 720, 751, 327.4)])
+    older = _row(pipe, 700, 751, 300.0)
+    older["tool_version"] = "2024.2"
+    b = _vivado_csv(tmp_path / "b.csv", [older, _row(pipe, 760, 751, 327.4)])
+    fit_rows, _, dropped = recalibrate.split_rows([a, b])
+    assert [p.tool_version for p in fit_rows] == ["2025.2", "2024.2"]  # another version is another measurement
+    assert len(dropped) == 1 and dropped[0]["disagree_pct"] == {"luts": pytest.approx(5.56, abs=0.01)}
+    md_line = recalibrate.markdown({**_minimal_report(), "duplicates_dropped": dropped})
+    assert "they disagree" in md_line and "luts +5.56%" in md_line
+    no_fmax = _vivado_csv(tmp_path / "c.csv", [_row(pipe, 720, 751, None)])
+    _, _, dropped = recalibrate.split_rows([a, no_fmax])
+    assert dropped[0]["missing_in_one"] == ["fmax_mhz"]  # present in one row, missing in the other
+    assert "fmax_mhz missing in one row" in recalibrate.markdown({**_minimal_report(), "duplicates_dropped": dropped})
+
+
+def _minimal_report() -> dict[str, object]:
+    consts = {k: 1.0 for k in recalibrate.CONST_NAMES}
+    return {"name": "t", "calibration_file": "x.yaml", "n_fit_points": 1, "base": "b", "constants_m1": consts,
+            "constants_refit": consts, "per_family": {}, "tool_corrections": {}, "summary_before": {},
+            "summary_after": {}, "residuals_before": [], "residuals_after": []}
+
+
+def test_ground_truth_re_evaluates_with_the_grids_cost_model(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The front and the selected design must carry the refit model's numbers, not the default's."""
+    from hw_dse import benchmark
+
+    designs = [ArchConfig.from_params("iterative", {"data_width": w, "n_iter": n}) for w, n in ((12, 10), (14, 12), (16, 14))]
+    monkeypatch.setattr(benchmark, "all_designs", lambda: designs)
+    refit_cm = FpgaCostModel(str(ROOT / "src/hw_dse/models/calibration_artix7_refit_vivado-2025.2.yaml"))
+    spec = load_spec(ROOT / "specs" / "low_area_control.yaml")
+    grid = benchmark.build_grid(cost_model=refit_cm)
+    assert grid.cost_model is refit_cm  # the grid carries its model; ground_truth cannot mix them up
+    gt = benchmark.ground_truth(grid, spec)
+    sel = ArchConfig.from_key(gt["selected"]["key"])
+    assert gt["selected"]["luts"] == pytest.approx(refit_cm.estimate(sel).area["luts"])
+    assert gt["selected"]["luts"] != pytest.approx(FpgaCostModel().estimate(sel).area["luts"])
+
+
+def test_committed_vivado_measurements_and_refit() -> None:
+    pts = measured.load(ROOT / "eval/data/vivado_measured.csv")
+    synth = [p for p in pts if not recalibrate.is_post_route(p)]
+    keys = {p.arch.key() for p in synth}
+    assert len(pts) == 16 and len(synth) == 8 and len(keys) == 8
+    assert {a.key() for a in VIVADO_POINTS} < keys
+    assert all(p.tool == "vivado" and p.rtl_source == "generated" and p.fmax_mhz for p in pts)
+    for p in pts:  # every row's reports are committed
+        for f in p.extra["source_log"].split(", "):
+            assert (ROOT / "eval/data/vivado_logs" / f).exists()
+    spot = measured.load(ROOT / "eval/data/vivado_spotcheck.csv")[0]
+    same = next(p for p in synth if p.arch.key() == spot.arch.key())
+    assert (same.luts, same.ffs) == (spot.luts, spot.ffs) and same.fmax_mhz == pytest.approx(spot.fmax_mhz, abs=0.05)
+    cal = load_calibration(str(ROOT / "src/hw_dse/models/calibration_artix7_refit_vivado-2025.2.yaml"))
+    assert cal["tool_corrections"]["vivado"] == {"luts": 1.0, "ffs": 1.0, "path": 1.0}
+    assert cal["refit"]["points_by_tool"] == {"vivado": 14, "yosys+nextpnr-xilinx": 37}
+    assert "eval/data/vivado_measured_2.csv" in cal["refit"]["sources"]
+    assert (ROOT / "eval/data/l5_refit_vivado-2025.2.md").exists()  # not truncated at the version's dot
+    assert load_calibration()["id"] == "artix7-xc7a35t-vivado2025.2-2anchor-v1"  # the default is untouched
+
+
+def test_second_vivado_batch_and_the_measured_high_precision_verdict() -> None:
+    """Batch 2 (6 designs) is schema-valid and its reports are committed; Vivado measures the
+    high_precision ground-truth winner (pipelined_m W26 N22 m=6) feasible and its m=8 neighbour not."""
+    pts = measured.load(ROOT / "eval/data/vivado_measured_2.csv")
+    synth = {p.arch.key(): p for p in pts if not recalibrate.is_post_route(p)}
+    assert len(pts) == 12 and len(synth) == 6
+    for p in pts:
+        for f in p.extra["source_log"].split(", "):
+            assert (ROOT / "eval/data/vivado_logs_2" / f).exists()
+    spec = load_spec(ROOT / "specs" / "high_precision.yaml")
+    need = spec.min_throughput_msps
+    m6, m8 = (ArchConfig.from_params("pipelined_m", {"data_width": 26, "n_iter": 22, "rounding": "round", "m": m})
+              for m in (6, 8))
+    assert synth[m6.key()].fmax_mhz * m6.results_per_cycle >= need  # 65.39 MSPS
+    assert synth[m8.key()].fmax_mhz * m8.results_per_cycle < need  # 49.88 MSPS: misses by 0.24%
+    gt = json.loads((ROOT / "eval/data/ground_truth.json").read_text())
+    assert gt["high_precision"]["selected"]["key"] == m6.key()  # the default model's winner is the measured-feasible one
+
+
+@pytest.mark.parametrize("csv_name, logs", [("vivado_measured.csv", "vivado_logs"), ("vivado_measured_2.csv", "vivado_logs_2")])
+def test_committed_vivado_csvs_reproduce_from_their_reports(csv_name: str, logs: str, tmp_path: Path) -> None:
+    """`collect` on the committed reports re-creates each committed CSV byte for byte (no EDA tools needed)."""
+    spec_ = importlib.util.spec_from_file_location("vivado_points", ROOT / "scripts" / "vivado_points.py")
+    vp = importlib.util.module_from_spec(spec_)
+    spec_.loader.exec_module(vp)  # type: ignore[union-attr]
+    out = tmp_path / csv_name
+    vp.collect(ROOT / "eval" / "data" / logs, out, "2025.2")
+    assert filecmp.cmp(out, ROOT / "eval" / "data" / csv_name, shallow=False)

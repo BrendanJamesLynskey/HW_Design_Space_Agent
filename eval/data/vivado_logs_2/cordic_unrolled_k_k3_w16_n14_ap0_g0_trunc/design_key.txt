@@ -1,0 +1,1 @@
+unrolled_k:data_width=16,n_iter=14,angle_guard=0,frac_guard=0,rounding=trunc,k=3

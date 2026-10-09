@@ -43,7 +43,7 @@ Simulators used for the committed rows: Verilator 5.020, Icarus Verilog 12.0
 * **Logs**: `l4_logs/<rtl_source>_<top>.log.gz` holds the Yosys `stat` output
   and the full nextpnr log of every seed.
 * **Points**: the two Vivado anchors twice (vendored reference RTL and the
-  generated equivalent), the six points to be re-run in Vivado (`unrolled_k`
+  generated equivalent), the six points also measured in Vivado (`unrolled_k`
   k=2/4, `pipelined_m` m=2/4, `pipelined` W=12/24; all N=14), the three
   ground-truth winners and a spread over every family (see
   `src/hw_dse/synth/sweep.py`).
@@ -62,7 +62,18 @@ Regenerate: `HW_DSE_CHIPDB_DIR=<dir with xc7a35t.bin> python scripts/run_l4_swee
 | `vivado_spotcheck.csv` | one Vivado 2025.2 measurement in the measured-points schema: the *generated* `pipelined` W=16 N=14 (720 LUT, 751 FF, 190 CARRY4, 327.4 MHz = 1000/(10 − 6.946 ns), `synth_design` only on xc7a35tcpg236-1), run by the maintainer with `scripts/vivado_points.py` while reviewing PR #3. Reports are not committed. |
 | `l5_refit_yosys-nextpnr.md` / `.json` | the cost model refitted to the 37 generated-RTL L4 points, the Vivado spot-check and the remaining reference-RTL Vivado anchor (`iterative`; the `pipelined` one is superseded by the spot-check), each tool carrying equal total weight, with one correction factor per tool and metric (Vivado = 1); residuals at every measured point before (M1 calibration) and after; leave-one-out RMS; the ground truth recomputed under the refit. Writes `src/hw_dse/models/calibration_artix7_refit_yosys-nextpnr.yaml`, which is **not** the default. |
 
-Regenerate: `python -m hw_dse.synth.recalibrate --measured eval/data/l4_synthesis.csv --measured eval/data/vivado_spotcheck.csv --name yosys-nextpnr`.
+| `vivado_measured.csv` | Vivado 2025.2 on the eight designs `scripts/vivado_points.py export --route` writes (`unrolled_k` k=2/4, `pipelined_m` m=2/4, `pipelined` W=12/24, and the *generated* `iterative` / `pipelined` anchors; W=16 N=14 unless noted), xc7a35tcpg236-1, 10 ns clock, `set_param general.maxThreads 2`, run on the maintainer's machine. Two rows per design: **post-synthesis** (`synth_design`, the anchors' flow; Fmax = 1000/(10 − WNS)) and **post-route** (`opt_design; place_design; route_design`, same formula), told apart by `fmax_kind`. |
+| `vivado_logs/<design>/` | the reports those rows were parsed from: `utilization.rpt`, `timing.rpt` (post-synthesis), `utilization_routed.rpt`, `timing_routed.rpt`, plus `design_key.txt`. The `Host` header lines are redacted. `python scripts/vivado_points.py collect --dir eval/data/vivado_logs --out eval/data/vivado_measured.csv` re-creates the CSV byte for byte. No checkpoints or project files. |
+| `vivado_measured_2.csv`, `vivado_logs_2/<design>/` | batch 2, same flow, layout and redaction: `pipelined_m` W=26 N=22 round m=6 / m=8 (the `high_precision` winner and its neighbour), `iterative` W=12 / W=24 N=14, `unrolled_k` k=3 / k=8 (W=16 N=14). Exported with `vivado_points.py` (`vp.POINTS` set to these six before `vp.export(..., route=True)`); 12 rows. |
+| `l5_refit_vivado-2025.2.md` / `.json` | the refit on the 14 Vivado post-synthesis rows (both batches) and the 37 generated-RTL L4 rows (the spot-check is counted once: it duplicates batch 1's `pipelined` W=16 N=14 row and agrees within 0.5%; the post-route rows and the reference-RTL anchors are reported, not fitted). Same method and report as below, plus a leave-one-out breakdown per tool. Writes `src/hw_dse/models/calibration_artix7_refit_vivado-2025.2.yaml`, which is **not** the default. |
+
+Regenerate:
+
+```bash
+python -m hw_dse.synth.recalibrate --measured eval/data/vivado_measured.csv --measured eval/data/vivado_measured_2.csv \
+       --measured eval/data/l4_synthesis.csv --measured eval/data/vivado_spotcheck.csv --name vivado-2025.2
+python -m hw_dse.synth.recalibrate --measured eval/data/l4_synthesis.csv --measured eval/data/vivado_spotcheck.csv --name yosys-nextpnr
+```
 
 ## The eval
 
