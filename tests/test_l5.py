@@ -7,6 +7,9 @@ All offline, on recorded data: the committed L4 sweep
 from __future__ import annotations
 
 import csv
+import filecmp
+import importlib.util
+import json
 from pathlib import Path
 
 import pytest
@@ -170,8 +173,6 @@ def test_back_annotate_node_runs_in_the_graph(tmp_path: Path) -> None:
 def test_vivado_points_export_and_collect(tmp_path: Path) -> None:
     """The Vivado PR path, offline: export the 8 designs, fake Vivado's reports from
     excerpts of the anchors' real reports, collect into a schema-valid CSV."""
-    import importlib.util
-
     spec_ = importlib.util.spec_from_file_location("vivado_points", ROOT / "scripts" / "vivado_points.py")
     vp = importlib.util.module_from_spec(spec_)
     spec_.loader.exec_module(vp)  # type: ignore[union-attr]
@@ -248,7 +249,7 @@ def test_post_route_vivado_rows_are_reported_not_fitted_and_duplicates_count_onc
     viv = [p for p in fit_rows if p.tool == "vivado"]
     assert sorted(p.arch.family for p in viv) == ["iterative", "pipelined"]  # spot-check counted once
     assert dropped == [{"tool": "vivado 2025.2", "key": pipe.key(), "csv": "spot.csv", "kept_from": "full.csv",
-                        "disagree_pct": {}}]
+                        "disagree_pct": {}, "missing_in_one": []}]
     assert {p.tool for p in report_only} == {"vivado post-route"} and len(report_only) == 2
     cal_dir = tmp_path / "models"
     cal_dir.mkdir()
@@ -275,6 +276,10 @@ def test_duplicates_need_the_same_tool_version_and_disagreement_is_flagged(tmp_p
     assert len(dropped) == 1 and dropped[0]["disagree_pct"] == {"luts": pytest.approx(5.56, abs=0.01)}
     md_line = recalibrate.markdown({**_minimal_report(), "duplicates_dropped": dropped})
     assert "they disagree" in md_line and "luts +5.56%" in md_line
+    no_fmax = _vivado_csv(tmp_path / "c.csv", [_row(pipe, 720, 751, None)])
+    _, _, dropped = recalibrate.split_rows([a, no_fmax])
+    assert dropped[0]["missing_in_one"] == ["fmax_mhz"]  # present in one row, missing in the other
+    assert "fmax_mhz missing in one row" in recalibrate.markdown({**_minimal_report(), "duplicates_dropped": dropped})
 
 
 def _minimal_report() -> dict[str, object]:
@@ -322,7 +327,7 @@ def test_committed_vivado_measurements_and_refit() -> None:
 
 
 def test_second_vivado_batch_and_the_measured_high_precision_verdict() -> None:
-    """Batch 2 (6 designs) is schema-valid and reproducible from its reports; Vivado measures the
+    """Batch 2 (6 designs) is schema-valid and its reports are committed; Vivado measures the
     high_precision ground-truth winner (pipelined_m W26 N22 m=6) feasible and its m=8 neighbour not."""
     pts = measured.load(ROOT / "eval/data/vivado_measured_2.csv")
     synth = {p.arch.key(): p for p in pts if not recalibrate.is_post_route(p)}
@@ -336,5 +341,16 @@ def test_second_vivado_batch_and_the_measured_high_precision_verdict() -> None:
               for m in (6, 8))
     assert synth[m6.key()].fmax_mhz * m6.results_per_cycle >= need  # 65.39 MSPS
     assert synth[m8.key()].fmax_mhz * m8.results_per_cycle < need  # 49.88 MSPS: misses by 0.24%
-    gt = __import__("json").loads((ROOT / "eval/data/ground_truth.json").read_text())
+    gt = json.loads((ROOT / "eval/data/ground_truth.json").read_text())
     assert gt["high_precision"]["selected"]["key"] == m6.key()  # the default model's winner is the measured-feasible one
+
+
+@pytest.mark.parametrize("csv_name, logs", [("vivado_measured.csv", "vivado_logs"), ("vivado_measured_2.csv", "vivado_logs_2")])
+def test_committed_vivado_csvs_reproduce_from_their_reports(csv_name: str, logs: str, tmp_path: Path) -> None:
+    """`collect` on the committed reports re-creates each committed CSV byte for byte (no EDA tools needed)."""
+    spec_ = importlib.util.spec_from_file_location("vivado_points", ROOT / "scripts" / "vivado_points.py")
+    vp = importlib.util.module_from_spec(spec_)
+    spec_.loader.exec_module(vp)  # type: ignore[union-attr]
+    out = tmp_path / csv_name
+    vp.collect(ROOT / "eval" / "data" / logs, out, "2025.2")
+    assert filecmp.cmp(out, ROOT / "eval" / "data" / csv_name, shallow=False)

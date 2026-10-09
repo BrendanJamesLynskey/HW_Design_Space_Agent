@@ -340,7 +340,8 @@ def split_rows(measured_csvs: list[Path]) -> tuple[list[MeasuredPoint], list[Mea
     * The same design measured twice by the same tool, tool version and flow
       (e.g. the review's spot-check and the full Vivado run) is counted once:
       the row from the CSV given first wins. If the two rows disagree by more
-      than :data:`DUPLICATE_TOLERANCE` on any metric, the report says so.
+      than :data:`DUPLICATE_TOLERANCE` on any metric, or one row has a metric
+      the other lacks, the report says so.
     """
     seen: dict[tuple[str, str, str, str, bool], tuple[str, MeasuredPoint]] = {}
     fit_rows, report_only, dropped = [], [], []
@@ -349,11 +350,11 @@ def split_rows(measured_csvs: list[Path]) -> tuple[list[MeasuredPoint], list[Mea
             k = (p.tool, p.tool_version, p.rtl_source, p.arch.key(), is_post_route(p))
             if k in seen:
                 kept_csv, kept = seen[k]
-                diffs = {m: round((b / a - 1) * 100, 2) for m, a, b in (("luts", kept.luts, p.luts), ("ffs", kept.ffs, p.ffs),
-                                                                         ("fmax_mhz", kept.fmax_mhz, p.fmax_mhz))
-                         if a and b and abs(b / a - 1) > DUPLICATE_TOLERANCE}
+                pairs = (("luts", kept.luts, p.luts), ("ffs", kept.ffs, p.ffs), ("fmax_mhz", kept.fmax_mhz, p.fmax_mhz))
+                diffs = {m: round((b / a - 1) * 100, 2) for m, a, b in pairs if a and b and abs(b / a - 1) > DUPLICATE_TOLERANCE}
                 dropped.append({"tool": f"{p.tool} {p.tool_version}", "key": p.arch.key(), "csv": c.name,
-                                "kept_from": kept_csv, "disagree_pct": diffs})
+                                "kept_from": kept_csv, "disagree_pct": diffs,
+                                "missing_in_one": [m for m, a, b in pairs if bool(a) != bool(b)]})
                 continue
             seen[k] = (c.name, p)
             if p.tool == REFERENCE_TOOL and is_post_route(p):
@@ -438,8 +439,9 @@ def markdown(rep: dict[str, Any]) -> str:
         L.append(f"\nReported, not fitted: {len(rep['report_only'])} Vivado post-route rows (tool `vivado post-route`; "
                  "the anchors and the default model are post-synthesis), shown with no tool factor.")
     for d in rep.get("duplicates_dropped", []):
-        agree = ("**they disagree**: " + ", ".join(f"{m} {v:+.2f}%" for m, v in d["disagree_pct"].items())
-                 if d.get("disagree_pct") else f"they agree within {DUPLICATE_TOLERANCE:.1%}")
+        bad = [f"{m} {v:+.2f}%" for m, v in d.get("disagree_pct", {}).items()]
+        bad += [f"{m} missing in one row" for m in d.get("missing_in_one", [])]
+        agree = "**they disagree**: " + ", ".join(bad) if bad else f"they agree within {DUPLICATE_TOLERANCE:.1%}"
         L.append(f"\nCounted once: `{d['key']}` ({d['tool']}) is in both `{d['kept_from']}` (kept) and `{d['csv']}` "
                  f"(dropped); {agree}.")
     if rep.get("loo_summary"):

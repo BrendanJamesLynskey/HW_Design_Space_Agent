@@ -65,7 +65,7 @@ class Grid:
     accuracy_bits: np.ndarray
     power_norm: float
     activity: float
-    cost_model: Any = None  # the model the columns were computed with (build_grid sets it)
+    cost_model: Any  # the model the columns were computed with (set by build_grid, the only constructor)
 
     def __len__(self) -> int:
         return int(self.family.size)

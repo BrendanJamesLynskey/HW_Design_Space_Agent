@@ -2074,7 +2074,8 @@
    "key": "pipelined:data_width=16,n_iter=14,angle_guard=0,frac_guard=0,rounding=trunc",
    "csv": "vivado_spotcheck.csv",
    "kept_from": "vivado_measured.csv",
-   "disagree_pct": {}
+   "disagree_pct": {},
+   "missing_in_one": []
   }
  ],
  "leave_one_out": [
