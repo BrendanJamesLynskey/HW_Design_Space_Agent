@@ -16,10 +16,13 @@ Step 3, here again: parse the reports into a measured-points CSV (the schema of
 
     python scripts/vivado_points.py collect --dir vivado_points/ --out eval/data/vivado_measured.csv
     python -m hw_dse.synth.recalibrate --measured eval/data/vivado_measured.csv \\
-        --measured eval/data/l4_synthesis.csv --measured eval/data/vivado_spotcheck.csv --name vivado-2025.2
+        --measured eval/data/vivado_measured_2.csv --measured eval/data/l4_synthesis.csv \\
+        --measured eval/data/vivado_spotcheck.csv --name vivado-2025.2
 
-(The committed ``eval/data/vivado_measured.csv`` was collected from the reports
-copied into ``eval/data/vivado_logs/``; see ``eval/data/README.md``.)
+(The committed ``eval/data/vivado_measured.csv`` / ``vivado_measured_2.csv`` were
+collected from the reports copied into ``eval/data/vivado_logs/`` / ``vivado_logs_2/``;
+batch 2 set ``POINTS`` to other designs before calling :func:`export`. See
+``eval/data/README.md``.)
 
 Fmax is computed as the anchors' was, ``1000 / (10 - WNS)`` from the
 post-synthesis timing summary. Add ``--route`` to ``export`` to also place and
