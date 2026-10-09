@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hw-dse"
-version = "0.2.0"
+version = "0.3.0"
 description = "A LangGraph agent for hardware design-space exploration: spec in, Pareto-optimal architecture out. CORDIC sin/cos on Artix-7: analytical exploration, verified RTL, open-source synthesis, back-annotation."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -21,6 +21,7 @@ dependencies = [
     "langgraph-checkpoint-sqlite>=2.0",
     "langchain-core>=0.3.30",
     "python-dotenv>=1.0",
+    "simpy==4.1.2",                       # L2 system models (milestone 3); pure Python
 ]
 
 [project.optional-dependencies]
@@ -31,6 +32,9 @@ openrouter = ["langchain-openai>=0.3"]
 anthropic = ["langchain-anthropic>=0.3"]
 gemini = ["langchain-google-genai>=2.0"]
 ollama = ["langchain-ollama>=0.3"]
+# Milestone 3 campaign layer (optional outer agent): LangChain Deep Agents,
+# pinned because its API moves quickly (see README, "Campaign agent").
+campaign = ["deepagents==0.7.23", "langchain-openai>=0.3"]
 
 [project.scripts]
 hw-dse = "hw_dse.cli:main"

@@ -65,6 +65,12 @@ GT_FILE = DATA / "ground_truth.json"
 BASELINES = {"m1": DATA / "baselines.json", "m2": DATA / "baselines_m2.json"}
 AGENT_DIRS = {"m1": DATA / "agent", "m2": DATA / "agent_m2", "m2-pilot": DATA / "agent_m2_pilot"}
 RESULTS = ROOT / "eval" / "results.md"
+GT_M3_FILE = DATA / "ground_truth_m3.json"
+# Milestone 3 system-level specs (specs/system/). The eval runs agents and
+# baselines on M3_EVAL_SPECS; dds_sfdr is ground truth only (a negative
+# result: its system constraints reduce to the MSPS-only view, see results.md).
+M3_EVAL_SPECS = ("multiaxis_control", "bursty_offload")
+M3_GT_ONLY = ("dds_sfdr",)
 SEEDS = {"m1": (0, 1, 2), "m2": (0, 1, 2, 3, 4)}
 LEDGER = DATA / "spend_ledger.jsonl"
 
@@ -102,6 +108,71 @@ def cmd_ground_truth(_: argparse.Namespace) -> None:
     DATA.mkdir(parents=True, exist_ok=True)
     GT_FILE.write_text(json.dumps(out, indent=1))
     print(f"wrote {GT_FILE} in {time.time() - t0:.0f}s")
+
+
+def system_specs() -> list[Spec]:
+    return [load_spec(p) for p in sorted((ROOT / "specs" / "system").glob("*.yaml"))]
+
+
+def _slim_sys(rec: dict[str, Any] | None, spec: Spec) -> dict[str, Any] | None:
+    out = _slim(rec)
+    if out is None or rec is None:
+        return out
+    for c in spec.constraints:
+        if c.metric.startswith("sys_"):
+            out[c.metric] = rec[c.metric]
+    for k in ("m", "k", "data_width", "n_iter"):
+        if k in rec:
+            out[k] = rec[k]
+    return out
+
+
+def cmd_ground_truth_m3(_: argparse.Namespace) -> None:
+    """Exhaustive ground truth for the system specs, three ways: the truth
+    (system metrics simulated at L2), what L1 screening sees (analytic
+    bounds), and the MSPS-only view (the spec without its system constraints,
+    throughput floor = the scenario's average offered rate)."""
+    import numpy as np
+
+    from hw_dse.benchmark import _feasible_mask, select_design
+    from hw_dse.evaluate import evaluate
+
+    accuracy_table.preload()
+    t0 = time.time()
+    grid = build_grid()
+    out: dict[str, Any] = {}
+    for s in system_specs():
+        gt = ground_truth(grid, s)
+        alt = s.without_system()
+        gt_msps = ground_truth(grid, alt)
+        mb = grid.metrics(s, "bound")
+        fb = _feasible_mask(mb, s)
+        sel_metric = mb[s.select_by]
+        idx = np.flatnonzero(fb)
+        best = sel_metric[idx].min() if s.select_direction == "min" else sel_metric[idx].max()
+        ties = idx[np.flatnonzero(sel_metric[idx] == best)]
+        bound_sel = select_design([evaluate(grid.arch(int(i)), s) for i in ties], s)
+        out[s.name] = {
+            "n_designs": gt["n_designs"], "n_feasible": gt["n_feasible"], "feasible": gt["feasible"],
+            "hv_true": gt.get("hv_true", 0.0), "best_throughput_msps_any": gt["best_throughput_msps_any"],
+            "selected": _slim_sys(gt["selected"], s), "front": [_slim_sys(r, s) for r in gt["front"]],
+            "eval": s.name in M3_EVAL_SPECS,
+            "n_feasible_l1_bound": int(fb.sum()),
+            "l1_bound_selected": _slim_sys(bound_sel, s),
+            "msps_only": {"spec": alt.model_dump(), "n_feasible": gt_msps["n_feasible"], "hv_true": gt_msps.get("hv_true", 0.0),
+                          "selected": _slim(gt_msps["selected"]), "front_size": len(gt_msps["front"])},
+            "winner_changes_vs_msps_only": bool(gt["selected"] and gt_msps["selected"]
+                                                and gt["selected"]["key"] != gt_msps["selected"]["key"]),
+        }
+        print(f"{s.name}: {gt['n_feasible']} feasible (L1 bound {int(fb.sum())}), selected "
+              f"{gt['selected']['key'] if gt['selected'] else None}; L1-bound selection "
+              f"{bound_sel['key'] if bound_sel else None}; MSPS-only {gt_msps['selected']['key'] if gt_msps['selected'] else None}")
+    GT_M3_FILE.write_text(json.dumps(out, indent=1))
+    print(f"wrote {GT_M3_FILE} in {time.time() - t0:.0f}s")
+
+
+def load_gt_m3() -> dict[str, Any]:
+    return json.loads(GT_M3_FILE.read_text())
 
 
 def load_gt() -> dict[str, Any]:
@@ -432,6 +503,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("ground-truth").set_defaults(fn=cmd_ground_truth)
+    sub.add_parser("ground-truth-m3").set_defaults(fn=cmd_ground_truth_m3)
     b = sub.add_parser("baselines")
     b.add_argument("--milestone", choices=("m1", "m2"), default="m2")
     b.set_defaults(fn=cmd_baselines)
