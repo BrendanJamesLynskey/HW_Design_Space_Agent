@@ -34,7 +34,7 @@
     "map_front",
     "stop"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3_memory/20261009-174055-b15d/dse/bursty_offload/20261009-174112-08b3",
+   "run_dir": "runs/campaign_m3_memory/20261009-174055-b15d/dse/bursty_offload/20261009-174112-08b3",
    "notes": "Bursty spec: bursts of 8 requests 0 ns apart, Poisson 2 req/us, p99 latency <= 0.4 us. A single iterative CORDIC (12 iters, ~12 cycles @ 150 MHz = 80 ns) cannot drain an 8-deep burst before the next burst arrives (avg 0.5 us apart) \u2014 expect queue buildup and p99 violation. Prior campaigns: iterative family reached the front; pipelined/unrolled_k/pipelined_m never did on this device, but this spec's latency constraint may favor pipelined (1-cycle latency, throughput-limited) designs. Prior area-min winner: iterative dw=16, n_iter=12, truncation (267 LUTs+FFs, 10.5 acc bits). Selection rule: min luts_plus_ffs among feasible.",
    "llm_declared_infeasible": false
   }
@@ -131,5 +131,5 @@
  "select_regret": 0.14705564991938802,
  "declared_infeasible": false,
  "infeasibility_correct": true,
- "memory_lessons_before": null
+ "memory_lessons_before": "not recorded in the M3 eval (always None, review N6; recorded for runs after the fix); the store after each spec is in campaign_m3_memory_store.json"
 }

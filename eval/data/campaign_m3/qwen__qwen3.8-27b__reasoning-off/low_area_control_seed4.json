@@ -32,7 +32,7 @@
     "add_family",
     "refine"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-185346-6bb4/dse/low_area_control/20261009-185359-835d",
+   "run_dir": "runs/campaign_m3/20261009-185346-6bb4/dse/low_area_control/20261009-185359-835d",
    "notes": "Area-critical spec: minimize LUTs+FFs, throughput >= 1 MSPS, max_abs_err <= 2^-10. Favor compact iterative or small-k unrolled designs; pipelined variants likely too area-hungry.",
    "llm_declared_infeasible": false
   }

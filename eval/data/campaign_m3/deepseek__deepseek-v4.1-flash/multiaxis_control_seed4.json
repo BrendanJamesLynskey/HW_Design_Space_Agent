@@ -34,7 +34,7 @@
     "map_front",
     "stop"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-184459-e74e/dse/multiaxis_control/20261009-184502-86e3",
+   "run_dir": "runs/campaign_m3/20261009-184459-e74e/dse/multiaxis_control/20261009-184502-86e3",
    "notes": "System spec: 32 requests/us burst, p99 batch latency <= 0.44us, err <= 2^-12, throughput >= 32 Msps. Minimise LUTs+FFs, maximise accuracy_bits. Need designs with enough parallelism (pipelined/unrolled) to meet the 0.44us batch bound; keep area low. Screen with the analytic sys bound at L1, then L2-simulate the shortlist.",
    "llm_declared_infeasible": false
   }

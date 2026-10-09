@@ -34,7 +34,7 @@
     "map_front",
     "stop"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-181314-588d/dse/multiaxis_control/20261009-181320-d0ba",
+   "run_dir": "runs/campaign_m3/20261009-181314-588d/dse/multiaxis_control/20261009-181320-d0ba",
    "notes": "System spec: 32 requests issued at once per 1 us tick, all 32 must return within 0.44 us (p99). So need throughput >= 32 Msps AND batch latency <= 0.44 us for a batch of 32 -> per-request latency budget ~0.44us; pipelined/multi-lane families likely needed (32 lanes or high II=1 throughput with short latency). Accuracy: max_abs_err <= 2^-12 = 0.000244141, so accuracy_bits >= 12. Objective: minimise luts_plus_ffs (HV ref 4000), maximise accuracy_bits (HV ref 12). Selection rule: min luts_plus_ffs among feasible. L1 screens the system constraint with an analytic bound; keep the shortlist diverse in family (iterative, unrolled_k, pipelined, pipelined_m) so L2 can re-select on simulated p99.",
    "llm_declared_infeasible": false
   }

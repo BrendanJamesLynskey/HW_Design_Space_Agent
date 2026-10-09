@@ -33,7 +33,7 @@
     "refine",
     "stop"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3_memory/20261009-180818-45e2/dse/bursty_offload/20261009-180832-d76e",
+   "run_dir": "runs/campaign_m3_memory/20261009-180818-45e2/dse/bursty_offload/20261009-180832-d76e",
    "notes": "Bursty Poisson traffic, 8-req bursts, 2 req/us mean, p99 <= 0.4us. Selection rule is min LUTs+FFs, so favor low-area designs that still pass the p99 latency in L2 simulation. Prior campaign: iterative dw=15/n_iter=12 was the area winner for a low-rate spec; pipelined/unrolled families never reached a front on this device. M1 cost model under-predicts LUTs ~19%, FFs ~11% vs yosys+nextpnr.",
    "llm_declared_infeasible": false
   }
@@ -130,5 +130,5 @@
  "select_regret": 0.09449719799882417,
  "declared_infeasible": false,
  "infeasibility_correct": true,
- "memory_lessons_before": null
+ "memory_lessons_before": "not recorded in the M3 eval (always None, review N6; recorded for runs after the fix); the store after each spec is in campaign_m3_memory_store.json"
 }

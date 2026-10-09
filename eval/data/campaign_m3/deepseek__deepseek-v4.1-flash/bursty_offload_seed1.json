@@ -34,7 +34,7 @@
     "map_front",
     "stop"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-181516-74e2/dse/bursty_offload/20261009-181524-0502",
+   "run_dir": "runs/campaign_m3/20261009-181516-74e2/dse/bursty_offload/20261009-181524-0502",
    "notes": "System spec: bursts of 8 requests, Poisson arrivals at 2 req/us; p99 latency <= 0.4us is tight, so the L1 analytic bound must be treated as optimistic \u2014 prefer designs with real throughput headroom (>= 2 Msps constraint, aim well above) and low per-request latency. Objective is min luts_plus_ffs with accuracy_bits >= 10 (max_abs_err <= 2^-10). Explore iterative and pipelined families broadly; keep the front well spread so L2 simulation has good candidates.",
    "llm_declared_infeasible": false
   }

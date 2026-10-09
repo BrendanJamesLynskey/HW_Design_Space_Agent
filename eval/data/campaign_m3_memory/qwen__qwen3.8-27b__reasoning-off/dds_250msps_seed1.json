@@ -34,7 +34,7 @@
     "add_family",
     "stop"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3_memory/20261009-175814-93de/dse/dds_250msps/20261009-175825-2e31",
+   "run_dir": "runs/campaign_m3_memory/20261009-175814-93de/dse/dds_250msps/20261009-175825-2e31",
    "notes": "DDS spec: 1 sample/clock at >=250 MSPS, err <= 2^-13, min LUTs. Pipelined_m (m=1) is the natural family for 1-sample-per-clock; iterative is too slow (12 cycles/sample ~ 83 MSPS at 1GHz). unrolled_k likely area-hungry. Prior calibration: cost model underestimates LUTs ~19%, FFs ~11%, Fmax ~10% vs yosys+nextpnr-xilinx. Favor data_width ~16-18, n_iter ~14-16 for 2^-13 accuracy.",
    "llm_declared_infeasible": false
   }
@@ -67,5 +67,5 @@
  "select_regret": 0.016298020954598386,
  "declared_infeasible": false,
  "infeasibility_correct": true,
- "memory_lessons_before": null
+ "memory_lessons_before": "not recorded in the M3 eval (always None, review N6; recorded for runs after the fix); the store after each spec is in campaign_m3_memory_store.json"
 }

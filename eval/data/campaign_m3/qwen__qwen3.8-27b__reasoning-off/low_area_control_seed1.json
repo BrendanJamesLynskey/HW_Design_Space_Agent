@@ -33,7 +33,7 @@
     "refine",
     "stop"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-180317-bc32/dse/low_area_control/20261009-180329-fd91",
+   "run_dir": "runs/campaign_m3/20261009-180317-bc32/dse/low_area_control/20261009-180329-fd91",
    "notes": "Area is everything: prioritize small data widths and pipelined/iterative families that meet >=1 MSPS throughput and max_abs_err <= 2^-10. Keep luts_plus_ffs minimal.",
    "llm_declared_infeasible": false
   }

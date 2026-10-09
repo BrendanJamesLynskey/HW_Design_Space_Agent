@@ -34,7 +34,7 @@
     "map_front",
     "stop"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-184617-895a/dse/bursty_offload/20261009-184622-77fb",
+   "run_dir": "runs/campaign_m3/20261009-184617-895a/dse/bursty_offload/20261009-184622-77fb",
    "notes": "System spec: bursts of 8 requests 0 ns apart, Poisson arrivals at 2 req/us; p99 latency <= 0.4 us is a hard constraint screened at L1 by an analytic bound but only truly checked at L2. Prioritise designs with low latency (pipelined / pipelined_m families, high throughput) while minimising luts_plus_ffs; accuracy_bits >= 10 required (max_abs_err <= 2^-10). Selection rule is min luts_plus_ffs, so keep the front well-mapped across the accuracy/area trade-off and make sure the area-optimal feasible designs are not lost to the analytic latency screen.",
    "llm_declared_infeasible": false
   }

@@ -30,7 +30,7 @@
    "decisions": [
     "infeasible"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-183423-a57a/dse/infeasible_dds_400msps/20261009-183433-b0ea",
+   "run_dir": "runs/campaign_m3/20261009-183423-a57a/dse/infeasible_dds_400msps/20261009-183433-b0ea",
    "notes": "DDS spec: needs >=400 MSPS single-lane, max_abs_err <= 2^-12, minimise LUTs. Watch feasibility: pipelined families may be needed for throughput; check accuracy_bits >= 12.",
    "llm_declared_infeasible": true
   }

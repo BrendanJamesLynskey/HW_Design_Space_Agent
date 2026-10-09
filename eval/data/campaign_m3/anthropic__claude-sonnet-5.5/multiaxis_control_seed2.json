@@ -33,7 +33,7 @@
     "refine",
     "stop"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-193035-9234/dse/multiaxis_control/20261009-193040-44dd",
+   "run_dir": "runs/campaign_m3/20261009-193035-9234/dse/multiaxis_control/20261009-193040-44dd",
    "notes": "System needs 32 results within 0.44us => ~73 Msps effective throughput; favor pipelined / unrolled families; accuracy >=12 bits.",
    "llm_declared_infeasible": false
   }

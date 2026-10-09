@@ -63,7 +63,7 @@
     "add_family",
     "stop"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-191854-6346/dse/bursty_offload/20261009-191925-5f28",
+   "run_dir": "runs/campaign_m3/20261009-191854-6346/dse/bursty_offload/20261009-191925-5f28",
    "notes": "Bursty Poisson arrivals, bursts of 8, p99 latency <= 0.4us. Favor designs with high sustained throughput (pipelined families) so bursts drain fast; accuracy needs >= 10 bits (max_abs_err <= 2^-10). Selection rule: min luts_plus_ffs among feasible.",
    "llm_declared_infeasible": false
   }

@@ -30,7 +30,7 @@
    "decisions": [
     "infeasible"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-185244-76ff/dse/infeasible_dds_400msps/20261009-185256-cbff",
+   "run_dir": "runs/campaign_m3/20261009-185244-76ff/dse/infeasible_dds_400msps/20261009-185256-cbff",
    "notes": "Spec is named infeasible: needs >=400 MSPS single-lane with max_abs_err <= 2^-12. If the front shows no feasible points, map the best near-feasible tradeoff (min LUTs vs accuracy) anyway; pipelined families are the only route to high throughput.",
    "llm_declared_infeasible": true
   }

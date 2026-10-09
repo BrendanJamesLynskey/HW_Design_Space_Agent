@@ -30,7 +30,7 @@
    "decisions": [
     "infeasible"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-182120-70ff/dse/infeasible_dds_400msps/20261009-182129-32a1",
+   "run_dir": "runs/campaign_m3/20261009-182120-70ff/dse/infeasible_dds_400msps/20261009-182129-32a1",
    "notes": "Spec: wideband DDS, >=400 MSPS single-lane, max_abs_err <= 2^-12, minimize LUTs. Name suggests infeasible \u2014 explore families broadly (iterative, unrolled_k, pipelined_m) to confirm feasibility; pipelined_m with enough stages is the likely throughput path.",
    "llm_declared_infeasible": true
   }

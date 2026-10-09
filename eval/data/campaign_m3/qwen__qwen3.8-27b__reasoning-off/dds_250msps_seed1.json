@@ -33,7 +33,7 @@
     "refine",
     "stop"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-175648-9e9d/dse/dds_250msps/20261009-175659-2cd3",
+   "run_dir": "runs/campaign_m3/20261009-175648-9e9d/dse/dds_250msps/20261009-175659-2cd3",
    "notes": "DDS/NCO sin-cos generator: one sample per clock at >=250 MSPS, max_abs_err <= 2^-13, minimize LUTs (HV ref 4000), maximize accuracy_bits (HV ref 13). Selection rule: min LUTs. Prioritize pipelined families for throughput; keep data widths tight to control LUTs while meeting 13-bit accuracy.",
    "llm_declared_infeasible": false
   }

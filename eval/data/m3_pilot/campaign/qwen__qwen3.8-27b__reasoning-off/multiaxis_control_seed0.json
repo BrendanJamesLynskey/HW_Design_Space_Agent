@@ -33,7 +33,7 @@
     "refine",
     "stop"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3_pilot/20261009-173408-03c1/dse/multiaxis_control/20261009-173424-59d1",
+   "run_dir": "runs/campaign_m3_pilot/20261009-173408-03c1/dse/multiaxis_control/20261009-173424-59d1",
    "notes": "Spec: 16-axis motor control, 32 requests per 1us tick, all results back within 0.44us p99. Need throughput >= 32 Msps and tight batch latency. Pipelined families (pipelined, pipelined_m) are the natural fit for high throughput with small area; unrolled_k with k>=32 could also meet the batch deadline but may cost area. Keep max_abs_err <= 2^-12 (accuracy_bits >= 12). Minimize luts+ffs.",
    "llm_declared_infeasible": false
   }

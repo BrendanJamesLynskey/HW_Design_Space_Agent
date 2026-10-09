@@ -33,7 +33,7 @@
     "add_family",
     "stop"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-180752-525a/dse/multiaxis_control/20261009-180805-661e",
+   "run_dir": "runs/campaign_m3/20261009-180752-525a/dse/multiaxis_control/20261009-180805-661e",
    "notes": "Spec: 16-axis motor control, 32 simultaneous requests per 1us tick, all 32 results back within 0.44us p99. Max abs err <= 2^-12. Minimize LUTs+FFs. Throughput >= 32 Msps. Consider pipelined families for throughput; iterative may not meet 32 Msps.",
    "llm_declared_infeasible": false
   }

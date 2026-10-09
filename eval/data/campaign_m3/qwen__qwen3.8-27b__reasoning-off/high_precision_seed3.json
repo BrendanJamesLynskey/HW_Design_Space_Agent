@@ -33,7 +33,7 @@
     "refine",
     "stop"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-183218-5464/dse/high_precision/20261009-183230-4105",
+   "run_dir": "runs/campaign_m3/20261009-183218-5464/dse/high_precision/20261009-183230-4105",
    "notes": "High-precision coherent demod: max_abs_err <= 2^-20 (~9.54e-7) at >= 50 MSPS. Tight error constraint \u2014 favor pipelined families with enough stages/precision; iterative designs may struggle on throughput. Selection rule: min luts_plus_ffs, so keep the small-area end of the front well populated.",
    "llm_declared_infeasible": false
   }

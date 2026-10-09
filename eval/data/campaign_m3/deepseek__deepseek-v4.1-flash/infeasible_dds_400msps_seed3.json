@@ -31,7 +31,7 @@
     "refine",
     "infeasible"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-183214-cb91/dse/infeasible_dds_400msps/20261009-183223-619f",
+   "run_dir": "runs/campaign_m3/20261009-183214-cb91/dse/infeasible_dds_400msps/20261009-183223-619f",
    "notes": "Spec is suspected hard/infeasible: throughput_msps >= 400 AND max_abs_err <= 2^-12 at the same time. Map the boundary of the feasible region and keep the best-compromise designs (highest throughput at min error, and largest accuracy_bits at >=400 MSPS) so a selection can still be made if the feasible set is empty. Prefer unrolled/pipelined families for throughput.",
    "llm_declared_infeasible": true
   }

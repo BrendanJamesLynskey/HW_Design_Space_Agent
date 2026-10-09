@@ -34,7 +34,7 @@
     "refine",
     "stop"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3_memory/20261009-181137-7737/dse/dds_250msps/20261009-181151-ee88",
+   "run_dir": "runs/campaign_m3_memory/20261009-181137-7737/dse/dds_250msps/20261009-181151-ee88",
    "notes": "DDS/NCO spec: needs 1 sample/clock at >=250 MSPS, so pipelined families (m>=1) are the natural fit; iterative (1 sample per n_iter cycles) likely fails throughput. Accuracy needs ~13 bits (max_abs_err <= 2^-13), so n_iter ~12-13 with dw ~15-16. Minimize LUTs. Prior campaigns: pipelined_m dominated bursty front (m=4..7, dw=15..20, n_iter=12..13); plain pipelined and unrolled_k never reached a front. Focus budget on pipelined_m with small m (m=1..4) and dw 14..18, n_iter 12..13.",
    "llm_declared_infeasible": false
   }
@@ -84,5 +84,5 @@
  "select_regret": 0.048894062863795155,
  "declared_infeasible": false,
  "infeasibility_correct": true,
- "memory_lessons_before": null
+ "memory_lessons_before": "not recorded in the M3 eval (always None, review N6; recorded for runs after the fix); the store after each spec is in campaign_m3_memory_store.json"
 }

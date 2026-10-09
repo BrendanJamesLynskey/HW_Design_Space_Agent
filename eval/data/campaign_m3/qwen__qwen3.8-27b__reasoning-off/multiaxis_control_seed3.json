@@ -34,7 +34,7 @@
     "map_front",
     "stop"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-183813-a9b3/dse/multiaxis_control/20261009-183828-ac4d",
+   "run_dir": "runs/campaign_m3/20261009-183813-a9b3/dse/multiaxis_control/20261009-183828-ac4d",
    "notes": "Spec: 16-axis motor control, 32 simultaneous requests per 1us tick, all 32 results back within 0.44us p99. Batch throughput is the binding constraint: pipelined families with enough parallelism (m) are likely needed; unrolled_k with k>=32 may be too area-heavy. Keep accuracy >= 12 bits (max_abs_err <= 2^-12). Minimize luts+ffs.",
    "llm_declared_infeasible": false
   }

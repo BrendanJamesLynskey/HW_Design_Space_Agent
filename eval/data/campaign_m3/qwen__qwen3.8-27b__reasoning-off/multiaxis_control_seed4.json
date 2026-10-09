@@ -36,7 +36,7 @@
     "add_family",
     "stop"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-185751-16ff/dse/multiaxis_control/20261009-185814-a7f1",
+   "run_dir": "runs/campaign_m3/20261009-185751-16ff/dse/multiaxis_control/20261009-185814-a7f1",
    "notes": "Spec: 32 requests per 1us tick, all results back within 0.44us of the tick (p99). A pipelined design with enough parallelism (m >= 32) or a wide unrolled datapath is likely needed to meet the batch latency bound; iterative designs will fail the 0.44us batch constraint. Max error <= 2^-12, so accuracy_bits >= 12. Minimise LUTs+FFs.",
    "llm_declared_infeasible": false
   }
@@ -131,8 +131,19 @@
  "hv_frac": 0.7879590911889433,
  "evals_to_95": null,
  "selected_meets_spec": true,
- "selected_key": "pipelined_m:data_width=18,n_iter=14,angle_guard=1,frac_guard=0,rounding=round,m=4",
- "select_regret": 0.05150241685773422,
+ "selected_key": "pipelined_m:data_width=18,n_iter=14,angle_guard=0,frac_guard=0,rounding=round,m=4",
+ "select_regret": 0.03496226675946299,
  "declared_infeasible": false,
- "infeasibility_correct": true
+ "infeasibility_correct": true,
+ "before_b1": {
+  "selected_key": "pipelined_m:data_width=18,n_iter=14,angle_guard=1,frac_guard=0,rounding=round,m=4",
+  "select_regret": 0.05150241685773422,
+  "hv_frac": 0.7879590911889433,
+  "selected_meets_spec": true,
+  "evals_to_95": null,
+  "l2_winner_changed": null
+ },
+ "l1_selected_key": "pipelined_m:data_width=18,n_iter=14,angle_guard=0,frac_guard=0,rounding=round,m=5",
+ "l2_winner_changed": true,
+ "rescored": "after the L2 fix (review B1): selection over every L1-feasible design; L1 evaluations unchanged (eval/m3_rescore.py)"
 }

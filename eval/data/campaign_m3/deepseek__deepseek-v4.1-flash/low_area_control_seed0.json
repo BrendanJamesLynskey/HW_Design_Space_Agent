@@ -34,7 +34,7 @@
     "map_front",
     "stop"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-175008-280b/dse/low_area_control/20261009-175010-dd86",
+   "run_dir": "runs/campaign_m3/20261009-175008-280b/dse/low_area_control/20261009-175010-dd86",
    "notes": "Area-dominated spec: minimise LUTs+FFs subject to throughput>=1 MSPS and max_abs_err<=2^-10. Favour small iterative/unrolled families with modest data width; keep accuracy_bits>=10. No system scenario expected, so L2 may be a no-op.",
    "llm_declared_infeasible": false
   }

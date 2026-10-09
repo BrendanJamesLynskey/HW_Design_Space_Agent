@@ -35,7 +35,7 @@
     "add_family",
     "add_family"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-182517-de34/dse/multiaxis_control/20261009-182527-c201",
+   "run_dir": "runs/campaign_m3/20261009-182517-de34/dse/multiaxis_control/20261009-182527-c201",
    "notes": "Spec: 16-axis motor control, 32 requests per 1us tick, all results back within 0.44us p99. Need throughput >= 32 Msps, max_abs_err <= 2^-12. Minimize LUTs+FFs. Pipelined families likely best for throughput; unrolled_k with k>=32 could meet latency but costs area. Keep accuracy at 12 bits to hit error bound without waste.",
    "llm_declared_infeasible": false
   }

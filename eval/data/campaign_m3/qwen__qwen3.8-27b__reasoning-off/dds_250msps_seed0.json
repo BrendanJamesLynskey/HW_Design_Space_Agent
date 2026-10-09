@@ -34,7 +34,7 @@
     "map_front",
     "stop"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-173834-ebb9/dse/dds_250msps/20261009-173849-45ce",
+   "run_dir": "runs/campaign_m3/20261009-173834-ebb9/dse/dds_250msps/20261009-173849-45ce",
    "notes": "DDS/NCO sin-cos for up-converter: 1 sample/clock at >=250 MSPS, max_abs_err <= 2^-13, minimise LUTs. Prioritize pipelined families for throughput; keep data widths modest to save LUTs while meeting 13-bit accuracy.",
    "llm_declared_infeasible": false
   }

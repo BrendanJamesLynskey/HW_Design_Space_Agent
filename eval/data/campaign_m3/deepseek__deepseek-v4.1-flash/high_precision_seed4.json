@@ -34,7 +34,7 @@
     "map_front",
     "stop"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-184110-2015/dse/high_precision/20261009-184114-4ddb",
+   "run_dir": "runs/campaign_m3/20261009-184110-2015/dse/high_precision/20261009-184114-4ddb",
    "notes": "Tight accuracy spec: max_abs_err <= 2^-20 (~9.54e-7) at >=50 MSPS. Precision comes from data width and iteration count, not from unrolling; area is the primary objective (min luts_plus_ffs) with power_index secondary. Prefer small-width iterative/pipelined families with enough fractional bits; avoid large unroll factors that inflate LUTs. Ensure the front is well spread and feasible on both constraints.",
    "llm_declared_infeasible": false
   }

@@ -34,7 +34,7 @@
     "map_front",
     "stop"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-173956-60e3/dse/high_precision/20261009-174000-b313",
+   "run_dir": "runs/campaign_m3/20261009-173956-60e3/dse/high_precision/20261009-174000-b313",
    "notes": "Precision spec: max_abs_err <= 2^-20 (9.53674e-07) at >=50 MSPS; minimise luts_plus_ffs (select rule) and power_index. Tight error bound likely needs high data_width and/or many iterations; watch that throughput constraint is met. Explore iterative/unrolled/pipelined families broadly; prefer designs with margin on the error constraint since estimates are optimistic.",
    "llm_declared_infeasible": false
   }

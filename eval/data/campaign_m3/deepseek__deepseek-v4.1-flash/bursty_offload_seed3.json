@@ -34,7 +34,7 @@
     "map_front",
     "stop"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-183725-4f9b/dse/bursty_offload/20261009-183729-30af",
+   "run_dir": "runs/campaign_m3/20261009-183725-4f9b/dse/bursty_offload/20261009-183729-30af",
    "notes": "System spec: p99 latency constraint is only an analytic bound at L1, so keep designs with latency margin for L2. Objective is min luts_plus_ffs with accuracy_bits >= 10 (max_abs_err <= 2^-10). Prefer area-lean families (iterative / small unroll) that still meet throughput_msps >= 2.",
    "llm_declared_infeasible": false
   }

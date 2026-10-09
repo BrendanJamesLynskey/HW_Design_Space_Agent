@@ -34,7 +34,7 @@
     "map_front",
     "stop"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-181132-2059/dse/low_area_control/20261009-181137-d9d3",
+   "run_dir": "runs/campaign_m3/20261009-181132-2059/dse/low_area_control/20261009-181137-d9d3",
    "notes": "Area-dominated spec: minimise luts_plus_ffs, hard constraint throughput_msps>=1 and max_abs_err<=2^-10 (10 bits). Small data widths and lower unroll are likely attractive but must still meet 1 MSPS and 10-bit accuracy; keep the front well spread on the accuracy axis too.",
    "llm_declared_infeasible": false
   }

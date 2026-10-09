@@ -33,7 +33,7 @@
     "refine",
     "stop"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-183529-7c84/dse/low_area_control/20261009-183611-f4f2",
+   "run_dir": "runs/campaign_m3/20261009-183529-7c84/dse/low_area_control/20261009-183611-f4f2",
    "notes": "Spec: low_area_control. Area is everything (min luts+ffs), but keep accuracy_bits as high as possible subject to max_abs_err <= 2^-10 and throughput >= 1 MSPS. Favor compact iterative designs with small data widths; pipelined variants only if they win on area.",
    "llm_declared_infeasible": false
   }

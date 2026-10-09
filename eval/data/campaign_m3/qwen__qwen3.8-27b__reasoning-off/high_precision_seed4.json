@@ -34,7 +34,7 @@
     "map_front",
     "stop"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-184721-8f8a/dse/high_precision/20261009-184810-b079",
+   "run_dir": "runs/campaign_m3/20261009-184721-8f8a/dse/high_precision/20261009-184810-b079",
    "notes": "Spec: coherent demodulator, precision instrument. Hard constraints: throughput >= 50 MSPS and max_abs_err <= 2^-20 (~9.54e-07). Objectives: min luts_plus_ffs, min power_index. Selection rule: min luts_plus_ffs. Tight error budget (20-bit accuracy) likely needs many CORDIC iterations; consider pipelined families to hit 50 MSPS while keeping area low.",
    "llm_declared_infeasible": false
   }

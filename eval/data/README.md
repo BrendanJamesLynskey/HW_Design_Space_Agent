@@ -105,4 +105,5 @@ python -m hw_dse.synth.recalibrate --measured eval/data/l4_synthesis.csv --measu
 | `m3_pilot/` | the live pilots, including the failed first campaign pilot (`*_attempt1.json`) | `--pilot` |
 | `key_usage_m3.json` | key usage snapshots (free endpoint; the key is never recorded) | `eval/run_eval.py key-usage --tag ...` |
 | `spend_ledger.jsonl` | every live run's provider-reported cost; M3 rows carry `milestone: m3` and an `arm` | the live commands |
-| `traces/m3/` | every M3 live run's LLM trace (+ tool log, inner reports, evaluations), with `INDEX.md` | `scripts/archive_traces_m3.py` |
+| `traces/m3/` | every M3 live run's LLM trace (+ tool log, inner reports, evaluations), with `INDEX.md`; campaigns also `pool_keys.json.gz` (the L1 pool, so every campaign can be re-scored) | `scripts/archive_traces_m3.py`, then `eval/m3_rescore.py` |
+| (rows with `before_b1`) | M3 rows re-scored after the L2 fix (selection over every L1-feasible design); the old values are kept | `eval/m3_rescore.py` |

@@ -63,7 +63,7 @@
     "refine",
     "stop"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-181047-479c/dse/bursty_offload/20261009-181059-d9ce",
+   "run_dir": "runs/campaign_m3/20261009-181047-479c/dse/bursty_offload/20261009-181059-d9ce",
    "notes": "Bursty Poisson bursts of 8 requests 0 ns apart, 2 req/us avg; p99 latency <= 0.4 us is the tight constraint \u2014 favor designs with high per-burst throughput (unrolled/pipelined families) so a burst of 8 clears within ~0.4 us. Minimize LUTs+FFs.",
    "llm_declared_infeasible": false
   }

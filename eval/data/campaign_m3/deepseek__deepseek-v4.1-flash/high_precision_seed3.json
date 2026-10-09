@@ -34,7 +34,7 @@
     "map_front",
     "stop"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-183025-e910/dse/high_precision/20261009-183033-9dc1",
+   "run_dir": "runs/campaign_m3/20261009-183025-e910/dse/high_precision/20261009-183033-9dc1",
    "notes": "Tight accuracy spec: max_abs_err <= 2^-20 (~9.54e-07) AND throughput >= 50 MSPS simultaneously. Search the whole data-width range aggressively (high width needed to meet 2^-20; check where err saturates) and prefer families/structures that reach 50 MSPS without massive unroll cost: pipelined with modest stages and unrolled_k may both qualify. Keep the front well spread on luts_plus_ffs vs power_index; do not let the front collapse to only ultra-wide designs. Selection rule is min luts_plus_ffs, so keep many feasible low-area points, but cover the power end too.",
    "llm_declared_infeasible": false
   }

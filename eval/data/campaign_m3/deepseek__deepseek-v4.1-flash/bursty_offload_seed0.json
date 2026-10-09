@@ -34,7 +34,7 @@
     "map_front",
     "stop"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-175420-f2fc/dse/bursty_offload/20261009-175423-a205",
+   "run_dir": "runs/campaign_m3/20261009-175420-f2fc/dse/bursty_offload/20261009-175423-a205",
    "notes": "System spec: bursts of 8 requests, Poisson 2 req/us, p99 latency <= 0.4us. Latency is dominated by per-request service time, so favour low n_iter / pipelined families with high throughput; sys_* numbers are optimistic bounds until L2 simulation. Minimise luts_plus_ffs subject to throughput_msps>=2 and max_abs_err<=2^-10.",
    "llm_declared_infeasible": false
   }

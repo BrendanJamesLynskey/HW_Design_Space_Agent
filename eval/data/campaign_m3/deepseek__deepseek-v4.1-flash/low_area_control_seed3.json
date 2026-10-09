@@ -34,7 +34,7 @@
     "map_front",
     "stop"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-183403-dbc5/dse/low_area_control/20261009-183417-df07",
+   "run_dir": "runs/campaign_m3/20261009-183403-dbc5/dse/low_area_control/20261009-183417-df07",
    "notes": "Area-dominated spec: minimise LUTs+FFs subject to throughput>=1 MSPS and max_abs_err<=2^-10. Favour small iterative/unrolled families with modest data width; accuracy_bits>=10 is a hard-ish target so keep enough iterations. Selection rule is min luts_plus_ffs, so the front must be well populated near the low-area corner.",
    "llm_declared_infeasible": false
   }

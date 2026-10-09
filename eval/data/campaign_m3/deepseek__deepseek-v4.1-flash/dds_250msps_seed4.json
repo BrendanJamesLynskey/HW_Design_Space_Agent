@@ -34,7 +34,7 @@
     "map_front",
     "stop"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-183914-249c/dse/dds_250msps/20261009-183916-212d",
+   "run_dir": "runs/campaign_m3/20261009-183914-249c/dse/dds_250msps/20261009-183916-212d",
    "notes": "NCO/DDS sin-cos, 1 sample/clock at >=250 MSPS, max_abs_err <= 2^-13, minimise LUTs, maximise accuracy_bits. Full 400-eval budget: cover all families (iterative, unrolled_k, pipelined, pipelined_m) and the data_width / n_iter / k_or_m ranges, since LUT cost and accuracy trade off strongly across families. Keep the front well spread on the luts vs accuracy_bits trade-off.",
    "llm_declared_infeasible": false
   }

@@ -33,7 +33,7 @@
     "refine",
     "stop"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-175427-3796/dse/bursty_offload/20261009-175436-86f1",
+   "run_dir": "runs/campaign_m3/20261009-175427-3796/dse/bursty_offload/20261009-175436-86f1",
    "notes": "Bursty Poisson load: bursts of 8 requests 0 ns apart, 2 req/us mean; p99 latency <= 0.4 us. Pipelined families should handle bursts well; iterative designs risk p99 violations under burst load. Max error <= 2^-10, so accuracy_bits >= 10. Minimise LUTs+FFs.",
    "llm_declared_infeasible": false
   }

@@ -33,7 +33,7 @@
     "refine",
     "stop"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-175904-11bb/dse/high_precision/20261009-175915-9a49",
+   "run_dir": "runs/campaign_m3/20261009-175904-11bb/dse/high_precision/20261009-175915-9a49",
    "notes": "Spec high_precision: strict accuracy (max_abs_err <= 2^-20) at >= 50 MSPS. Selection rule is min luts_plus_ffs, so favor designs near the accuracy boundary with small area; pipelined families may be needed for throughput.",
    "llm_declared_infeasible": false
   }

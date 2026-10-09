@@ -31,7 +31,7 @@
     "add_family",
     "infeasible"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-184317-0689/dse/infeasible_dds_400msps/20261009-184327-41cd",
+   "run_dir": "runs/campaign_m3/20261009-184317-0689/dse/infeasible_dds_400msps/20261009-184327-41cd",
    "notes": "Wideband DDS: need >=400 MSPS single-lane sin/cos with max_abs_err <= 2^-12, minimize LUTs. Explore pipelined/pipelined_m families for throughput; iterative/unrolled_k may not reach 400 MSPS single-lane. Prioritize feasible region on throughput and error.",
    "llm_declared_infeasible": true
   }

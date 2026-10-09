@@ -62,7 +62,7 @@
     "add_family",
     "refine"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-181539-69cd/dse/dds_250msps/20261009-181551-b512",
+   "run_dir": "runs/campaign_m3/20261009-181539-69cd/dse/dds_250msps/20261009-181551-b512",
    "notes": "DDS/NCO spec: needs >=250 MSPS (one sample per clock), max_abs_err <= 2^-13, minimize LUTs. Favor pipelined families for throughput; keep data widths modest to control LUTs while meeting accuracy.",
    "llm_declared_infeasible": false
   }

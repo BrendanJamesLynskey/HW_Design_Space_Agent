@@ -68,5 +68,33 @@
    "limit_usd": 10,
    "limit_remaining_usd": 2.2336060289999997
   }
+ },
+ "models_checked": {
+  "ts": "2026-10-09T16:29:03Z",
+  "source": "GET https://openrouter.ai/api/v1/models (free)",
+  "models": {
+   "qwen/qwen3.8-27b": {
+    "listed": true,
+    "tools": true,
+    "structured_outputs": true,
+    "pricing_prompt_usd_per_token": "0.000000425",
+    "pricing_completion_usd_per_token": "0.00000255"
+   },
+   "anthropic/claude-sonnet-5.5": {
+    "listed": true,
+    "tools": true,
+    "structured_outputs": true,
+    "pricing_prompt_usd_per_token": "0.000002",
+    "pricing_completion_usd_per_token": "0.00001"
+   },
+   "deepseek/deepseek-v4.1-flash": {
+    "listed": true,
+    "tools": true,
+    "structured_outputs": true,
+    "pricing_prompt_usd_per_token": "0.0000003",
+    "pricing_completion_usd_per_token": "0.0000012"
+   }
+  },
+  "substitutions": "none needed"
  }
 }

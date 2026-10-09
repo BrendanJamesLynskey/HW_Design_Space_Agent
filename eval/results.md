@@ -401,7 +401,7 @@ Structured arm: the M2 live runs on the four M2 specs (replay-proven identical g
 | high_precision | +3.9% ± 0.6 → **—** | +2.7% ± 1.9 → **+3.1% ± 0.9** | +17.5% ± 27.2 → **+17.5% ± 26.1** |
 | infeasible_dds_400msps | n/a → **—** | n/a → **n/a** | n/a → **n/a** |
 | low_area_control | +1.4% ± 1.3 → **—** | +5.1% ± 3.3 → **+4.1% ± 1.2** | +3.7% ± 0.7 → **+54.8% ± 86.1** |
-| multiaxis_control | +3.2% ± 2.3 → **+7.5% ± 4.5** | +11.8% ± 5.0 → **+13.0% ± 6.7** | +4.9% ± 3.8 → **+6.3% ± 4.4** |
+| multiaxis_control | +3.2% ± 2.3 → **+5.7% ± 1.9** | +11.8% ± 5.0 → **+13.0% ± 6.7** | +4.9% ± 3.8 → **+6.0% ± 4.6** |
 | bursty_offload | +9.1% ± 5.1 → **—** | +9.4% ± 8.8 → **+14.3% ± 7.5** | +15.8% ± 6.5 → **+11.9% ± 5.9** |
 
 **L1 evaluations used** (structured → campaign)
@@ -415,13 +415,17 @@ Structured arm: the M2 live runs on the four M2 specs (replay-proven identical g
 | multiaxis_control | 400 ± 0 → **400 ± 0** | 400 ± 0 → **400 ± 0** | 400 ± 0 → **400 ± 0** |
 | bursty_offload | 400 ± 0 → **—** | 400 ± 0 → **400 ± 0** | 400 ± 0 → **400 ± 0** |
 
-**Cost, tokens, time and failures per run** (structured → campaign; all specs)
+**Cost, tokens, time and failures per run** (structured → campaign, over the specs both arms ran for that model: all six for DeepSeek and Qwen, `multiaxis_control` only for Sonnet). Wall-clock is not controlled: structured, campaign and memory-on runs ran 3–4 at a time in this session, and the structured runs on the M2 specs come from the M2 session.
 
 | model | runs | input tokens / run | output tokens / run | cost / run (USD) | wall time / run (s) | failure rate |
 |---|---|---|---|---|---|---|
-| `anthropic/claude-sonnet-5.5` | 30 → 5 | 18782 ± 6255 → 85627 ± 4049 | 3706 ± 1124 → 5301 ± 981 | 0.0746 ± 0.0217 → 0.2243 ± 0.0056 | 33 ± 9 → 62 ± 6 | 0/30 → 0/5 |
+| `anthropic/claude-sonnet-5.5` | 5 → 5 | 24382 ± 2632 → 85627 ± 4049 | 5081 ± 179 → 5301 ± 981 | 0.0996 ± 0.0070 → 0.2243 ± 0.0056 | 45 ± 4 → 62 ± 6 | 0/5 → 0/5 |
 | `deepseek/deepseek-v4.1-flash` | 30 → 30 | 13170 ± 3677 → 80312 ± 10673 | 13059 ± 4993 → 18724 ± 4620 | 0.0123 ± 0.0042 → 0.0199 ± 0.0048 | 99 ± 81 → 133 ± 117 | 0/30 → 0/30 |
 | `qwen/qwen3.8-27b, reasoning off` | 30 → 30 | 10112 ± 3572 → 89869 ± 28280 | 2948 ± 960 → 5006 ± 1177 | 0.0075 ± 0.0019 → 0.0108 ± 0.0024 | 60 ± 30 → 178 ± 91 | 0/30 → 4/30 |
+
+**L2 re-selections in the live runs.** Structured arm: 0/30. Campaign arm: 4/65 (anthropic/claude-sonnet-5.5 multiaxis_control seed 1, anthropic/claude-sonnet-5.5 multiaxis_control seed 2, deepseek/deepseek-v4.1-flash multiaxis_control seed 4, qwen/qwen3.8-27b, reasoning off multiaxis_control seed 4).
+
+**What the ladder steps returned in the campaign arm.** `verify_rtl`: recorded L3 row 1, fresh run 0, not verified 54 (of 55 runs that called it); `synthesize`: recorded measurements 1 of 55; `back_annotate`: compared 1 of 61. Most selections have W ≥ 15, which has no recorded L3/L4 data and is too large for a fresh exhaustive run inside a campaign.
 
 **What the campaign agent did** (tool sequence per run, condensed)
 

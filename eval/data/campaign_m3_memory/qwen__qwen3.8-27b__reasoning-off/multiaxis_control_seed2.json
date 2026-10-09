@@ -33,7 +33,7 @@
     "refine",
     "stop"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3_memory/20261009-181428-7daf/dse/multiaxis_control/20261009-181441-01e2",
+   "run_dir": "runs/campaign_m3_memory/20261009-181428-7daf/dse/multiaxis_control/20261009-181441-01e2",
    "notes": "Spec: 32 requests per 1us tick, all results within 0.44us p99, min LUTs+FFs. From memory: pipelined_m dominated the front on the similar bursty spec (m=4..7, dw=15..20, n_iter=12..13); pipelined (dw 15..18, n_iter 14..16) reached the front on the 1/cycle DDS spec; iterative can't hit 1/cycle; unrolled_k never reached a front. L1 analytic p99 under-predicts simulated p99 ~1.4-1.5x, so keep margin on sys_p99_batch_us <= 0.44us.",
    "llm_declared_infeasible": false
   }
@@ -130,5 +130,5 @@
  "select_regret": 0.3214588403597312,
  "declared_infeasible": false,
  "infeasibility_correct": true,
- "memory_lessons_before": null
+ "memory_lessons_before": "not recorded in the M3 eval (always None, review N6; recorded for runs after the fix); the store after each spec is in campaign_m3_memory_store.json"
 }

@@ -33,7 +33,7 @@
     "map_front",
     "stop"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-182904-4ffc/dse/dds_250msps/20261009-182910-2c21",
+   "run_dir": "runs/campaign_m3/20261009-182904-4ffc/dse/dds_250msps/20261009-182910-2c21",
    "notes": "NCO/DDS sin-cos for DUC: need 1 sample/clock at >=250 MSPS, max_abs_err <= 2^-13. Minimise LUTs (HV ref 4000), maximise accuracy_bits (HV ref 13); select min luts. Memory is off, so no prior lessons: explore broadly across iterative / unrolled_k / pipelined / pipelined_m families, and make sure the front is well spread on the LUT-vs-accuracy trade-off. Prefer designs that keep throughput >= 250 MSPS with margin (pipelined/unrolled with enough parallelism) and error comfortably under 2^-13.",
    "llm_declared_infeasible": false
   }

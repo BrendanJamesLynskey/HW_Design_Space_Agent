@@ -31,7 +31,7 @@
     "add_family",
     "infeasible"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-174635-4366/dse/infeasible_dds_400msps/20261009-174658-183c",
+   "run_dir": "runs/campaign_m3/20261009-174635-4366/dse/infeasible_dds_400msps/20261009-174658-183c",
    "notes": "Spec is named infeasible: needs >=400 MSPS single-lane with max_abs_err <= 2^-12, min LUTs. Prior campaigns suggest single-lane iterative CORDIC struggles at 400 MSPS; pipelined families with enough stages (m) and adequate data width for 12-bit accuracy are the likely feasible region. Explore pipelined_m and unrolled_k families broadly; keep data width high enough for 12-bit accuracy.",
    "llm_declared_infeasible": true
   }

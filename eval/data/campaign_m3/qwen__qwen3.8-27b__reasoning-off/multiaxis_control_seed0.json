@@ -62,7 +62,7 @@
     "refine",
     "stop"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-175131-9cda/dse/multiaxis_control/20261009-175140-9255",
+   "run_dir": "runs/campaign_m3/20261009-175131-9cda/dse/multiaxis_control/20261009-175140-9255",
    "notes": "Spec: 32 simultaneous requests per 1us tick, all results back within 0.44us p99. Throughput >= 32 Msps, max_abs_err <= 2^-12. Minimize luts+ffs. Consider pipelined families with enough parallelism (m) to serve 32 requests in 0.44us; iterative likely too slow unless pipelined.",
    "llm_declared_infeasible": false
   }

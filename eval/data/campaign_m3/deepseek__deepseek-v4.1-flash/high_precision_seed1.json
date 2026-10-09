@@ -34,7 +34,7 @@
     "map_front",
     "stop"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-175830-f5d6/dse/high_precision/20261009-175834-3d59",
+   "run_dir": "runs/campaign_m3/20261009-175830-f5d6/dse/high_precision/20261009-175834-3d59",
    "notes": "Precision demodulator: max_abs_err <= 2^-20 (~9.54e-07) at >=50 MSPS. Selection rule is min luts_plus_ffs, so area is the primary driver; power_index is secondary. Error budget is tight, so favour high data_width / high n_iter designs; check whether pipelined or pipelined_m families can reach 50 MSPS with fewer LUTs+FFs than fully unrolled. Keep the front well-spread and feasible.",
    "llm_declared_infeasible": false
   }

@@ -33,7 +33,7 @@
     "map_front",
     "stop"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-182124-ba17/dse/low_area_control/20261009-182130-7136",
+   "run_dir": "runs/campaign_m3/20261009-182124-ba17/dse/low_area_control/20261009-182130-7136",
    "notes": "Area-critical sin/cos at >=1 MSPS, err <= 2^-10. Prefer small-LUT families (iterative / unrolled_k) with modest data widths; avoid large pipelined_m LUT multipliers. Selection rule: min luts_plus_ffs.",
    "llm_declared_infeasible": false
   }

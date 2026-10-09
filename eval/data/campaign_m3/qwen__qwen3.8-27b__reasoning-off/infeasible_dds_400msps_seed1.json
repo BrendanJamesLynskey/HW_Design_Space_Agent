@@ -29,7 +29,7 @@
    "decisions": [
     "infeasible"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-180202-7c78/dse/infeasible_dds_400msps/20261009-180215-cdd9",
+   "run_dir": "runs/campaign_m3/20261009-180202-7c78/dse/infeasible_dds_400msps/20261009-180215-cdd9",
    "notes": "Spec is named infeasible: 400 MSPS single-lane with max_abs_err <= 2^-12. Explore pipelined families (pipelined, pipelined_m) for throughput, and unrolled_k for latency/throughput tradeoffs. Keep data width modest to minimize LUTs while meeting accuracy. If no design meets throughput>=400 with err<=2^-12, the front will be empty/infeasible \u2014 still map the closest feasible region (max throughput at best accuracy) so the selection rule (min LUTs) has candidates.",
    "llm_declared_infeasible": true
   }

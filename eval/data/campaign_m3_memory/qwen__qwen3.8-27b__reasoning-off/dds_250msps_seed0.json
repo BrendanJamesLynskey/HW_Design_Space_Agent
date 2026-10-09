@@ -33,7 +33,7 @@
     "refine",
     "stop"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3_memory/20261009-174635-621b/dse/dds_250msps/20261009-174654-b5d4",
+   "run_dir": "runs/campaign_m3_memory/20261009-174635-621b/dse/dds_250msps/20261009-174654-b5d4",
    "notes": "High-throughput spec: needs >=250 MSPS, so iterative family (13.2 MSPS at dw=16/n_iter=12) is far too slow; unrolled_k and pipelined have never reached a front on this device. Focus budget on pipelined_m (won bursty spec at dw=15, n_iter=14, m=7, 59.6 MSPS) with larger m for throughput, and a small check of unrolled_k for area. Selection rule is min LUTs subject to throughput>=250 and accuracy>=13 bits.",
    "llm_declared_infeasible": false
   }
@@ -83,5 +83,5 @@
  "select_regret": 0.03259604190919677,
  "declared_infeasible": false,
  "infeasibility_correct": true,
- "memory_lessons_before": null
+ "memory_lessons_before": "not recorded in the M3 eval (always None, review N6; recorded for runs after the fix); the store after each spec is in campaign_m3_memory_store.json"
 }

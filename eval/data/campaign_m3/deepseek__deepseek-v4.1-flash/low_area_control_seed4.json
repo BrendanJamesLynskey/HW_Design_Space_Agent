@@ -33,7 +33,7 @@
     "map_front",
     "stop"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-184408-1ce0/dse/low_area_control/20261009-184411-8b5f",
+   "run_dir": "runs/campaign_m3/20261009-184408-1ce0/dse/low_area_control/20261009-184411-8b5f",
    "notes": "Area-dominated spec: minimise LUTs+FFs subject to throughput>=1 MSPS and max_abs_err<=2^-10. Favour small iterative/unrolled families with modest data width; avoid large pipelined structures that inflate area. Selection rule is min luts_plus_ffs.",
    "llm_declared_infeasible": false
   }

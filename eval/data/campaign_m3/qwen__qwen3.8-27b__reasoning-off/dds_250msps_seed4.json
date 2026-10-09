@@ -33,7 +33,7 @@
     "refine",
     "stop"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-184423-88a6/dse/dds_250msps/20261009-184433-1591",
+   "run_dir": "runs/campaign_m3/20261009-184423-88a6/dse/dds_250msps/20261009-184433-1591",
    "notes": "DDS/NCO spec: needs one sample per clock at >=250 MSPS, so pipelined (m) or unrolled families with adequate throughput are the natural candidates; iterative families likely fail the throughput constraint. Max error <= 2^-13, so accuracy_bits >= 13. Objective is min LUTs.",
    "llm_declared_infeasible": false
   }

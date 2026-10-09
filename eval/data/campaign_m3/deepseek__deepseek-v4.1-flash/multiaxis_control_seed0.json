@@ -33,7 +33,7 @@
     "refine",
     "stop"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-175141-0f02/dse/multiaxis_control/20261009-175148-9cf7",
+   "run_dir": "runs/campaign_m3/20261009-175141-0f02/dse/multiaxis_control/20261009-175148-9cf7",
    "notes": "System spec: 1 MHz tick, 32 simultaneous requests, all 32 back within 0.44 us p99, so throughput>=32 Msps is hard. Prefer high-throughput families (pipelined / pipelined_m / heavily unrolled) with enough parallel lanes or a fast clock; analytic sys_p99 bound must be <=0.44us. Accuracy constraint max_abs_err<=2^-12. Objective: minimise luts_plus_ffs (HV ref 4000), maximise accuracy_bits (HV ref 12). Selection rule: min luts_plus_ffs. Cover the whole family range; keep the front wide and feasible, no budget left unspent.",
    "llm_declared_infeasible": false
   }

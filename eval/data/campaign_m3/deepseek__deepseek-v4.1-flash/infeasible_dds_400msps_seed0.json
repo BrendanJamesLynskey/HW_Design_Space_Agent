@@ -32,7 +32,7 @@
     "refine",
     "infeasible"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-174616-ba08/dse/infeasible_dds_400msps/20261009-174621-3d7f",
+   "run_dir": "runs/campaign_m3/20261009-174616-ba08/dse/infeasible_dds_400msps/20261009-174621-3d7f",
    "notes": "Spec may be infeasible (400 MSPS single-lane with 2^-12 error). Explore widely: pipelined and pipelined_m families for throughput, unrolled_k for area/throughput tradeoffs; keep the front well-spread on luts vs accuracy_bits.",
    "llm_declared_infeasible": true
   }

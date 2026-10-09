@@ -32,7 +32,7 @@
     "map_front",
     "add_family"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-174252-56e0/dse/high_precision/20261009-174305-7596",
+   "run_dir": "runs/campaign_m3/20261009-174252-56e0/dse/high_precision/20261009-174305-7596",
    "notes": "High-precision spec: max_abs_err <= 2^-20 (9.53674e-07) at >= 50 MSPS. Selection rule is min luts_plus_ffs, so favor designs that hit the error bound with minimal LUT+FF count; power_index is secondary. Consider pipelined families for throughput and iterative for area, but error bound likely needs enough iterations/precision.",
    "llm_declared_infeasible": false
   }

@@ -34,7 +34,7 @@
     "refine",
     "stop"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3_memory/20261009-180053-1db2/dse/multiaxis_control/20261009-180111-04a0",
+   "run_dir": "runs/campaign_m3_memory/20261009-180053-1db2/dse/multiaxis_control/20261009-180111-04a0",
    "notes": "Spec: 32 requests per 1us tick, all 32 results back within 0.44us (p99), err <= 2^-12, min LUTs+FFs. Memory: pipelined_m m=4 (data_width=15, n_iter=12, angle_guard=2, rounding=round) won a similar bursty p99 spec (8 requests, p99 0.4us, err 2^-10) with est 813 luts+ffs. Here the burst is 4x larger (32) but the window is similar (0.44us), so m>=4 is likely needed; consider m=4..8, data_width 15-18, n_iter 12-15, angle_guard 1-2, rounding=round. Cost model underestimates LUTs ~19%, FFs ~11%, Fmax ~10% vs yosys+nextpnr-xilinx. unrolled_k never reached a front; iterative too slow for burst draining.",
    "llm_declared_infeasible": false
   }
@@ -131,5 +131,5 @@
  "select_regret": 0.06076551654129449,
  "declared_infeasible": false,
  "infeasibility_correct": true,
- "memory_lessons_before": null
+ "memory_lessons_before": "not recorded in the M3 eval (always None, review N6; recorded for runs after the fix); the store after each spec is in campaign_m3_memory_store.json"
 }

@@ -34,7 +34,7 @@
     "map_front",
     "stop"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-182334-fcbd/dse/multiaxis_control/20261009-182339-3a03",
+   "run_dir": "runs/campaign_m3/20261009-182334-fcbd/dse/multiaxis_control/20261009-182339-3a03",
    "notes": "System spec: 32 requests/us burst, sys_p99_batch_us <= 0.44 us is an optimistic analytic bound at L1 and must be L2-simulated. Need throughput_msps >= 32 and max_abs_err <= 2^-12 (12 accuracy bits). Minimise luts_plus_ffs. Prefer architectures with high throughput per unit area; keep enough accuracy bits margin so the L2-simulated selection stays feasible.",
    "llm_declared_infeasible": false
   }

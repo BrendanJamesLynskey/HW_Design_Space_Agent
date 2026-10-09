@@ -33,7 +33,7 @@
     "map_front",
     "stop"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-181723-7765/dse/dds_250msps/20261009-181726-e74d",
+   "run_dir": "runs/campaign_m3/20261009-181723-7765/dse/dds_250msps/20261009-181726-e74d",
    "notes": "NCO/DDS sin-cos, 1 sample/clock at >=250 MSPS, max_abs_err <= 2^-13, minimise LUTs. No system scenario. Prefer pipelined/pipelined_m families for throughput; keep accuracy_bits >= 13.",
    "llm_declared_infeasible": false
   }

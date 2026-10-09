@@ -33,7 +33,7 @@
     "refine",
     "stop"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-182653-3aa2/dse/bursty_offload/20261009-182703-7760",
+   "run_dir": "runs/campaign_m3/20261009-182653-3aa2/dse/bursty_offload/20261009-182703-7760",
    "notes": "Bursty Poisson bursts of 8 requests, 2 req/us avg, p99 latency <= 0.4 us. Favor pipelined families for throughput; keep data width modest to hit max_abs_err <= 2^-10 while minimising LUTs+FFs.",
    "llm_declared_infeasible": false
   }

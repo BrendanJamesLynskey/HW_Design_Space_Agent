@@ -30,7 +30,7 @@ and the LLM cost per run.
 
 ## The design principle
 
-**The LLM is never the optimiser and never produces a PPA or accuracy number.**
+**The LLM is never the optimiser and never produces a PPA, accuracy or system-level number.**
 
 The LLM does the architect's job: it reads the spec, chooses architecture families and
 parameter ranges from a fixed registry, reads compact summaries of results, and decides
@@ -136,7 +136,7 @@ graph TD;
 | `explore_family` | code | one Optuna NSGA-II study per family, fanned out with `Send`; results appended by a reducer |
 | `analyse` | code → LLM → code | code merges the front, feasibility, hypervolume; LLM reads a compact summary and returns `refine` / `widen` / `add_family` / `map_front` / `infeasible` / `stop`; code applies the stopping rules and the whole-curve levers (below) |
 | `select` | human / code | `interrupt()` to pick a design off the front, or auto-select by the spec's rule |
-| `l2_simulate` (M3) | code | L2: the front's top 5 by the selection rule are simulated in the spec's system (SimPy); system constraints re-checked on simulated numbers; the best passing design becomes the selection (shortlist extended down the front, up to 20, if none passes). No system scenario: the selected design's contract and DDS spectrum go in the report, nothing changes |
+| `l2_simulate` (M3) | code | L2: every L1-feasible design the run evaluated is simulated in the spec's system (SimPy; cached per (latency, ii, Fmax), so a few dozen simulations), system constraints re-checked on simulated numbers, the best passing design becomes the selection; the report shows the top 5. Not just the L1 front: a design that passes L2 can be dominated in the L1 objectives by one that only passed the bound (the `multiaxis_control` case; fixed after review). No system scenario: the selected design's contract and DDS spectrum go in the report, nothing changes |
 | `back_annotate` | code | L5: measured data for the selected design (committed L4 CSV, or a fresh synthesis if configured) vs its estimates; front designs with measurements re-scored on the Vivado scale; flags a winner change in the report |
 | `l5_reexplore` (M3) | code | only after a flagged winner change: 60 evaluations (a separate L5 budget) of NSGA-II around the measured front designs under the `vivado-2025.2` refit; re-selection under the refit (`l5_selected`). The L1 evaluations and selection are untouched |
 | `report` | code | `runs/<spec>/<timestamp>/`: `report.md`, `pareto.png`, `evaluations.csv`, `llm_trace.jsonl` |
@@ -528,7 +528,9 @@ bound (`src/hw_dse/l2/bounds.py`: each burst or tick served alone, starting on a
 which is optimistic by construction: in the simulation a request can only wait longer (clock
 alignment, backlog from earlier bursts), request by request, and percentiles are monotone
 under that ordering. So L1 never discards a design L2 would accept (tested on random
-contracts for every scenario). The `l2_simulate` node then simulates the shortlist.
+contracts for every scenario). The `l2_simulate` node then simulates every L1-feasible design
+of the run and re-selects (the first version simulated only the top of the L1 front, which can
+miss the system winner: see the `multiaxis_control` bullet below).
 
 **System-level specs** (`specs/system/`), exhaustive ground truth in three views
 (`python eval/run_eval.py ground-truth-m3` → `eval/data/ground_truth_m3.json`):
@@ -544,11 +546,21 @@ contracts for every scenario). The `l2_simulate` node then simulates the shortli
   a burst waits for seven others; with Poisson bursts overlapping, its simulated p99 is
   1.18 µs, 2.0× even the isolated-burst bound. No FSM design passes; the winner is a
   `pipelined_m` at 3× the area. Here the L1 bound already decides (151,528 designs feasible
-  either way).
+  either way), and so would a back-of-envelope peak-rate floor: sizing for the burst
+  (8 requests in 0.4 µs = 20 MSPS) instead of the average rate gives the same winner and the
+  identical feasible set. So this spec shows that *average*-rate sizing is wrong, not that
+  simulation is needed.
 * `multiaxis_control`: the average rate needs 32 MSPS, the batch deadline ((32 − 1) + (latency − 1))
-  cycles in 0.44 µs, i.e. 77–82 MHz for these designs, and the clock-domain crossing (a tick lands between CORDIC edges) costs up to a
-  cycle that the bound ignores: 53,667 designs pass the bound, 51,244 the simulation, and
-  the bound's winner (m=5, simulated 0.4465 µs) misses the deadline, so L2 switches to m=4.
+  cycles in 0.44 µs, i.e. 77–82 MHz for these designs, and clock-edge alignment (a tick lands
+  between CORDIC edges, so up to one cycle passes before the first accept) costs a cycle the
+  bound ignores: 53,667 designs pass the bound, 51,244 the simulation, and the bound's winner
+  (m=5, simulated 0.4465 µs) misses the deadline by 1.5%, so L2 switches to m=4. A peak-rate
+  floor (32 / 0.44 µs = 72.7 MSPS) stops at m=5, the bound's winner; only the simulation gets to
+  m=4. m=4 has m=5's numerics and more area, so it is *dominated* in the L1 objectives: L2 has
+  to search every L1-feasible design, not the L1 front (a bug in the first version, found in
+  review). The model aligns to the next edge but has no synchroniser: a real CDC FIFO adds about
+  two destination cycles (~25 ns at 80 MHz), which against a 1.5% margin could move the winner
+  again (Limitations).
 * `dds_sfdr` is the honest negative, kept as evidence: for this design space a DDS's
   system constraints (no stall at the sample rate, SFDR) reduce to the MSPS-only view (the
   max-error winner already has 100.3 dBc SFDR; "no stall" is "throughput ≥ fs").
@@ -583,7 +595,9 @@ rule-based architect (`python eval/m3_offline.py mapfront` → `eval/data/m3_map
 
 The unconditional version spends budget on FSM families that can never reach 250 MSPS. The
 gate was refined on these same replays, so it is fitted to them; the heuristic architect is
-unchanged by it. `LEVERS_M3` is the default only for specs with a system scenario; the M2
+unchanged by it. The gated fix also moves HV without changing a selection: in 4 Sonnet
+`low_area_control` replays (seeds 0, 1, 3, 4; seed 3 goes 0.893 → 0.802) a family that was
+explored without a feasible design takes part of the mapping budget from the front families. `LEVERS_M3` is the default only for specs with a system scenario; the M2
 specs keep `LEVERS_M2`, so the M2 results stand as recorded.
 
 ## Campaign agent on LangChain Deep Agents (M3)
@@ -615,7 +629,8 @@ failure). The agent never sees the ground truth; scoring happens afterwards in t
 writes lessons after every spec: per family (where it was explored, whether it reached a
 front), per spec class (what the front-mapping rounds gained), calibration history (every
 back-annotation verdict and L5 re-selection). The agent can add text notes, labelled as its
-own. Every entry carries the run IDs it came from; memory off means nothing is read or
+own, with every number masked (since the review; the live eval's notes still carried copied
+numbers). Every entry carries the run IDs it came from; memory off means nothing is read or
 written. Store contents after the eval: `eval/data/campaign_m3_memory_store.json`.
 
 **What we found in `deepagents` (pinned `==0.7.23`, checked 2026-10-09):**
@@ -637,7 +652,9 @@ written. Store contents after the eval: `eval/data/campaign_m3_memory_store.json
 * Gotchas: LangChain **swallows exceptions raised in callbacks** unless the handler sets
   `raise_error = True`. Our first live pilot's call cap therefore did not fire while Qwen
   called `ls('.')` 250 times inside the sub-agent ($0.058, killed by hand). Parallel tool
-  calls run concurrently, so their order in the ledger is not fixed.
+  calls run concurrently: their order in the ledger is not fixed, and in the live eval two
+  parallel `explore_family` calls could take the same seed index (it counted *finished* calls;
+  now taken at call start). `eval/m3_rescore.py` handles that when it rebuilds a campaign's pool.
 * A scripted chat model (`hw_dse.campaign.fake.ScriptedChatModel`) drives the whole harness
   offline: `tests/test_campaign.py` checks the ladder, the sub-agent, to-dos, files, the
   budget, the forced re-plan, memory read/write and the off switch, and the loop guards.
@@ -701,6 +718,7 @@ python eval/run_eval.py agent-m3    --model qwen/qwen3.8-27b --reasoning off   #
 python eval/run_eval.py campaign-m3 --model qwen/qwen3.8-27b --reasoning off   # campaign arm, all specs
 python eval/run_eval.py memory-m3   --model qwen/qwen3.8-27b --reasoning off --seeds 3
 python scripts/archive_traces_m3.py                     # traces -> eval/data/traces/m3/
+python eval/m3_rescore.py                               # re-select the live runs with today's L2 (offline); pool keys
 ```
 
 The reference RTL is vendored in `third_party/CORDIC/` (MIT, pinned commit `fe4775e`,
@@ -854,11 +872,15 @@ NSGA-II / random get the same L1 screening and the same L2 shortlist step; score
 | bursty_offload regret | +26.7 ± 6.4% | +31.7 ± 11.6% | **+9.1 ± 5.1%** | +9.4 ± 8.8% | +15.8 ± 6.5% |
 
 Every selected design met the spec (simulated). The agents keep the M2 pattern: HV at or above
-NSGA-II and much lower regret. **L2 changed the L1 selection in 0 of 30 live runs**: the
-fronts the agents found did not put a design on the bound-vs-simulation boundary first, so the
-re-selection the ground truth shows (m=5 → m=4 on `multiaxis_control`) and the unit tests
-exercise never triggered live. Honest reading: on these specs the L1 bound did the work, and L2
-was a check that passed.
+NSGA-II (one exception: Qwen on `bursty_offload`, 0.838 vs 0.840) and much lower regret.
+**L2 changed the L1 selection in 0 of 30 structured runs** (their L1 selections passed the
+simulation) **and in 4 of 65 campaign runs**, all on `multiaxis_control` (Sonnet seeds 1–2,
+DeepSeek seed 4, Qwen seed 4), where the L1 pick, an m=5 design, missed `sys_p99_batch_us` by 1.5%.
+After the L2 fix (simulate every L1-feasible design, not the L1 front) two of those campaigns
+select a cheaper passing design (Sonnet seed 1: +15.8% → +6.6% regret; Qwen seed 4: +5.2% →
++3.5%); no structured run and no baseline changes (`eval/m3_rescore.py` rebuilds each run's L1
+evaluations from committed data and re-selects; rewritten rows keep their old values under
+`before_b1`).
 
 **A/B: structured graph vs campaign agent** (same specs, seeds and budget; the structured arm
 reuses the M2 live runs on the four M2 specs, which the replay proof allows, and the fresh runs
@@ -867,12 +889,14 @@ above on the system specs; campaign = one single-spec campaign per spec and seed
 | model | HV, mean over the 5 feasible specs (structured → campaign) | regret, same | cost / run | input tokens / run | wall / run | failures |
 |---|---|---|---|---|---|---|
 | DeepSeek V4.1 Flash (30 → 30 runs) | 0.905 → 0.893 | +7.3% → +7.8% | $0.012 → $0.020 | 13k → 80k | 99 → 133 s | 0/30 → 0/30 |
-| Qwen3.8-27B, reasoning off (30 → 30) | 0.872 → 0.819 | +9.2% → +19.1% | $0.008 → $0.011 | 10k → 90k | 60 → 178 s | 0/30 → **4/30** |
-| Sonnet 5.5 (`multiaxis_control` only, 5 → 5) | 0.839 → 0.833 | +3.2% → +7.5% | $0.100 → $0.224 | 24k → 86k | 45 → 62 s | 0 → 0 |
+| Qwen3.8-27B, reasoning off (30 → 30) | 0.872 → 0.819 | +9.2% → +19.0% | $0.008 → $0.011 | 10k → 90k | 60 → 178 s | 0/30 → **4/30** |
+| Sonnet 5.5 (`multiaxis_control` only, 5 → 5) | 0.839 → 0.833 | +3.2% → +5.7% | $0.100 → $0.224 | 24k → 86k | 45 → 62 s | 0 → 0 |
 
 (Per-spec cells in `eval/results.md`. Structured HV/regret for DeepSeek and Qwen are the means of
 their five per-spec means; the infeasible spec is excluded from HV/regret and was called
-correctly by every run of both arms.)
+correctly by every run of both arms. Wall-clock is not controlled: in this session structured,
+campaign and memory-on runs ran 3–4 at a time, and the structured M2-spec runs come from the M2
+session.)
 
 **The free-form loop loses, mildly, and costs more.** In 52 of 65 campaigns the agent spent its
 whole budget on one `run_dse(400)` (so its result is the structured graph's plus sampling noise)
@@ -884,9 +908,12 @@ accuracy at the constraint floor") narrowed the first box and the run ended at H
 (400 evaluations vs 100–180; still correct in 10/10). Qwen failed 4 of 30 campaigns by
 re-running verify/synthesize/back_annotate until the 40-call cap (every failed campaign had
 already used its 400 evaluations, so it is still scored). The campaign costs 1.4× (Qwen), 1.6×
-(DeepSeek) and 2.2× (Sonnet) per spec, with 3.5–9× the input tokens. What it did add: the ladder
-walked for every spec (L2, L3 recorded or fresh, L4 recorded, L5) and a forced re-plan when
-recorded data flagged the winner, which the structured graph also does in code.
+(DeepSeek) and 2.2× (Sonnet) per spec, with 3.5–9× the input tokens. What it did add is mostly
+form: it called the ladder's tools, but they rarely had anything to say: `verify_rtl` returned a
+recorded L3 row in 1 of 55 calls (no fresh run: every selection had W ≥ 15, too large for a live
+exhaustive run), `synthesize` found recorded measurements in 1 of 55, `back_annotate` compared
+in 1 of 61. The forced re-plan after a flagged winner change ran once; the structured graph does
+the same in code.
 
 **Memory on vs off** (Qwen, sequence `low_area_control → bursty_offload → dds_250msps →
 multiaxis_control`, seeds 0–2; off = the campaign arm's runs):
@@ -970,14 +997,23 @@ attempt 2 succeeded ($0.018).
   from the simulation (bursty: p99 2× the bound for an FSM design), so a spec whose winner sits
   near a system limit can have its whole L1 shortlist rejected at L2 (with a 1.0 µs limit on
   `bursty_offload`, 186,457 designs pass the bound and 151,528 the simulation; not used in the eval).
-- **Two system specs, and L2 never re-selected live.** The winner-change evidence is the
-  exhaustive ground truth and the tests; in the 30 live runs the L1 selection always passed L2.
-  The DDS scenario's constraints reduce to the MSPS-only view for this design space.
+- **Two system specs, one of which an MSPS floor at the right rate already decides.** On
+  `bursty_offload` a peak-rate floor gives the same winner as the simulation; only
+  `multiaxis_control` needs the system model, and there the margin is 1.5%. L2 re-selected in 0
+  of 30 structured runs and 4 of 65 campaign runs. The DDS scenario's constraints reduce to the
+  MSPS-only view for this design space.
+- **Clock-edge alignment, not a synchroniser.** Requests are accepted at the next CORDIC edge;
+  a real clock-domain crossing (a two-flop or FIFO synchroniser) would add about two cycles,
+  which is not modelled and could change `multiaxis_control`'s winner again.
 - **The campaign A/B is small and partly reused.** Two models over all six specs (Sonnet only on
   `multiaxis_control`, for the spend cap), 5 seeds; the structured arm on the M2 specs is the
   M2 runs (identical graph by replay, but sampled on a different day). Memory on/off: one
-  model, 3 seeds. The campaign agent's notes copy numbers from tool outputs into memory; they
-  are labelled as LLM-authored and nothing reads a number back from them.
+  model, 3 seeds. In the live eval the campaign agent's notes copied numbers from tool outputs
+  into memory, at least once inconsistently (Vivado-scale percentages next to a raw measured
+  pair), and those notes reached the next campaign's prompt and, through `run_dse(notes)`, the
+  inner architect (all 65 A/B campaigns passed notes). Since the review, every number in
+  LLM-authored text is masked before it is stored or forwarded (`mask_numbers`); the live runs
+  predate that.
 - **`deepagents` needs Python ≥ 3.11**; on 3.10 the campaign extra is skipped and its tests skip.
 - **Lever tuning used replays.** The levers were tuned on recorded M1 decisions; a replay
   cannot show how the LLM would react to different summaries. The live 5-seed eval is

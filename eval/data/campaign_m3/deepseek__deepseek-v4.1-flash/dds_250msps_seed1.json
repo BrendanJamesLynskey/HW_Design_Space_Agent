@@ -34,7 +34,7 @@
     "map_front",
     "stop"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-175634-602f/dse/dds_250msps/20261009-175638-00e5",
+   "run_dir": "runs/campaign_m3/20261009-175634-602f/dse/dds_250msps/20261009-175638-00e5",
    "notes": "NCO/DDS sin-cos for a digital up-converter: need >= 250 MSPS (one sample/clock), max_abs_err <= 2^-13 (13 accuracy bits), minimise LUTs (HV ref 4000). Prioritise pipelined and unrolled/pipelined_k families with high throughput (II=1); the accuracy constraint is tight so keep enough data width/iterations (accuracy_bits ~ 14+ before rounding to satisfy 2^-13 error). Exploit symmetry/quadrant compression in ROM-free or small-ROM CORDIC; keep pipelines deep enough that timing closes at 250 MHz on Artix-7. Selection rule is min luts, so the feasible point with lowest LUT count matters most.",
    "llm_declared_infeasible": false
   }

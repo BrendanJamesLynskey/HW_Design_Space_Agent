@@ -32,7 +32,7 @@
     "add_family",
     "refine"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-182611-6a7b/dse/bursty_offload/20261009-182617-01d1",
+   "run_dir": "runs/campaign_m3/20261009-182611-6a7b/dse/bursty_offload/20261009-182617-01d1",
    "notes": "System spec: bursty Poisson arrivals (bursts of 8, 2 req/us avg), p99 latency <= 0.4us is only screened by an analytic bound at L1, so favour designs with real throughput/latency headroom (pipelined / higher n_iter throughput) that survive L2. Constraint throughput_msps >= 2 is easy; error <= 2^-10 needs enough iterations. Select rule is min luts_plus_ffs, so keep small-area designs alive, plus points spanning accuracy for a well-mapped front.",
    "llm_declared_infeasible": false
   }

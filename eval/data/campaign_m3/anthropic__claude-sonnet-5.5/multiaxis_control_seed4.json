@@ -33,7 +33,7 @@
     "refine",
     "stop"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-193238-b28d/dse/multiaxis_control/20261009-193242-c1a0",
+   "run_dir": "runs/campaign_m3/20261009-193238-b28d/dse/multiaxis_control/20261009-193242-c1a0",
    "notes": "Need throughput >=32 MSps and batch of 32 within 0.44us: favor pipelined/unrolled designs; minimise LUT+FF with error<=2^-12 (>=12 bits accuracy).",
    "llm_declared_infeasible": false
   }

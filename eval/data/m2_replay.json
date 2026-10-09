@@ -17,7 +17,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": "facts_only",
    "back_annotation_winner_changed": false,
@@ -38,7 +40,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": "facts_only",
    "back_annotation_winner_changed": false,
@@ -59,7 +63,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": "facts_only",
    "back_annotation_winner_changed": false,
@@ -80,7 +86,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": "facts_only",
    "back_annotation_winner_changed": false,
@@ -101,7 +109,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": "facts_only",
    "back_annotation_winner_changed": false,
@@ -122,7 +132,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": "facts_only",
    "back_annotation_winner_changed": false,
@@ -143,7 +155,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": "facts_only",
    "back_annotation_winner_changed": false,
@@ -164,7 +178,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": "facts_only",
    "back_annotation_winner_changed": false,
@@ -185,7 +201,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": "facts_only",
    "back_annotation_winner_changed": false,
@@ -206,7 +224,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": "facts_only",
    "back_annotation_winner_changed": false,
@@ -227,7 +247,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": null,
    "back_annotation_winner_changed": false,
@@ -248,7 +270,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": null,
    "back_annotation_winner_changed": false,
@@ -269,7 +293,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": null,
    "back_annotation_winner_changed": false,
@@ -290,7 +316,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": null,
    "back_annotation_winner_changed": false,
@@ -311,7 +339,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": null,
    "back_annotation_winner_changed": false,
@@ -332,7 +362,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": "facts_only",
    "back_annotation_winner_changed": false,
@@ -353,7 +385,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": "facts_only",
    "back_annotation_winner_changed": false,
@@ -374,7 +408,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": "facts_only",
    "back_annotation_winner_changed": false,
@@ -395,7 +431,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": "facts_only",
    "back_annotation_winner_changed": false,
@@ -416,7 +454,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": "facts_only",
    "back_annotation_winner_changed": false,
@@ -437,7 +477,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": "facts_only",
    "back_annotation_winner_changed": false,
@@ -458,7 +500,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": "facts_only",
    "back_annotation_winner_changed": false,
@@ -479,7 +523,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": "facts_only",
    "back_annotation_winner_changed": false,
@@ -500,7 +546,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": "facts_only",
    "back_annotation_winner_changed": false,
@@ -521,7 +569,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": "facts_only",
    "back_annotation_winner_changed": false,
@@ -542,7 +592,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": "facts_only",
    "back_annotation_winner_changed": false,
@@ -563,7 +615,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": "facts_only",
    "back_annotation_winner_changed": false,
@@ -584,7 +638,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": "facts_only",
    "back_annotation_winner_changed": false,
@@ -605,7 +661,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": "facts_only",
    "back_annotation_winner_changed": false,
@@ -626,7 +684,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": "facts_only",
    "back_annotation_winner_changed": false,
@@ -647,7 +707,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": null,
    "back_annotation_winner_changed": false,
@@ -668,7 +730,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": null,
    "back_annotation_winner_changed": false,
@@ -689,7 +753,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": null,
    "back_annotation_winner_changed": false,
@@ -710,7 +776,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": null,
    "back_annotation_winner_changed": false,
@@ -731,7 +799,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": null,
    "back_annotation_winner_changed": false,
@@ -752,7 +822,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": "facts_only",
    "back_annotation_winner_changed": false,
@@ -773,7 +845,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": "facts_only",
    "back_annotation_winner_changed": false,
@@ -794,7 +868,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": "facts_only",
    "back_annotation_winner_changed": false,
@@ -815,7 +891,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": "facts_only",
    "back_annotation_winner_changed": false,
@@ -836,7 +914,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": "facts_only",
    "back_annotation_winner_changed": false,
@@ -857,7 +937,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": "facts_only",
    "back_annotation_winner_changed": false,
@@ -878,7 +960,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": "facts_only",
    "back_annotation_winner_changed": false,
@@ -899,7 +983,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": "facts_only",
    "back_annotation_winner_changed": true,
@@ -920,7 +1006,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": "facts_only",
    "back_annotation_winner_changed": false,
@@ -941,7 +1029,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": "facts_only",
    "back_annotation_winner_changed": false,
@@ -962,7 +1052,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": "facts_only",
    "back_annotation_winner_changed": false,
@@ -983,7 +1075,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": "facts_only",
    "back_annotation_winner_changed": false,
@@ -1004,7 +1098,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": "facts_only",
    "back_annotation_winner_changed": false,
@@ -1025,7 +1121,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": "facts_only",
    "back_annotation_winner_changed": false,
@@ -1046,7 +1144,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": "facts_only",
    "back_annotation_winner_changed": false,
@@ -1067,7 +1167,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": null,
    "back_annotation_winner_changed": false,
@@ -1088,7 +1190,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": null,
    "back_annotation_winner_changed": false,
@@ -1109,7 +1213,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": null,
    "back_annotation_winner_changed": false,
@@ -1130,7 +1236,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": null,
    "back_annotation_winner_changed": false,
@@ -1151,7 +1259,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": null,
    "back_annotation_winner_changed": false,
@@ -1172,7 +1282,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": "facts_only",
    "back_annotation_winner_changed": false,
@@ -1193,7 +1305,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": "facts_only",
    "back_annotation_winner_changed": false,
@@ -1214,7 +1328,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": "facts_only",
    "back_annotation_winner_changed": false,
@@ -1235,7 +1351,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": "facts_only",
    "back_annotation_winner_changed": false,
@@ -1256,7 +1374,9 @@
     "evaluations": true,
     "hv_frac": true,
     "select_regret": true,
-    "selected_key": true
+    "selected_key": true,
+    "architect_inputs": true,
+    "all_recorded_calls_consumed": true
    },
    "l2_status": "facts_only",
    "back_annotation_winner_changed": false,

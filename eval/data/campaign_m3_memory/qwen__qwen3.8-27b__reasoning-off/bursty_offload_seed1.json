@@ -33,7 +33,7 @@
     "refine",
     "stop"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3_memory/20261009-175434-0255/dse/bursty_offload/20261009-175447-97f9",
+   "run_dir": "runs/campaign_m3_memory/20261009-175434-0255/dse/bursty_offload/20261009-175447-97f9",
    "notes": "Bursty 8-channel sensor offload: bursts of 8 requests 0 ns apart, Poisson at 2 requests/us, p99 latency <= 0.4 us, err <= 2^-10, min LUTs+FFs. Prior campaign: iterative family dominated the front (data_width=15, n_iter=12, angle_guard=1, rounding=round won for a low-rate area-min spec); pipelined/pipelined_m/unrolled_k never reached a front. Cost model underestimates LUTs ~19%, FFs ~11%, Fmax ~10% low. For p99 latency, a single iterative CORDIC with ~12 iters at ~150 MHz is ~80 ns per request; 8 back-to-back requests = ~640 ns > 0.4 us p99 bound, so the system sim will likely need higher throughput (pipelined or unrolled) or a faster clock. Prioritize designs with enough throughput to drain 8-request bursts within 0.4 us p99, while keeping area low.",
    "llm_declared_infeasible": false
   }
@@ -130,5 +130,5 @@
  "select_regret": 0.09136970390866367,
  "declared_infeasible": false,
  "infeasibility_correct": true,
- "memory_lessons_before": null
+ "memory_lessons_before": "not recorded in the M3 eval (always None, review N6; recorded for runs after the fix); the store after each spec is in campaign_m3_memory_store.json"
 }

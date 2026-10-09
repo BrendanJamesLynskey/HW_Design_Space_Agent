@@ -34,7 +34,7 @@
     "refine",
     "stop"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-192928-cb08/dse/multiaxis_control/20261009-192934-6422",
+   "run_dir": "runs/campaign_m3/20261009-192928-cb08/dse/multiaxis_control/20261009-192934-6422",
    "notes": "Throughput >=32 MSPS with batch of 32 in 0.44us => need ~73+ MSPS effective; likely pipelined or unrolled; data width ~14-16 for 2^-12 error.",
    "llm_declared_infeasible": false
   }
@@ -158,8 +158,19 @@
  "hv_frac": 0.8010427250805869,
  "evals_to_95": null,
  "selected_meets_spec": true,
- "selected_key": "pipelined_m:data_width=17,n_iter=15,angle_guard=3,frac_guard=2,rounding=trunc,m=4",
- "select_regret": 0.15837526640497315,
+ "selected_key": "pipelined_m:data_width=18,n_iter=14,angle_guard=0,frac_guard=1,rounding=trunc,m=4",
+ "select_regret": 0.06616060039308426,
  "declared_infeasible": false,
- "infeasibility_correct": true
+ "infeasibility_correct": true,
+ "before_b1": {
+  "selected_key": "pipelined_m:data_width=17,n_iter=15,angle_guard=3,frac_guard=2,rounding=trunc,m=4",
+  "select_regret": 0.15837526640497315,
+  "hv_frac": 0.8010427250805869,
+  "selected_meets_spec": true,
+  "evals_to_95": null,
+  "l2_winner_changed": null
+ },
+ "l1_selected_key": "pipelined_m:data_width=15,n_iter=14,angle_guard=3,frac_guard=3,rounding=round,m=5",
+ "l2_winner_changed": true,
+ "rescored": "after the L2 fix (review B1): selection over every L1-feasible design; L1 evaluations unchanged (eval/m3_rescore.py)"
 }

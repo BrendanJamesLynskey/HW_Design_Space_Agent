@@ -36,7 +36,7 @@
     "add_family",
     "stop"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3_memory/20261009-173845-039a/dse/low_area_control/20261009-173858-27be",
+   "run_dir": "runs/campaign_m3_memory/20261009-173845-039a/dse/low_area_control/20261009-173858-27be",
    "notes": "Spec: low_area_control. Area is everything: minimize LUTs+FFs while meeting throughput >= 1 MSPS and max_abs_err <= 2^-10. Favor compact iterative/pipelined CORDIC with enough iterations for 10-bit accuracy; keep data width modest.",
    "llm_declared_infeasible": false
   }
@@ -86,5 +86,5 @@
  "select_regret": 0.06503550402761182,
  "declared_infeasible": false,
  "infeasibility_correct": true,
- "memory_lessons_before": null
+ "memory_lessons_before": "not recorded in the M3 eval (always None, review N6; recorded for runs after the fix); the store after each spec is in campaign_m3_memory_store.json"
 }

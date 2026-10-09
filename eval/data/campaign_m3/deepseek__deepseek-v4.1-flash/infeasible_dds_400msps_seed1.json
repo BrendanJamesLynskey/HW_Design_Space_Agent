@@ -31,7 +31,7 @@
    "decisions": [
     "infeasible"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-181034-3d0d/dse/infeasible_dds_400msps/20261009-181040-5d55",
+   "run_dir": "runs/campaign_m3/20261009-181034-3d0d/dse/infeasible_dds_400msps/20261009-181040-5d55",
    "notes": "Spec named infeasible: throughput >= 400 MSPS single-lane with max_abs_err <= 2^-12 (12 bits). Likely needs pipelined/pipelined_m families (fully pipelined, one sample/cycle) rather than iterative. Prioritise pipelined and pipelined_m families; check whether the constraint set is actually satisfiable at all and report the best feasible front plus the closest-to-feasible designs if not.",
    "llm_declared_infeasible": true
   }

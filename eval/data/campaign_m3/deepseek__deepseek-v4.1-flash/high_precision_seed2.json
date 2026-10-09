@@ -34,7 +34,7 @@
     "map_front",
     "stop"
    ],
-   "run_dir": "/home/user/HW_Design_Space_Agent/runs/campaign_m3/20261009-181843-0c65/dse/high_precision/20261009-181849-90f2",
+   "run_dir": "runs/campaign_m3/20261009-181843-0c65/dse/high_precision/20261009-181849-90f2",
    "notes": "Hard error constraint: max_abs_err <= 2^-20 (9.5367e-07) \u2014 this is a precision-dominated spec, so accuracy, not speed, is the binding constraint. Prioritise data_width and iteration/unroll depth large enough to reach ~20+ bits of accuracy (truncation/rounding error scales ~2^-width, CORDIC angle-quantisation error ~2^-n_iter): the exhaustive frontier almost certainly sits at high data_width (>= 24-28) and high n_iter (>= 20-24); low-width/low-iteration designs will be infeasible. Throughput >= 50 MSPS only needs to be met, not beaten, so for the min-luts_plus_ffs selection the cheapest way to reach 50 MSPS at high n_iter is likely a well-pipelined/unrolled-but-modest-parallelism structure or a multi-cycle iterative variant with a fast enough clock \u2014 do NOT buy throughput with area beyond the 50 MSPS requirement. Cover the full registry range in the searches, concentrate evals where the error constraint is feasible, and make sure the reported front has dense coverage along the area/power trade-off among feasible designs. Also return the L2 shortlist covering the smallest-area feasible designs.",
    "llm_declared_infeasible": false
   }
