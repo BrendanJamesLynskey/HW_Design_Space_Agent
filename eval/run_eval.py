@@ -287,7 +287,9 @@ def cmd_report(_: argparse.Namespace) -> None:
              "milestones are scored on the same ground truth) and *exact* (bit-accurate golden model).\n")
     L.append("Budget per run = the spec's `total_evals` (400). **M1**: seeds 0–2, the M1 agent. **M2**: seeds 0–4, the "
              "agent with the whole-curve levers (`LEVERS_M2`: a 40% front-mapping reserve, front-anchored box, the "
-             "`map_front` decision). Cells are mean ± population std over seeds. HV fraction = hypervolume of the "
+             "`map_front` decision). Before an M2 run stops, code spends any budget left on one final front-mapping round, "
+             "which is exempt from `max_rounds` and `evals_per_round` (so up to 5 rounds, and one round can exceed 100 "
+             "evaluations); `total_evals` is never exceeded. Cells are mean ± population std over seeds. HV fraction = hypervolume of the "
              "feasible designs found / true hypervolume of the exhaustive grid (635,040 designs). Selection regret = how "
              "much worse the selected design is than the true optimum on the spec's selection metric (0% = optimal). "
              "M1 numbers are read from the archived M1 data and are not re-run.\n")

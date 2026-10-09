@@ -59,9 +59,10 @@ Regenerate: `HW_DSE_CHIPDB_DIR=<dir with xc7a35t.bin> python scripts/run_l4_swee
 
 | file | what |
 |---|---|
-| `l5_refit_yosys-nextpnr.md` / `.json` | the cost model refitted to the 37 generated-RTL L4 points plus the two Vivado anchors, with one correction factor per tool and metric (Vivado = 1); residuals at every measured point before (M1 calibration) and after; the ground truth recomputed under the refit. Writes `src/hw_dse/models/calibration_artix7_refit_yosys-nextpnr.yaml`, which is **not** the default. |
+| `vivado_spotcheck.csv` | one Vivado 2025.2 measurement in the measured-points schema: the *generated* `pipelined` W=16 N=14 (720 LUT, 751 FF, 190 CARRY4, 327.4 MHz = 1000/(10 − 6.946 ns), `synth_design` only on xc7a35tcpg236-1), run by the maintainer with `scripts/vivado_points.py` while reviewing PR #3. Reports are not committed. |
+| `l5_refit_yosys-nextpnr.md` / `.json` | the cost model refitted to the 37 generated-RTL L4 points, the Vivado spot-check and the remaining reference-RTL Vivado anchor (`iterative`; the `pipelined` one is superseded by the spot-check), each tool carrying equal total weight, with one correction factor per tool and metric (Vivado = 1); residuals at every measured point before (M1 calibration) and after; leave-one-out RMS; the ground truth recomputed under the refit. Writes `src/hw_dse/models/calibration_artix7_refit_yosys-nextpnr.yaml`, which is **not** the default. |
 
-Regenerate: `python -m hw_dse.synth.recalibrate --measured eval/data/l4_synthesis.csv --name yosys-nextpnr`.
+Regenerate: `python -m hw_dse.synth.recalibrate --measured eval/data/l4_synthesis.csv --measured eval/data/vivado_spotcheck.csv --name yosys-nextpnr`.
 
 ## The eval
 
