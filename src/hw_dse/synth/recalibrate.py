@@ -17,10 +17,12 @@ For a design x measured by tool T::
 * The structural counts (``arith_bits``, ``mux_luts``, ``reg_bits``, levels,
   the primitive delays inside ``fixed``) are exactly the M1 model's
   (:func:`hw_dse.models.cost_fpga.structure`); only constants are refitted.
-* ``[f]``: a constant is fitted **per family** when that family has at least
-  :data:`MIN_FAMILY_POINTS` measured points (any tool); otherwise the family
-  shares the global value. (Pipelined families have no mux terms, so
-  ``c_mux``/``t_mux`` are never fitted for them.)
+* ``[f]``: ``c_arith``, ``c_ff`` and ``t_logic`` are fitted **per family**
+  when that family has at least :data:`MIN_FAMILY_POINTS` measured points
+  (about three per free parameter); otherwise the family shares the global
+  value. The barrel-shifter terms ``c_mux``/``t_mux`` are always global:
+  fitted per family they traded off against ``c_arith`` and generalised
+  poorly (leave-one-out LUT error 24% for ``unrolled_k``).
 * ``tau_T``: one multiplicative **per-tool correction** per metric. Vivado is
   the reference tool (``tau = 1``), so the fitted constants stay on the
   Vivado scale the default model and the eval use, and Yosys/nextpnr
@@ -28,15 +30,21 @@ For a design x measured by tool T::
   dragging the absolute scale to another tool's. When only open-source
   points exist besides the two anchors, the anchors alone fix the scale.
 * Fit criterion: least squares on *relative* error (so a 2,000-LUT design
-  does not dominate a 150-LUT one), by alternating between the linear
-  constants (non-negative least squares) and the closed-form tool factors.
+  does not dominate a 150-LUT one), with **every tool carrying the same total
+  weight** (so 37 open-source points do not outvote the Vivado ones), by
+  alternating between the linear constants (non-negative least squares) and
+  the closed-form tool factors.
+* The report includes a **leave-one-out** check: each generated-RTL point
+  refitted without itself and predicted, the honest measure of how the
+  refit generalises.
 
-Assumption to be tested by the Vivado PR: the two Vivado anchors were
-synthesised from the *reference* RTL, while every other point uses the
-*generated* RTL. The fit treats the anchors as Vivado-on-generated (the
-generated modules are bit-identical and structurally the same datapath).
-Yosys's own reference-vs-generated ratio is reported separately; the
-recommended Vivado points therefore include the two generated anchors.
+Known limit of the current data: the two Vivado anchors were synthesised
+from the *reference* RTL, while every other point uses the *generated* RTL,
+and the fit has to treat them as Vivado-on-generated. A one-design Vivado
+spot-check (generated ``pipelined`` W=16 N=14) found LUT/FF within 4% of the
+anchor but Fmax 20% higher, so this assumption does not hold for Fmax. As
+soon as a measured-points CSV has a Vivado row for the generated equivalent
+of an anchor, :func:`refit` uses that row and drops the reference anchor.
 
 Outputs (:func:`refit`, ``python -m hw_dse.synth.recalibrate``):
 
@@ -68,7 +76,7 @@ from hw_dse.rtl.generator import REPO_ROOT
 from hw_dse.synth.measured import MeasuredPoint, load
 
 REFERENCE_TOOL = "vivado"
-MIN_FAMILY_POINTS = 5
+MIN_FAMILY_POINTS = 3 * len(("c_arith", "c_ff", "t_logic_ns"))  # ~3 points per free parameter
 CONST_NAMES = ("c_arith", "c_mux", "c_ff", "t_logic_ns", "t_mux_ns")
 
 
@@ -126,39 +134,61 @@ def _features(p: MeasuredPoint, src: dict[str, float]) -> dict[str, float]:
     return {"arith": s.arith_bits, "mux": s.mux_luts, "reg": s.reg_bits, "fixed": fixed, "nl": nl, "nm": nm}
 
 
+PER_FAMILY_CONSTANTS = ("c_arith", "c_ff", "t_logic_ns")
+"""Constants a family may override. The barrel-shifter terms (``c_mux``,
+``t_mux_ns``) are always shared: only the two FSM families have them, and
+fitting them per family let them trade off against ``c_arith``/``t_logic``
+(collinear features), which generalised poorly in leave-one-out tests."""
+
+
+def tool_weights(points: list[MeasuredPoint]) -> list[float]:
+    """Every tool carries the same total weight, whatever its point count.
+
+    Without this, 37 open-source points outvote 2 Vivado points 37:2 and the
+    reference tool's own points end up far from its own scale.
+    """
+    n = {t: sum(p.tool == t for p in points) for t in {p.tool for p in points}}
+    return [1.0 / n[p.tool] for p in points]
+
+
 def _alternate(points: list[MeasuredPoint], feats: list[dict[str, float]], group: Any, coef: dict[str, dict[str, float]],
-               fixed: set[str], tau: dict[str, dict[str, float]], iters: int) -> dict[str, set[str]]:
-    """Alternate (a) non-negative LSQ for each free group's constants given the
-    tool factors and (b) closed-form tool factors given the constants.
-    Returns, per group, the names of the constants that were actually fitted."""
+               free: dict[str, tuple[str, ...]], tau: dict[str, dict[str, float]], iters: int,
+               weights: list[float]) -> dict[str, set[str]]:
+    """Alternate (a) weighted non-negative LSQ for each group's *free*
+    constants given the tool factors (the other constants are held fixed and
+    move to the right-hand side) and (b) weighted closed-form tool factors
+    given the constants. Returns, per group, the constants actually fitted."""
     fitted: dict[str, set[str]] = {g: set() for g in coef}
+    sw = [math.sqrt(w) for w in weights]
+    key = {"c_arith": "arith", "c_mux": "mux", "c_ff": "reg", "t_logic_ns": "nl", "t_mux_ns": "nm"}
     for _ in range(iters):
         for metric, cols, meas_of in (("luts", ("c_arith", "c_mux"), lambda p: p.luts), ("ffs", ("c_ff",), lambda p: p.ffs)):
             for g in coef:
-                if g in fixed:
-                    continue
                 idx = [i for i, p in enumerate(points) if group(p) == g]
-                if not idx:
+                use = [c for c in cols if c in free[g] and (c != "c_mux" or any(feats[i]["mux"] > 0 for i in idx))]
+                if not idx or not use:
                     continue
-                use = [c for c in cols if c != "c_mux" or any(feats[i]["mux"] > 0 for i in idx)]
-                key = {"c_arith": "arith", "c_mux": "mux", "c_ff": "reg"}
-                A = np.array([[tau[points[i].tool][metric] * feats[i][key[c]] / meas_of(points[i]) for c in use] for i in idx])
-                coef[g].update(dict(zip(use, _nnls(A, np.ones(len(idx))))))
+                held = [c for c in cols if c not in use]
+                A, b = [], []
+                for i in idx:
+                    s = tau[points[i].tool][metric] / meas_of(points[i])
+                    A.append([sw[i] * s * feats[i][key[c]] for c in use])
+                    b.append(sw[i] * (1.0 - s * sum(coef[g][c] * feats[i][key[c]] for c in held)))
+                coef[g].update(dict(zip(use, _nnls(np.array(A), np.array(b)))))
                 fitted[g].update(use)
-        # path: tau*(fixed + nl*tl + nm*tm) = meas  ->  rows relative to meas/tau
+        # path: tau*(fixed + nl*tl + nm*tm) = meas, rows relative to meas/tau
         for g in coef:
-            if g in fixed:
-                continue
             idx = [i for i, p in enumerate(points) if group(p) == g and p.fmax_mhz]
-            if not idx:
+            use = [c for c in ("t_logic_ns", "t_mux_ns") if c in free[g]
+                   and (c != "t_mux_ns" or any(feats[i]["nm"] > 0 for i in idx))]
+            if not idx or not use:
                 continue
-            use = ["t_logic_ns"] + (["t_mux_ns"] if any(feats[i]["nm"] > 0 for i in idx) else [])
-            key = {"t_logic_ns": "nl", "t_mux_ns": "nm"}
+            held = [c for c in ("t_logic_ns", "t_mux_ns") if c not in use]
             rows, rhs = [], []
             for i in idx:
                 tgt = 1000.0 / points[i].fmax_mhz / tau[points[i].tool]["path"]  # type: ignore[operator]
-                rows.append([feats[i][key[c]] / tgt for c in use])
-                rhs.append(1.0 - feats[i]["fixed"] / tgt)
+                rows.append([sw[i] * feats[i][key[c]] / tgt for c in use])
+                rhs.append(sw[i] * (1.0 - (feats[i]["fixed"] + sum(coef[g][c] * feats[i][key[c]] for c in held)) / tgt))
             coef[g].update(dict(zip(use, _nnls(np.array(rows), np.array(rhs)))))
             fitted[g].update(use)
         pred = [_predict_raw(p, f, coef[group(p)]) for p, f in zip(points, feats)]
@@ -167,25 +197,27 @@ def _alternate(points: list[MeasuredPoint], feats: list[dict[str, float]], group
                 continue
             for metric, meas_of, k in (("luts", lambda p: p.luts, 0), ("ffs", lambda p: p.ffs, 1),
                                        ("path", lambda p: 1000.0 / p.fmax_mhz if p.fmax_mhz else None, 2)):
-                r = [pr[k] / meas_of(p) for p, pr in zip(points, pred) if p.tool == tl and meas_of(p)]
-                if r:
-                    tau[tl][metric] = sum(r) / sum(x * x for x in r)
+                rw = [(w, pr[k] / meas_of(p)) for p, pr, w in zip(points, pred, weights) if p.tool == tl and meas_of(p)]
+                if rw:
+                    tau[tl][metric] = sum(w * r for w, r in rw) / sum(w * r * r for w, r in rw)
     return fitted
 
 
 def fit(points: list[MeasuredPoint], base: dict[str, Any], iters: int = 60) -> Fit:
-    """Two passes: (1) one pooled set of constants for every family -> the
-    global constants; (2) per-family constants for each family with at least
-    MIN_FAMILY_POINTS points (other families keep the global ones), refitting
-    the tool factors alongside."""
+    """Two passes, every tool weighted equally (:func:`tool_weights`):
+    (1) one pooled set of all five constants -> the global constants;
+    (2) for each family with at least MIN_FAMILY_POINTS points, its own
+    ``c_arith``/``c_ff``/``t_logic_ns`` (:data:`PER_FAMILY_CONSTANTS`; the
+    shifter terms stay global), refitting the tool factors alongside."""
     src = base["source_constants"]
     feats = [_features(p, src) for p in points]
     tools = sorted({p.tool for p in points})
     if REFERENCE_TOOL not in tools:
         raise ValueError("need at least one Vivado point (the calibration anchors) to fix the scale")
+    w = tool_weights(points)
     tau = {t: {"luts": 1.0, "ffs": 1.0, "path": 1.0} for t in tools}
     pooled = {"_global": dict(base["fitted"])}
-    _alternate(points, feats, lambda p: "_global", pooled, set(), tau, iters)
+    _alternate(points, feats, lambda p: "_global", pooled, {"_global": CONST_NAMES}, tau, iters, w)
     glob = {k: float(v) for k, v in pooled["_global"].items()}
     fams = sorted({p.arch.family for p in points})
     per_fam = [f for f in fams if sum(p.arch.family == f for p in points) >= MIN_FAMILY_POINTS]
@@ -194,9 +226,33 @@ def fit(points: list[MeasuredPoint], base: dict[str, Any], iters: int = 60) -> F
     def group(p: MeasuredPoint) -> str:
         return p.arch.family if p.arch.family in per_fam else "_global"
 
-    fitted = _alternate(points, feats, group, coef, {"_global"}, tau, iters)
+    free = {"_global": (), **{f: PER_FAMILY_CONSTANTS for f in per_fam}}
+    fitted = _alternate(points, feats, group, coef, free, tau, iters, w)
     per_family = {f: {k: float(coef[f][k]) for k in CONST_NAMES if k in fitted[f]} for f in per_fam}
     return Fit({k: glob[k] for k in CONST_NAMES}, per_family, tau)
+
+
+def predict(f: Fit, p: MeasuredPoint, src: dict[str, float]) -> tuple[float, float, float | None]:
+    """(LUTs, FFs, Fmax) the fit predicts for ``p`` on ``p.tool``'s scale."""
+    c = {**f.constants, **f.per_family.get(p.arch.family, {})}
+    t = f.tau.get(p.tool, {"luts": 1.0, "ffs": 1.0, "path": 1.0})
+    luts, ffs, path = _predict_raw(p, _features(p, src), c)
+    return luts * t["luts"], ffs * t["ffs"], 1000.0 / (path * t["path"])
+
+
+def leave_one_out(points: list[MeasuredPoint], base: dict[str, Any], targets: list[int]) -> list[dict[str, Any]]:
+    """Refit without each target point in turn and predict it: an
+    out-of-sample check on how well the refit generalises."""
+    src = base["source_constants"]
+    out = []
+    for i in targets:
+        p = points[i]
+        f = fit(points[:i] + points[i + 1:], base, iters=30)
+        luts, ffs, fmax = predict(f, p, src)
+        out.append({"family": p.arch.family, "key": p.arch.key(), "tool": p.tool,
+                    "luts_err_pct": (luts / p.luts - 1) * 100, "ffs_err_pct": (ffs / p.ffs - 1) * 100,
+                    "fmax_err_pct": (fmax / p.fmax_mhz - 1) * 100 if p.fmax_mhz else None})
+    return out
 
 
 def _predict_raw(p: MeasuredPoint, f: dict[str, float], c: dict[str, float]) -> tuple[float, float, float]:
@@ -270,9 +326,15 @@ def refit(measured_csvs: list[Path], name: str, base_path: Path = CALIBRATION_FI
     # Open-source rows synthesised from the *reference* RTL measure Yosys's
     # handling of that RTL, not the generated designs we explore: reported,
     # not fitted (unless asked).
-    fit_pts = anchor_points(base) + [p for p in pts_all if p.rtl_source == "generated" or include_reference_rtl
-                                     or p.tool == REFERENCE_TOOL]
+    # The calibration's Vivado anchors were synthesised from the *reference*
+    # RTL. Once Vivado has measured the *generated* equivalent of an anchor,
+    # that row replaces it (a spot-check found +20% Fmax on generated RTL).
+    viv_gen = {p.arch.key() for p in pts_all if p.tool == REFERENCE_TOOL and p.rtl_source == "generated"}
+    anchors = [a for a in anchor_points(base) if a.arch.key() not in viv_gen]
+    fit_pts = anchors + [p for p in pts_all if p.rtl_source == "generated" or include_reference_rtl]
     f = fit(fit_pts, base)
+    loo_idx = [i for i, p in enumerate(fit_pts) if p.rtl_source == "generated"]
+    loo = leave_one_out(fit_pts, base, loo_idx) if loo_idx else []
     cal = f.calibration(base, name, fit_pts, [str(c.relative_to(REPO_ROOT)) if c.is_absolute() and REPO_ROOT in c.parents
                                               else str(c) for c in measured_csvs])
     out_path = base_path.with_name(f"calibration_artix7_refit_{name}.yaml")
@@ -289,10 +351,26 @@ def refit(measured_csvs: list[Path], name: str, base_path: Path = CALIBRATION_FI
         "tool_corrections": cal["tool_corrections"], "n_fit_points": len(fit_pts),
         "summary_before": summary_by_tool(before), "summary_after": summary_by_tool(after),
         "residuals_before": before, "residuals_after": after,
+        "anchors_used": [a.arch.key() for a in anchors],
+        "leave_one_out": loo, "loo_summary": _loo_summary(loo, after, fit_pts, loo_idx),
     }
     if impact:
         report["ground_truth_impact"] = ground_truth_impact(out_path)
     return report
+
+
+def _loo_summary(loo: list[dict[str, Any]], after: list[dict[str, Any]], fit_pts: list[MeasuredPoint],
+                 loo_idx: list[int]) -> dict[str, dict[str, Any]]:
+    """In-sample vs leave-one-out RMS % error per family (generated-RTL points)."""
+    ins = {(r["tool"], r["key"], r["rtl_source"]): r for r in after}
+    out: dict[str, dict[str, Any]] = {}
+    for fam in ["all", *sorted({r["family"] for r in loo})]:
+        rows = [r for r in loo if fam in ("all", r["family"])]
+        insample = [ins[(r["tool"], r["key"], "generated")] for r in rows]
+        out[fam] = {"n": len(rows), **{f"{m}_in": round(_rms([x[f"{m}_err_pct"] for x in insample]), 1)
+                                       for m in ("luts", "ffs", "fmax")},
+                    **{f"{m}_loo": round(_rms([x[f"{m}_err_pct"] for x in rows]), 1) for m in ("luts", "ffs", "fmax")}}
+    return out
 
 
 def markdown(rep: dict[str, Any]) -> str:
@@ -306,6 +384,17 @@ def markdown(rep: dict[str, Any]) -> str:
                                                 for f, d in rep["per_family"].items()) or "none"))
     L.append("\nTool corrections (measured ≈ factor × model, Vivado = 1): " + "; ".join(
         f"`{t}`: LUT ×{d['luts']:.3f}, FF ×{d['ffs']:.3f}, path ×{d['path']:.3f}" for t, d in rep["tool_corrections"].items()))
+    L.append("\nFit: every tool carries equal total weight; per-family overrides only for c_arith, c_ff and "
+             f"t_logic_ns, for families with >= {MIN_FAMILY_POINTS} points. Vivado anchors used: "
+             + (", ".join(f"`{k}`" for k in rep.get("anchors_used", [])) or "none (superseded by generated-RTL Vivado rows)"))
+    if rep.get("loo_summary"):
+        L.append("\n## Out-of-sample check: leave-one-out RMS error (generated-RTL points)\n")
+        L.append("Each point refitted without itself and predicted on its own tool's scale; in-sample → leave-one-out.\n")
+        L.append("| family | points | LUT | FF | Fmax |")
+        L.append("|---|---|---|---|---|")
+        for fam, s in rep["loo_summary"].items():
+            L.append(f"| {fam} | {s['n']} | {s['luts_in']} → {s['luts_loo']}% | {s['ffs_in']} → {s['ffs_loo']}% | "
+                     f"{s['fmax_in']} → {s['fmax_loo']}% |")
     L.append("\n## RMS error by tool (before = M1 calibration as-is, no tool correction; after = refit × tool factor)\n")
     L.append("| tool (RTL) | points | LUT before | LUT after | FF before | FF after | Fmax before | Fmax after |")
     L.append("|---|---|---|---|---|---|---|---|")
