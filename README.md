@@ -71,18 +71,20 @@ graph TD;
 	explore_family(explore_family)
 	analyse(analyse)
 	select(select)
+	back_annotate(back_annotate)
 	report(report)
 	__end__([<p>__end__</p>]):::last
 	__start__ --> intake;
 	analyse -.-> explore_family;
 	analyse -.-> report;
 	analyse -.-> select;
+	back_annotate --> report;
 	confirm_spec -.-> propose;
 	confirm_spec -.-> report;
 	explore_family --> analyse;
 	intake --> confirm_spec;
 	propose -.-> explore_family;
-	select --> report;
+	select --> back_annotate;
 	report --> __end__;
 	classDef default fill:#f2f0ff,line-height:1.2
 	classDef first fill-opacity:0

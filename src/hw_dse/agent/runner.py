@@ -46,8 +46,14 @@ def run_agent(
     run_root: Path | None = None,
     method: str | None = None,
     llm: StructuredLLM | None = None,
+    levers: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Run one fully automatic agent session and return its results."""
+    """Run one fully automatic agent session and return its results.
+
+    ``levers`` overrides the whole-curve levers (default
+    :data:`hw_dse.agent.graph.LEVERS_M2`; pass ``LEVERS_M1`` for milestone-1
+    behaviour).
+    """
     run_dir = new_run_dir(spec.name, run_root)
     tracer = Tracer(run_dir / "llm_trace.jsonl")
     if llm is None:
@@ -55,7 +61,8 @@ def run_agent(
     else:
         llm.tracer = tracer
     graph = build_graph(llm, sqlite_checkpointer(run_dir / "checkpoints.sqlite"))
-    config = {"configurable": {"thread_id": f"{spec.name}-{seed}", "auto_approve": True, "auto_select": True},
+    config = {"configurable": {"thread_id": f"{spec.name}-{seed}", "auto_approve": True, "auto_select": True,
+                               "levers": levers or {}},
               "recursion_limit": 100}
     state = graph.invoke({"spec": spec.model_dump(), "run_dir": str(run_dir), "seed": seed}, config)
     totals = tracer.totals()
@@ -67,7 +74,9 @@ def run_agent(
         "selected": state.get("selected"),
         "evaluations_ordered": order_evaluations(state.get("evaluations", [])),
         "llm_declared_infeasible": bool(state.get("llm_declared_infeasible")),
-        "decisions": [log["llm_decision"] for log in state.get("rounds_log", [])],
+        "decisions": [log["llm_decision"] for log in state.get("rounds_log", []) if log.get("llm_decision")],
+        "coverage_rounds": int(state.get("coverage_rounds") or 0),
+        "overrides": [o for log in state.get("rounds_log", []) for o in log.get("overrides", [])],
         "llm": totals,
         "models_served": served,
         "structured_method": getattr(llm, "method", "n/a"),

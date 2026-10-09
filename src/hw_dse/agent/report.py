@@ -124,6 +124,32 @@ def _plan_lines(plan: dict[str, Any]) -> list[str]:
     return out
 
 
+def _back_annotation_lines(ba: dict[str, Any] | None) -> list[str]:
+    """L5 section: measured vs estimated for the selected design, and the winner check."""
+    if not ba or ba.get("status") == "skipped":
+        return []
+    L = ["## L5 back-annotation: measured vs estimate", ""]
+    if ba["status"] == "no_measured_data":
+        L.append("No measured data for the selected design in "
+                 + ", ".join(f"`{Path(s).name}`" for s in ba["measured_sources"]) + "; nothing to compare.")
+    elif ba["status"] != "compared":
+        L.append(f"Back-annotation did not run ({ba['status']}).")
+    else:
+        L.append("| tool | LUTs est → meas | FFs est → meas | Fmax MHz est → meas |")
+        L.append("|---|---|---|---|")
+        for c in ba["comparisons"]:
+            cells = [f"{c[m]['estimate']:.0f} → {c[m]['measured']:.0f} ({c[m]['diff_pct']:+.1f}%)" for m in ("luts", "ffs", "fmax_mhz")]
+            L.append(f"| {c['provenance']} | " + " | ".join(cells) + " |")
+        L.append("")
+        flag = "**WINNER CHANGES**" if ba["winner_changed"] else "winner unchanged"
+        L.append(f"Winner check ({ba['n_front_designs_measured']} of {ba['n_front_designs']} front designs have "
+                 f"measurements): {flag}: {ba['why']}.")
+    for n in ba.get("notes", []):
+        L.append(f"- {n}")
+    L.append("")
+    return L
+
+
 def write_report(state: dict[str, Any], llm: Any) -> Path:
     run_dir = Path(state["run_dir"])
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -146,7 +172,8 @@ def write_report(state: dict[str, Any], llm: Any) -> Path:
     L.append("")
     L.append("> Provenance key. *exact*: bit-accurate golden model over the stated angle sweep, or the cycle "
              "schedule. *estimate*: analytical Artix-7 cost model calibrated to two Vivado anchor points "
-             "(weak calibration; milestone 2 recalibrates against real synthesis). *measured*: none in M1. "
+             "(weak calibration; see the L5 refit in eval/data/). *measured*: real synthesis / place-and-route "
+             "results, named by tool and version (back-annotation section). "
              "The LLM produced no numbers in this report; its plans and reasoning are quoted as text.")
     L.append("")
     L.append("## Spec")
@@ -174,6 +201,7 @@ def write_report(state: dict[str, Any], llm: Any) -> Path:
     else:
         L.append("None.")
     L.append("")
+    L += _back_annotation_lines(state.get("back_annotation"))
     if front:
         L.append(f"## Pareto front ({len(front)} feasible non-dominated designs)")
         L.append("")
@@ -201,11 +229,14 @@ def write_report(state: dict[str, Any], llm: Any) -> Path:
         L.append(f"**Result (code):** {log['evals_this_round']} evaluations this round, {log['budget_used']} total; "
                  f"{log['n_feasible']} feasible; hypervolume {log['hv']:.4g} ({gain_s}).")
         L.append("")
-        L.append(f"**LLM decision:** `{log['llm_decision']}` — {log['rationale']}")
+        if log["llm_decision"] is None:
+            L.append(f"**No LLM call** (code's front-mapping round): {log['rationale']}")
+        else:
+            L.append(f"**LLM decision:** `{log['llm_decision']}` — {log['rationale']}")
         if log.get("overrides"):
             for o in log["overrides"]:
                 L.append(f"- **rule applied by code:** {o}")
-        if log["decision"] != log["llm_decision"]:
+        if log["llm_decision"] is not None and log["decision"] != log["llm_decision"]:
             L.append(f"- effective decision: `{log['decision']}`")
         L.append("")
         L.append("<details><summary>Summary the LLM was shown</summary>")

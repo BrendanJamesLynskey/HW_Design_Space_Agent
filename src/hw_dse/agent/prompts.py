@@ -35,7 +35,10 @@ Architecture registry (the only families and parameters that exist):
 Goal: map the feasible Pareto front over the spec's objectives as well as possible
 within the evaluation budget (scored by hypervolume against the spec's reference
 point); the final design is then picked from that front by the spec's selection
-rule. If no design in the registry can meet the constraints, say so (decision
+rule. Both matter: the hypervolume rewards covering the whole trade-off curve, not
+just the corner the selection rule picks. Before the run ends, code spends a reserved
+part of the budget mapping the front over the full ranges of the families you found on
+it. If no design in the registry can meet the constraints, say so (decision
 `infeasible`) rather than settling for a design that violates them.
 
 Notes:
@@ -79,6 +82,9 @@ Decide the next step:
 - refine: narrow ranges around the promising region (give next_plan)
 - widen: enlarge ranges that look too tight (give next_plan)
 - add_family: bring in a family not yet explored (give next_plan)
+- map_front: let code spend this round mapping the whole front (NSGA-II over the full
+  ranges of the families on the front, seeded with it); use it when the front covers
+  only a small part of an objective's range (no next_plan needed)
 - infeasible: no family in the registry can meet the constraints (explain which
   constraint is unreachable and the evidence)
 - stop: the front is good enough or no longer improving

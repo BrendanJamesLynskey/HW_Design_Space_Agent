@@ -86,6 +86,62 @@ def _make_sampler(kind: str, seed: int, n_trials: int) -> optuna.samplers.BaseSa
     return optuna.samplers.NSGAIISampler(population_size=population_size(n_trials), seed=seed, **kw)
 
 
+def _seed_study(study: optuna.Study, spec: Spec, seeds: list[tuple[dict[str, ParamValue], dict[str, Range]]]) -> int:
+    """Warm-start NSGA-II with designs that were *already evaluated* earlier in the run.
+
+    Each seed is added as a completed trial of generation 0, with its
+    objective values and constraint violations recomputed by
+    :func:`evaluate` (deterministic, so identical to what the earlier round
+    saw). Seeds are not new evaluations and are not counted against the
+    budget or returned as records: they only tell NSGA-II where the known
+    front is, so its first offspring are bred from it instead of from
+    random designs. Returns the number of seeds added.
+    """
+    gen_key = (NSGAIISampler_generation_key())
+    n = 0
+    for values, box in seeds:
+        fam = str(values.get("family", ""))
+        params = {k: v for k, v in values.items() if k in box}
+        dists: dict[str, optuna.distributions.BaseDistribution] = {}
+        ok = True
+        for name, rng in box.items():
+            v = params.get(name)
+            if isinstance(rng[0], str):
+                if v not in rng:
+                    ok = False
+                    break
+                dists[name] = optuna.distributions.CategoricalDistribution(list(rng))
+            else:
+                lo, hi = int(rng[0]), int(rng[1])  # type: ignore[arg-type]
+                if v is None or not lo <= int(v) <= hi:
+                    ok = False
+                    break
+                dists[name] = optuna.distributions.IntDistribution(lo, hi)
+        if not ok:
+            continue
+        arch_params = {k: v for k, v in params.items() if k != "family"}
+        arch = ArchConfig.from_params(fam, arch_params)
+        rec = evaluate(arch, spec)
+        cons = list(rec["violations"].values()) or [0.0]
+        attrs: dict[str, object] = {gen_key: 0}
+        if _HAS_SET_CONSTRAINT:
+            attrs.update({f"constraints:c{i}": float(c) for i, c in enumerate(cons)})
+        else:
+            attrs["constraints"] = [float(c) for c in cons]
+        vals = [float(rec[o.metric]) for o in spec.objectives]
+        study.add_trial(optuna.trial.create_trial(
+            params=params, distributions=dists, values=[v if math.isfinite(v) else 1e9 for v in vals],
+            system_attrs=attrs, user_attrs={"constraints": cons, "seed_design": True}))
+        n += 1
+    return n
+
+
+def NSGAIISampler_generation_key() -> str:  # noqa: N802 - mirrors Optuna's class name
+    """The system-attr key Optuna's NSGA-II uses for a trial's generation."""
+    getter = getattr(optuna.samplers.NSGAIISampler, "_get_generation_key", None)
+    return getter() if callable(getter) else "nsga2:generation"
+
+
 def _run(
     spec: Spec,
     n_trials: int,
@@ -93,9 +149,12 @@ def _run(
     sampler: str,
     design_of: Callable[[optuna.Trial], ArchConfig],
     tag: dict[str, object],
+    seeds: list[tuple[dict[str, ParamValue], dict[str, Range]]] | None = None,
 ) -> list[EvalRecord]:
     directions = ["minimize" if o.direction == "min" else "maximize" for o in spec.objectives]
     study = optuna.create_study(directions=directions, sampler=_make_sampler(sampler, seed, n_trials))
+    if seeds and sampler == "nsga2":
+        _seed_study(study, spec, seeds)
     records: list[EvalRecord] = []
 
     def objective(trial: optuna.Trial) -> tuple[float, ...]:
@@ -127,8 +186,13 @@ def run_family_study(
     seed: int,
     sampler: Literal["nsga2", "random"] = "nsga2",
     tag: dict[str, object] | None = None,
+    seed_designs: list[dict[str, ParamValue]] | None = None,
 ) -> list[EvalRecord]:
-    """NSGA-II (default) over one family inside ``box``."""
+    """NSGA-II (default) over one family inside ``box``.
+
+    ``seed_designs`` (parameter dicts of this family, already evaluated
+    earlier in the run) warm-start NSGA-II; see :func:`_seed_study`.
+    """
     if family not in REGISTRY:
         raise KeyError(family)
     params = [p.name for p in REGISTRY[family].params]
@@ -137,7 +201,8 @@ def run_family_study(
         values = {name: _suggest(trial, name, box[name]) for name in params}
         return ArchConfig.from_params(family, values)
 
-    return _run(spec, n_trials, seed, sampler, design_of, {"source": f"study:{family}", **(tag or {})})
+    seeds = [({**d, "family": family}, box) for d in (seed_designs or [])]
+    return _run(spec, n_trials, seed, sampler, design_of, {"source": f"study:{family}", **(tag or {})}, seeds)
 
 
 def union_box() -> dict[str, Range]:

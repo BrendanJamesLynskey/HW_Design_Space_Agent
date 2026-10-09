@@ -74,8 +74,49 @@ from hw_dse.families import REGISTRY, clamp_ranges
 from hw_dse.pareto import hypervolume
 from hw_dse.spec import Budget, Constraint, Objective, Spec, try_parse_spec_text
 
-CONTINUE = ("refine", "widen", "add_family")
+CONTINUE = ("refine", "widen", "add_family", "map_front")
 MIN_TRIALS_PER_FAMILY = 5
+
+# ---------------------------------------------------------------------------
+# Whole-curve levers (milestone 2)
+# ---------------------------------------------------------------------------
+# Milestone 1's agent was a good *selector* but a poor *front-mapper*: it
+# dived at the corner the selection rule cares about and the 1% HV-gain rule
+# then ended the run with a narrow front. The levers below are deterministic
+# code; the LLM can only *choose* one of them (the ``map_front`` decision).
+#
+# coverage_reserve
+#     Fraction of the evaluation budget the LLM's own rounds may not spend
+#     (once a feasible design exists). When the run would stop (LLM ``stop``, the HV-gain rule, the round cap
+#     or the LLM's share of the budget running out) and feasible designs
+#     exist, code first spends what is left of the budget (at least the
+#     reserve) on one front-mapping round. 0 disables it (milestone-1
+#     behaviour).
+# coverage_box
+#     The search box of a front-mapping round, per family on the merged
+#     front: ``"full"`` = the registry's full ranges; ``"front_anchored"`` =
+#     full ranges, except that data_width and n_iter start just below the
+#     smallest values on the front (smaller ones cannot meet the accuracy
+#     constraint the front designs barely meet).
+# warm_start, warm_start_max
+#     Seed each front-mapping study with (up to warm_start_max of, spread
+#     along) the family's current front designs -- already evaluated, so
+#     free -- so NSGA-II breeds from the known front.
+# hv_epsilon
+#     Override for the spec's HV-gain stopping threshold (None = the spec's).
+#
+# The values in LEVERS_M2 were chosen offline by replaying the recorded
+# milestone-1 LLM decisions against the exhaustive ground truth
+# (eval/tune_levers.py; eval/data/levers_offline*.json). Replaying the 12
+# recorded runs per spec, reserve 0.40 + front-anchored box lifted mean HV
+# from 0.43 to 0.90 (dds_250msps) and 0.20 to 0.90 (low_area_control), with
+# selection regret no worse; warm starts and the full box mapped less, and
+# reserve 0.50 left the LLM too little budget. The reserve only applies once
+# a feasible design exists, so infeasibility is still established with the
+# whole budget.
+LEVERS_M1: dict[str, Any] = {"coverage_reserve": 0.0, "coverage_box": "full", "warm_start": False, "hv_epsilon": None}
+LEVERS_M2: dict[str, Any] = {"coverage_reserve": 0.40, "coverage_box": "front_anchored", "warm_start": False,
+                             "hv_epsilon": None}
 
 
 class DSEState(TypedDict, total=False):
@@ -95,6 +136,10 @@ class DSEState(TypedDict, total=False):
     selected: dict[str, Any] | None
     selection_mode: str
     report_path: str
+    levers: dict[str, Any]
+    coverage_rounds: int
+    pending_stop: dict[str, Any] | None
+    back_annotation: dict[str, Any] | None
 
 
 def _cfg(config: RunnableConfig | None, key: str, default: Any = None) -> Any:
@@ -214,6 +259,59 @@ def _hv(records: list[dict[str, Any]], spec: Spec) -> float:
     return hypervolume([objective_vector(r, spec) for r in front], reference_point(spec))
 
 
+def _llm_budget(total: int, levers: dict[str, Any]) -> int:
+    """Evaluations the LLM's own rounds may spend before a front-mapping round."""
+    return total - int(round(total * float(levers.get("coverage_reserve") or 0.0)))
+
+
+def coverage_plan(spec: Spec, records: list[dict[str, Any]], budget: int, levers: dict[str, Any]) -> dict[str, Any] | None:
+    """A deterministic front-mapping round (the ``map_front`` lever).
+
+    One NSGA-II study per family on the merged feasible front, over that
+    family's full registry ranges (or the front-anchored box), budget split
+    in proportion to each family's share of the front, optionally seeded
+    with the family's front designs. Returns ``None`` if nothing is feasible.
+    """
+    from hw_dse.families import full_box
+
+    front = merged_front(records, spec)
+    if not front or budget < MIN_TRIALS_PER_FAMILY:
+        return None
+    fams = list(dict.fromkeys(r["family"] for r in front))
+    max_fams = max(1, budget // MIN_TRIALS_PER_FAMILY)
+    fams = fams[:max_fams]
+    counts = [sum(r["family"] == f for r in front) for f in fams]
+    trials = [max(MIN_TRIALS_PER_FAMILY, int(budget * c / sum(counts))) for c in counts]
+    while sum(trials) > budget:
+        trials[trials.index(max(trials))] -= 1
+    i = 0
+    while sum(trials) < budget:
+        trials[i % len(trials)] += 1
+        i += 1
+    jobs = []
+    for fam, n in zip(fams, trials):
+        box = {k: list(v) for k, v in full_box(fam).items()}
+        rows = [r for r in front if r["family"] == fam]
+        if levers.get("coverage_box") == "front_anchored":
+            for prm, slack in (("data_width", 1), ("n_iter", 2)):
+                lo, hi = box[prm]
+                box[prm] = [max(lo, min(int(r[prm]) for r in rows) - slack), hi]
+        seeds = []
+        if levers.get("warm_start"):
+            names = [pp.name for pp in REGISTRY[fam].params]
+            seeds = [{nm: r[nm] for nm in names} for r in rows]
+            cap = levers.get("warm_start_max")
+            if cap and len(seeds) > cap:  # an even spread along the front, ends included
+                pick = sorted({round(i * (len(seeds) - 1) / (cap - 1)) for i in range(cap)}) if cap > 1 else [0]
+                seeds = [seeds[i] for i in pick]
+        jobs.append({"family": fam, "box": box, "n_trials": n, "seeds": seeds,
+                     "why": f"code: map the front of {fam} ({len(rows)} front designs"
+                            f"{', seeded with them' if seeds else ''}; box {levers.get('coverage_box')})"})
+    return {"jobs": jobs, "kind": "coverage", "notes": [],
+            "rationale": "code-driven front-mapping round: NSGA-II over the front families' "
+                         f"{levers.get('coverage_box')} ranges with {budget} evaluations"}
+
+
 def order_evaluations(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Canonical evaluation order: by round, then trial index across the
     parallel family studies (round-robin), modelling concurrent execution."""
@@ -252,8 +350,9 @@ def build_graph(llm: StructuredLLM, checkpointer: Any = None) -> Any:
     def route_after_confirm(state: DSEState) -> str:
         return "report" if state.get("status") == "rejected" else "propose"
 
-    def propose(state: DSEState) -> dict[str, Any]:
+    def propose(state: DSEState, config: RunnableConfig) -> dict[str, Any]:
         spec = Spec.model_validate(state["spec"])
+        levers = {**LEVERS_M2, **(_cfg(config, "levers") or {})}
         b = spec.budget
         user = prompts.PROPOSE.format(spec=spec.summary(), budget=b.total_evals, per_round=b.evals_per_round, max_rounds=b.max_rounds)
         failure = None
@@ -262,10 +361,11 @@ def build_graph(llm: StructuredLLM, checkpointer: Any = None) -> Any:
         except StructuredOutputError as exc:
             failure = f"LLM produced no valid plan ({str(exc)[:200]}); used deterministic fallback: every family, full range"
             plan = fallback_plan("widen", spec, [], {})
-        vp = validate_plan(plan, min(b.evals_per_round, b.total_evals))
+        vp = validate_plan(plan, min(b.evals_per_round, _llm_budget(b.total_evals, levers)))
         if failure:
             vp["notes"].insert(0, failure)
-        return {"plan": vp, "round": 0, "budget_used": 0, "hv_history": [], "llm_declared_infeasible": False}
+        return {"plan": vp, "round": 0, "budget_used": 0, "hv_history": [], "llm_declared_infeasible": False,
+                "levers": levers, "coverage_rounds": 0, "pending_stop": None}
 
     def fan_out(state: DSEState) -> list[Send]:
         rnd = state.get("round", 0) + 1
@@ -280,12 +380,16 @@ def build_graph(llm: StructuredLLM, checkpointer: Any = None) -> Any:
         spec = Spec.model_validate(payload["spec"])
         job = payload["job"]
         box = {k: tuple(v) for k, v in job["box"].items()}
-        recs = run_family_study(job["family"], box, spec, job["n_trials"], payload["seed"], tag={"round": payload["round"]})
+        recs = run_family_study(job["family"], box, spec, job["n_trials"], payload["seed"], tag={"round": payload["round"]},
+                                seed_designs=job.get("seeds") or None)
         return {"evaluations": recs}
 
     def analyse(state: DSEState) -> dict[str, Any]:
         spec = Spec.model_validate(state["spec"])
         b = spec.budget
+        # Checkpoints from before milestone 2 carry no levers: behave as M1 did.
+        levers = {**LEVERS_M1, **(state.get("levers") or {})}
+        eps = b.hv_epsilon if levers.get("hv_epsilon") is None else float(levers["hv_epsilon"])
         rnd = state.get("round", 0) + 1
         records = state.get("evaluations", [])
         used = len(records)
@@ -293,57 +397,97 @@ def build_graph(llm: StructuredLLM, checkpointer: Any = None) -> Any:
         hv = _hv(records, spec)
         hv_prev = hv_hist[-1] if hv_hist else None
         remaining = b.total_evals - used
-        final = rnd >= b.max_rounds or remaining < MIN_TRIALS_PER_FAMILY
+        cov_rounds = int(state.get("coverage_rounds", 0))
+        # The LLM's own rounds may not touch the coverage reserve until a
+        # front-mapping round has run -- but only once there is a front to
+        # map: while nothing is feasible (e.g. an infeasible spec), the LLM
+        # keeps the whole budget to establish that.
+        any_feasible = any(r.get("feasible") for r in records)
+        llm_remaining = (_llm_budget(b.total_evals, levers) - used) if (cov_rounds == 0 and any_feasible) else remaining
+        final = rnd >= b.max_rounds or llm_remaining < MIN_TRIALS_PER_FAMILY
         explored = sorted({r["family"] for r in records}, key=list(REGISTRY).index)
         summary, ctx = summarise(spec, records, round_no=rnd, max_rounds=b.max_rounds, budget_used=used, hv=hv,
                                  hv_prev=hv_prev, explored=explored, final_round=final)
-        user = prompts.ANALYSE.format(spec=spec.summary(), summary=summary, final_note=prompts.FINAL_NOTE if final else "")
-        overrides: list[str] = []
-        try:
-            dec = llm.structured(AnalysisDecision, prompts.SYSTEM, user, node="analyse", context=ctx)
-        except StructuredOutputError as exc:
-            dec = AnalysisDecision(decision="stop", rationale=f"[LLM failed to answer: {exc}]")
-            overrides.append("LLM produced no valid decision; treated as stop")
-        llm_decision = dec.decision
-        decision = llm_decision
         n_feas = int(ctx["n_feasible"])
         gain = ctx["hv_gain"]
+        overrides: list[str] = []
+        update: dict[str, Any] = {"round": rnd, "budget_used": used, "hv_history": hv_hist + [hv], "pending_stop": None}
 
-        # -- hard rules (code, not LLM) ---------------------------------
-        if decision == "infeasible" and n_feas > 0:
-            overrides.append(f"'infeasible' rejected: {n_feas} feasible designs exist; treated as stop")
+        pending = state.get("pending_stop")
+        if pending:
+            # The round that just ran was the code's front-mapping round,
+            # inserted after the architect (or a hard rule) had already
+            # decided to stop. Stop now, without asking the LLM again.
+            dec = AnalysisDecision(decision="stop", rationale=pending["rationale"])
+            llm_decision = None
             decision = "stop"
-        if decision in CONTINUE and final:
-            why = "round cap" if rnd >= b.max_rounds else "budget exhausted"
-            overrides.append(f"'{decision}' overridden to stop: {why}")
-            decision = "stop"
-        if decision in CONTINUE and hv_prev is not None and hv_prev > 0 and gain is not None and gain < b.hv_epsilon:
-            overrides.append(f"'{decision}' overridden to stop: HV gain {gain * 100:.2f}% < epsilon {b.hv_epsilon * 100:.2f}%")
-            decision = "stop"
-
-        update: dict[str, Any] = {"round": rnd, "budget_used": used, "hv_history": hv_hist + [hv]}
-        if decision == "infeasible":
-            update["status"] = "infeasible"
-            update["llm_declared_infeasible"] = True
-        elif decision == "stop":
-            if n_feas == 0:
-                update["status"] = "no_feasible"
-                overrides.append("no feasible design found and the architect did not declare infeasibility")
-            elif rnd >= b.max_rounds and llm_decision in CONTINUE:
-                update["status"] = "round_cap"
-            elif remaining < MIN_TRIALS_PER_FAMILY and llm_decision in CONTINUE:
-                update["status"] = "budget"
-            elif any("HV gain" in o for o in overrides):
-                update["status"] = "converged"
-            else:
-                update["status"] = "stopped"
+            update["status"] = pending["status"]
+            overrides.append("code: front-mapping round complete; stopping as decided before it")
         else:
-            plan = dec.next_plan
-            if plan is None:
-                plan = fallback_plan(decision, spec, records, state.get("plan", {}))
-                overrides.append(f"no next_plan given for '{decision}'; used deterministic fallback")
-            update["plan"] = validate_plan(plan, min(b.evals_per_round, remaining))
-            update["status"] = "running"
+            user = prompts.ANALYSE.format(spec=spec.summary(), summary=summary, final_note=prompts.FINAL_NOTE if final else "")
+            try:
+                dec = llm.structured(AnalysisDecision, prompts.SYSTEM, user, node="analyse", context=ctx)
+            except StructuredOutputError as exc:
+                dec = AnalysisDecision(decision="stop", rationale=f"[LLM failed to answer: {exc}]")
+                overrides.append("LLM produced no valid decision; treated as stop")
+            llm_decision = dec.decision
+            decision = llm_decision
+
+            # -- hard rules (code, not LLM) -----------------------------
+            if decision == "infeasible" and n_feas > 0:
+                overrides.append(f"'infeasible' rejected: {n_feas} feasible designs exist; treated as stop")
+                decision = "stop"
+            if decision in CONTINUE and final:
+                why = "round cap" if rnd >= b.max_rounds else "budget exhausted"
+                overrides.append(f"'{decision}' overridden to stop: {why}")
+                decision = "stop"
+            if (decision in CONTINUE and decision != "map_front" and hv_prev is not None and hv_prev > 0
+                    and gain is not None and gain < eps):
+                overrides.append(f"'{decision}' overridden to stop: HV gain {gain * 100:.2f}% < epsilon {eps * 100:.2f}%")
+                decision = "stop"
+
+            if decision == "infeasible":
+                update["status"] = "infeasible"
+                update["llm_declared_infeasible"] = True
+            elif decision == "stop":
+                if n_feas == 0:
+                    status = "no_feasible"
+                    overrides.append("no feasible design found and the architect did not declare infeasibility")
+                elif rnd >= b.max_rounds and llm_decision in CONTINUE:
+                    status = "round_cap"
+                elif llm_remaining < MIN_TRIALS_PER_FAMILY and llm_decision in CONTINUE:
+                    status = "budget"
+                elif any("HV gain" in o for o in overrides):
+                    status = "converged"
+                else:
+                    status = "stopped"
+                update["status"] = status
+                # Lever: never stop with an unmapped front while budget remains.
+                if (n_feas > 0 and levers.get("coverage_reserve", 0) > 0 and cov_rounds == 0
+                        and remaining >= MIN_TRIALS_PER_FAMILY):
+                    cov = coverage_plan(spec, records, remaining, levers)
+                    if cov is not None:
+                        overrides.append(f"code: before stopping ({status}), one front-mapping round with the "
+                                         f"remaining {remaining} evaluations")
+                        update.update(plan=cov, status="running", coverage_rounds=cov_rounds + 1,
+                                      pending_stop={"status": status, "rationale": dec.rationale})
+            elif decision == "map_front":
+                cov = coverage_plan(spec, records, min(b.evals_per_round, llm_remaining), levers)
+                if cov is None:
+                    overrides.append("'map_front' with no feasible design to map: used the widen fallback instead")
+                    update["plan"] = validate_plan(fallback_plan("widen", spec, records, state.get("plan", {})),
+                                                   min(b.evals_per_round, llm_remaining))
+                else:
+                    update["plan"] = cov
+                    update["coverage_rounds"] = cov_rounds + 1
+                update["status"] = "running"
+            else:
+                plan = dec.next_plan
+                if plan is None:
+                    plan = fallback_plan(decision, spec, records, state.get("plan", {}))
+                    overrides.append(f"no next_plan given for '{decision}'; used deterministic fallback")
+                update["plan"] = validate_plan(plan, min(b.evals_per_round, llm_remaining))
+                update["status"] = "running"
         update["rounds_log"] = [{
             "round": rnd,
             "plan": state.get("plan", {}),
@@ -386,6 +530,18 @@ def build_graph(llm: StructuredLLM, checkpointer: Any = None) -> Any:
             return {"selected": auto, "selection_mode": f"auto (invalid human choice {choice!r})"}
         return {"selected": front[idx], "selection_mode": f"human picked front index {idx}"}
 
+    def back_annotate(state: DSEState, config: RunnableConfig) -> dict[str, Any]:
+        from hw_dse.agent.backannotate import back_annotate as annotate
+
+        spec = Spec.model_validate(state["spec"])
+        front = merged_front(state.get("evaluations", []), spec)
+        try:
+            ba = annotate(spec, front, state.get("selected"), _cfg(config, "back_annotate") or {})
+        except Exception as exc:  # noqa: BLE001 - a broken CSV must not lose the run
+            ba = {"status": "error", "notes": [f"back-annotation failed: {type(exc).__name__}: {exc}"],
+                  "measured_sources": [], "comparisons": []}
+        return {"back_annotation": ba}
+
     def report(state: DSEState) -> dict[str, Any]:
         from hw_dse.agent.report import write_report
 
@@ -399,6 +555,7 @@ def build_graph(llm: StructuredLLM, checkpointer: Any = None) -> Any:
     g.add_node("explore_family", explore_family)
     g.add_node("analyse", analyse)
     g.add_node("select", select)
+    g.add_node("back_annotate", back_annotate)
     g.add_node("report", report)
     g.add_edge(START, "intake")
     g.add_edge("intake", "confirm_spec")
@@ -406,6 +563,7 @@ def build_graph(llm: StructuredLLM, checkpointer: Any = None) -> Any:
     g.add_conditional_edges("propose", fan_out, ["explore_family"])
     g.add_edge("explore_family", "analyse")
     g.add_conditional_edges("analyse", route_after_analyse, ["explore_family", "select", "report"])
-    g.add_edge("select", "report")
+    g.add_edge("select", "back_annotate")
+    g.add_edge("back_annotate", "report")
     g.add_edge("report", END)
     return g.compile(checkpointer=checkpointer)
