@@ -47,12 +47,15 @@ def run_agent(
     method: str | None = None,
     llm: StructuredLLM | None = None,
     levers: dict[str, Any] | None = None,
+    options: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Run one fully automatic agent session and return its results.
 
     ``levers`` overrides the whole-curve levers (default
-    :data:`hw_dse.agent.graph.LEVERS_M2`; pass ``LEVERS_M1`` for milestone-1
-    behaviour).
+    :func:`hw_dse.agent.graph.default_levers`: ``LEVERS_M2`` for a spec
+    without a system scenario, ``LEVERS_M3`` with one; pass ``LEVERS_M1``
+    for milestone-1 behaviour). ``options`` adds graph config (``l2``,
+    ``back_annotate``).
     """
     run_dir = new_run_dir(spec.name, run_root)
     tracer = Tracer(run_dir / "llm_trace.jsonl")
@@ -62,7 +65,7 @@ def run_agent(
         llm.tracer = tracer
     graph = build_graph(llm, sqlite_checkpointer(run_dir / "checkpoints.sqlite"))
     config = {"configurable": {"thread_id": f"{spec.name}-{seed}", "auto_approve": True, "auto_select": True,
-                               "levers": levers or {}},
+                               "levers": levers or {}, **(options or {})},
               "recursion_limit": 100}
     state = graph.invoke({"spec": spec.model_dump(), "run_dir": str(run_dir), "seed": seed}, config)
     totals = tracer.totals()
@@ -81,4 +84,9 @@ def run_agent(
         "models_served": served,
         "structured_method": getattr(llm, "method", "n/a"),
         "report_path": state.get("report_path"),
+        "selected_l1": state.get("selected_l1"),
+        "l2": state.get("l2"),
+        "back_annotation": state.get("back_annotation"),
+        "l5": state.get("l5"),
+        "l5_selected": state.get("l5_selected"),
     }

@@ -45,6 +45,7 @@ VERDICT = {
     "infeasible": "INFEASIBLE: the architect concluded no design in the registry meets the spec",
     "no_feasible": "NO FEASIBLE DESIGN FOUND within the budget (the architect did not declare infeasibility)",
     "rejected": "spec rejected by the human; nothing explored",
+    "l2_no_feasible": "NO SHORTLISTED DESIGN PASSES the simulated system constraints (L2)",
 }
 
 
@@ -152,6 +153,67 @@ def _back_annotation_lines(ba: dict[str, Any] | None) -> list[str]:
     return L
 
 
+def _l2_lines(l2: dict[str, Any] | None, spec: Spec) -> list[str]:
+    """L2 section: the shortlist simulated in the system, and the re-selection."""
+    if not l2 or l2.get("status") == "skipped":
+        return []
+    L = ["## L2: cycle-level contract and system simulation", ""]
+    f = l2.get("selected_facts") or {}
+    if f:
+        c = f["contract"]
+        L.append(f"Interface contract of the L1 selection (cycle model, checked against the RTL cycle for cycle): "
+                 f"latency {c['latency']} cycles, a new input every {c['ii']} cycle(s). DDS tone from its exact outputs: "
+                 f"SFDR {f['dds_sfdr_dbc']:.1f} dBc, SNR {f['dds_snr_db']:.1f} dB (*{f['dds_provenance']}*).")
+        L.append("")
+    if l2.get("status") == "facts_only":
+        L.append(f"No system scenario in this spec: {l2.get('reason')}.")
+        L.append("")
+        return L
+    assert spec.system is not None
+    L.append(f"System: {spec.system.describe()}. Shortlist: the front's top {l2.get('k')} by the selection rule, "
+             "simulated at their estimated Fmax (SimPy). L1 bound → L2 simulated:")
+    L.append("")
+    cons = spec.system_constraints
+    L.append("| design | " + " | ".join(f"{c} (bound → simulated)" for c in cons) + " | passes |")
+    L.append("|---|" + "---|" * len(cons) + "---|")
+    for row in l2.get("shortlist", []):
+        cells = [f"{row['l1_bound'][c.metric]:.4g} → {row[c.metric]:.4g}" for c in cons]
+        L.append(f"| `{row['key']}` | " + " | ".join(cells) + f" | {'yes' if row['feasible'] else 'no'} |")
+    L.append("")
+    flag = "**WINNER CHANGED AT L2**" if l2.get("winner_changed") else "winner unchanged"
+    L.append(f"{flag}: {l2.get('why')}.")
+    for n in l2.get("notes", []):
+        L.append(f"- {n}")
+    L.append("")
+    return L
+
+
+def _l5_lines(l5: dict[str, Any] | None) -> list[str]:
+    if not l5:
+        return []
+    L = ["## L5 loop: re-exploration after a winner change", ""]
+    if l5.get("status") != "reexplored":
+        L += [f"Re-exploration did not run ({l5.get('status')}): " + "; ".join(l5.get("notes", [])), ""]
+        return L
+    boxes = "; ".join(f"`{f}` " + ", ".join(f"{k}={v[0]}..{v[1]}" for k, v in b.items() if isinstance(v[0], int))
+                      for f, b in l5["boxes"].items())
+    L.append(f"Trigger: {l5['trigger']}. Code re-explored around the measured designs ({', '.join(f'`{a}`' for a in l5['anchors'])}) "
+             f"with {l5['n_evals']} evaluations of a separate L5 budget, under the refitted calibration "
+             f"`{l5['calibration']}` (boxes: {boxes}).")
+    L.append("")
+    if l5.get("selected"):
+        sel = l5["selected"]
+        L.append(f"Selection under the refit: `{sel['key']}` ({'changed' if l5['changed'] else 'unchanged'}; was "
+                 f"`{l5['selected_before']}`): {sel['luts']:.0f} LUTs, {sel['ffs']:.0f} FFs, "
+                 f"{sel['throughput_msps']:.1f} MSPS (*{sel['provenance']['luts']}*).")
+    else:
+        L.append("No design meets the spec under the refitted calibration in the re-explored boxes.")
+    if l5.get("l2"):
+        L.append(f"- L2 re-check: {l5['l2']}")
+    L.append("")
+    return L
+
+
 def write_report(state: dict[str, Any], llm: Any) -> Path:
     run_dir = Path(state["run_dir"])
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -203,7 +265,9 @@ def write_report(state: dict[str, Any], llm: Any) -> Path:
     else:
         L.append("None.")
     L.append("")
+    L += _l2_lines(state.get("l2"), spec)
     L += _back_annotation_lines(state.get("back_annotation"))
+    L += _l5_lines(state.get("l5"))
     if front:
         L.append(f"## Pareto front ({len(front)} feasible non-dominated designs)")
         L.append("")

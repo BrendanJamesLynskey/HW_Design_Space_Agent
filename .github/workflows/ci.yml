@@ -44,9 +44,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e '.[dev,openrouter]'
 
-      - name: Offline test suite (incl. bit-exact RTL comparison)
+      # HW_DSE_REQUIRE_RTL makes the Icarus checks mandatory: the golden model vs
+      # the reference RTL, and (M3) the L2 cycle model vs the generated RTL.
+      # HW_DSE_REPLAY_FULL replays all 60 committed M2 runs through today's graph.
+      - name: Offline test suite (incl. bit-exact RTL comparison, L2 cycle check, full M2 replay)
         env:
           HW_DSE_REQUIRE_RTL: "1"
+          HW_DSE_REPLAY_FULL: "1"
         run: python -m pytest -v -rs
 
       - name: Smoke run with the rule-based fake architect
@@ -60,7 +64,8 @@ jobs:
           git diff --exit-code eval/results.md
 
   # L3 + gate level: Verilator and Icarus (full L3 sweep), SymbiYosys proofs,
-  # Yosys-mapped netlists simulated against the golden model. Every class of
+  # Yosys-mapped netlists simulated against the golden model, and the L2
+  # cycle model against the generated RTL in both simulators. Every class of
   # tool is *required* here: a missing tool fails instead of skipping.
   hdl:
     name: HDL (L3 sweep, formal, gate level)
@@ -101,7 +106,7 @@ jobs:
           HW_DSE_L3_FULL: "1"
         run: >-
           python -m pytest -v -rs
-          tests/test_rtl_generator.py tests/test_formal.py tests/test_synth.py tests/test_bitexact_rtl.py
+          tests/test_rtl_generator.py tests/test_formal.py tests/test_synth.py tests/test_bitexact_rtl.py tests/test_l2.py
 
   # L4 smoke: one small design through Yosys + nextpnr-xilinx (openXC7
   # container) on xc7a35tcpg236-1, including building the chip database.

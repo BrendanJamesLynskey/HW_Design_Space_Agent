@@ -92,20 +92,25 @@ graph TD;
 	explore_family(explore_family)
 	analyse(analyse)
 	select(select)
+	l2_simulate(l2_simulate)
 	back_annotate(back_annotate)
+	l5_reexplore(l5_reexplore)
 	report(report)
 	__end__([<p>__end__</p>]):::last
 	__start__ --> intake;
 	analyse -.-> explore_family;
 	analyse -.-> report;
 	analyse -.-> select;
-	back_annotate --> report;
+	back_annotate -.-> l5_reexplore;
+	back_annotate -.-> report;
 	confirm_spec -.-> propose;
 	confirm_spec -.-> report;
 	explore_family --> analyse;
 	intake --> confirm_spec;
+	l2_simulate --> back_annotate;
+	l5_reexplore --> report;
 	propose -.-> explore_family;
-	select --> back_annotate;
+	select --> l2_simulate;
 	report --> __end__;
 	classDef default fill:#f2f0ff,line-height:1.2
 	classDef first fill-opacity:0

@@ -15,7 +15,7 @@ so the prompt can never drift from what the explorer actually supports.
 from __future__ import annotations
 
 from hw_dse.families import registry_table
-from hw_dse.spec import METRIC_HELP
+from hw_dse.spec import METRIC_HELP, SYSTEM_METRICS, Spec
 
 SYSTEM = f"""You are the hardware architect in a design-space exploration loop for a
 CORDIC sin/cos unit on an Artix-7 FPGA.
@@ -50,7 +50,27 @@ Notes:
   registry are clamped by code.
 
 Metrics:
-""" + "\n".join(f"- {k}: {v}" for k, v in METRIC_HELP.items())
+""" + "\n".join(f"- {k}: {v}" for k, v in METRIC_HELP.items() if k not in SYSTEM_METRICS)
+# (The system metrics are listed only for specs that have a system scenario,
+# below, so a milestone-2 spec gets exactly the milestone-2 prompt.)
+
+SYSTEM_L2_ADDENDUM = """
+This spec also has a SYSTEM scenario (milestone 3): the CORDIC sits in a system
+(a DDS, a control loop or a bursty request stream) and some constraints are on
+system metrics (sys_*). During exploration those metrics are ANALYTIC BOUNDS,
+optimistic by construction (queueing between bursts and clock-edge alignment are
+ignored). After selection, code simulates the top designs of the front in the
+system (SimPy, L2) and re-selects among those that pass, so a front whose cheapest
+designs only just pass the bound may lose them at L2. Throughput alone does not
+capture bursts: a design that accepts one request every few cycles queues the rest
+of a burst. System metrics:
+""" + "\n".join(f"- {k}: {METRIC_HELP[k]}" for k in SYSTEM_METRICS)
+
+
+def system_prompt(spec: Spec) -> str:
+    """The architect's system prompt: :data:`SYSTEM`, plus the L2 addendum for a
+    spec with a system scenario (milestone-2 specs get :data:`SYSTEM` unchanged)."""
+    return SYSTEM if spec.system is None else SYSTEM + "\n" + SYSTEM_L2_ADDENDUM
 
 INTAKE = """Turn this natural-language request into a structured spec draft.
 Only record requirements the text actually states; leave the rest empty.
