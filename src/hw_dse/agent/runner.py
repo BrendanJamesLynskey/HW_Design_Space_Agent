@@ -48,6 +48,7 @@ def run_agent(
     llm: StructuredLLM | None = None,
     levers: dict[str, Any] | None = None,
     options: dict[str, Any] | None = None,
+    tracer: Tracer | None = None,
 ) -> dict[str, Any]:
     """Run one fully automatic agent session and return its results.
 
@@ -55,10 +56,12 @@ def run_agent(
     :func:`hw_dse.agent.graph.default_levers`: ``LEVERS_M2`` for a spec
     without a system scenario, ``LEVERS_M3`` with one; pass ``LEVERS_M1``
     for milestone-1 behaviour). ``options`` adds graph config (``l2``,
-    ``back_annotate``).
+    ``back_annotate``, ``architect_notes``). ``tracer``: write the LLM trace
+    there instead of a new ``llm_trace.jsonl`` in the run directory (the
+    campaign agent keeps one trace for all its calls).
     """
     run_dir = new_run_dir(spec.name, run_root)
-    tracer = Tracer(run_dir / "llm_trace.jsonl")
+    tracer = tracer or Tracer(run_dir / "llm_trace.jsonl")
     if llm is None:
         llm = make_llm(provider, model, tracer=tracer, reasoning=reasoning, method=method)
     else:
@@ -68,7 +71,7 @@ def run_agent(
                                "levers": levers or {}, **(options or {})},
               "recursion_limit": 100}
     state = graph.invoke({"spec": spec.model_dump(), "run_dir": str(run_dir), "seed": seed}, config)
-    totals = tracer.totals()
+    totals = tracer.totals()  # (a shared tracer: totals of everything it has seen)
     served = sorted({str(r.get("model_served")) for r in tracer.records if r.get("model_served")})
     return {
         "run_dir": str(run_dir),
@@ -85,6 +88,7 @@ def run_agent(
         "structured_method": getattr(llm, "method", "n/a"),
         "report_path": state.get("report_path"),
         "selected_l1": state.get("selected_l1"),
+        "rounds_log": state.get("rounds_log", []),
         "l2": state.get("l2"),
         "back_annotation": state.get("back_annotation"),
         "l5": state.get("l5"),

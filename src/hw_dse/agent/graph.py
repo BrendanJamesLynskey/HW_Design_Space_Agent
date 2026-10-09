@@ -438,6 +438,9 @@ def build_graph(llm: StructuredLLM, checkpointer: Any = None) -> Any:
         levers = {**default_levers(spec), **(_cfg(config, "levers") or {})}
         b = spec.budget
         user = prompts.PROPOSE.format(spec=spec.summary(), budget=b.total_evals, per_round=b.evals_per_round, max_rounds=b.max_rounds)
+        notes = _cfg(config, "architect_notes")
+        if notes:  # milestone 3: advisory text from the campaign agent (never numbers it produced)
+            user += prompts.CAMPAIGN_NOTES.format(notes=str(notes)[:2000])
         failure = None
         try:
             plan = llm.structured(ExplorationPlan, prompts.system_prompt(spec), user, node="propose", context=spec_context(spec))

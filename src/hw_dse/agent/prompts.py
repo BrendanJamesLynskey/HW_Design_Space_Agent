@@ -92,6 +92,12 @@ plausibly meet the constraints; spend the budget where the trade-offs are. Expla
 your reasoning briefly in `rationale` and per family in `why`.
 """
 
+CAMPAIGN_NOTES = """
+Notes from the campaign agent that launched this run (lessons from earlier runs;
+advisory, not numbers to rely on):
+{notes}
+"""
+
 ANALYSE = """Spec:
 {spec}
 
