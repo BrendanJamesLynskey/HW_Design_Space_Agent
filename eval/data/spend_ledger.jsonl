@@ -112,3 +112,25 @@
 {"model": "qwen/qwen3.8-27b", "spec": "multiaxis_control", "seed": 0, "cost_usd": 0.00951347, "arm": "structured", "ts": "2026-10-09T17:22:38", "milestone": "m3", "note": "pilot"}
 {"model": "qwen/qwen3.8-27b", "spec": "multiaxis_control", "seed": 0, "cost_usd": 0.057575501, "arm": "campaign", "ts": "2026-10-09T17:33:00", "milestone": "m3", "note": "pilot attempt 1 (failed: ls loop, killed)"}
 {"model": "qwen/qwen3.8-27b", "spec": "multiaxis_control", "seed": 0, "cost_usd": 0.017698936999999998, "arm": "campaign", "ts": "2026-10-09T17:38:02", "milestone": "m3", "note": "pilot"}
+{"model": "anthropic/claude-sonnet-5.5", "spec": "multiaxis_control", "seed": 0, "cost_usd": 0.096812, "arm": "structured", "ts": "2026-10-09T17:39:21", "milestone": "m3"}
+{"model": "qwen/qwen3.8-27b", "spec": "multiaxis_control", "seed": 0, "cost_usd": 0.010487285800000001, "arm": "structured", "ts": "2026-10-09T17:39:41", "milestone": "m3"}
+{"model": "deepseek/deepseek-v4.1-flash", "spec": "dds_250msps", "seed": 0, "cost_usd": 0.020792546999999998, "arm": "campaign", "ts": "2026-10-09T17:39:56", "milestone": "m3"}
+{"model": "deepseek/deepseek-v4.1-flash", "spec": "multiaxis_control", "seed": 0, "cost_usd": 0.014783831999999997, "arm": "structured", "ts": "2026-10-09T17:39:57", "milestone": "m3"}
+{"model": "anthropic/claude-sonnet-5.5", "spec": "multiaxis_control", "seed": 1, "cost_usd": 0.1134, "arm": "structured", "ts": "2026-10-09T17:40:12", "milestone": "m3"}
+{"model": "deepseek/deepseek-v4.1-flash", "spec": "multiaxis_control", "seed": 1, "cost_usd": 0.013086819999999999, "arm": "structured", "ts": "2026-10-09T17:40:42", "milestone": "m3"}
+{"model": "anthropic/claude-sonnet-5.5", "spec": "multiaxis_control", "seed": 2, "cost_usd": 0.096318, "arm": "structured", "ts": "2026-10-09T17:40:54", "milestone": "m3"}
+{"model": "qwen/qwen3.8-27b", "spec": "low_area_control", "seed": 0, "cost_usd": 0.013963026199999999, "arm": "campaign", "ts": "2026-10-09T17:40:55", "milestone": "m3", "note": "memory-on"}
+{"model": "qwen/qwen3.8-27b", "spec": "multiaxis_control", "seed": 1, "cost_usd": 0.0070236299999999995, "arm": "structured", "ts": "2026-10-09T17:41:27", "milestone": "m3"}
+{"model": "anthropic/claude-sonnet-5.5", "spec": "multiaxis_control", "seed": 3, "cost_usd": 0.096838, "arm": "structured", "ts": "2026-10-09T17:41:37", "milestone": "m3"}
+{"model": "anthropic/claude-sonnet-5.5", "spec": "multiaxis_control", "seed": 4, "cost_usd": 0.09448200000000001, "arm": "structured", "ts": "2026-10-09T17:42:17", "milestone": "m3"}
+{"model": "qwen/qwen3.8-27b", "spec": "multiaxis_control", "seed": 2, "cost_usd": 0.009742235, "arm": "structured", "ts": "2026-10-09T17:42:44", "milestone": "m3"}
+{"model": "qwen/qwen3.8-27b", "spec": "dds_250msps", "seed": 0, "cost_usd": 0.0114202437, "arm": "campaign", "ts": "2026-10-09T17:42:52", "milestone": "m3"}
+{"model": "anthropic/claude-sonnet-5.5", "spec": "bursty_offload", "seed": 0, "cost_usd": 0.094012, "arm": "structured", "ts": "2026-10-09T17:43:01", "milestone": "m3"}
+{"model": "deepseek/deepseek-v4.1-flash", "spec": "high_precision", "seed": 0, "cost_usd": 0.023997486999999998, "arm": "campaign", "ts": "2026-10-09T17:43:30", "milestone": "m3"}
+{"model": "qwen/qwen3.8-27b", "spec": "bursty_offload", "seed": 0, "cost_usd": 0.011852941, "arm": "campaign", "ts": "2026-10-09T17:43:31", "milestone": "m3", "note": "memory-on"}
+{"model": "anthropic/claude-sonnet-5.5", "spec": "bursty_offload", "seed": 1, "cost_usd": 0.093816, "arm": "structured", "ts": "2026-10-09T17:43:42", "milestone": "m3"}
+{"model": "qwen/qwen3.8-27b", "spec": "multiaxis_control", "seed": 3, "cost_usd": 0.007197993000000001, "arm": "structured", "ts": "2026-10-09T17:43:55", "milestone": "m3"}
+{"model": "anthropic/claude-sonnet-5.5", "spec": "bursty_offload", "seed": 2, "cost_usd": 0.09132799999999999, "arm": "structured", "ts": "2026-10-09T17:44:22", "milestone": "m3"}
+{"model": "qwen/qwen3.8-27b", "spec": "multiaxis_control", "seed": 4, "cost_usd": 0.0089351896, "arm": "structured", "ts": "2026-10-09T17:44:38", "milestone": "m3"}
+{"model": "qwen/qwen3.8-27b", "spec": "high_precision", "seed": 0, "cost_usd": 0.008537687, "arm": "campaign", "ts": "2026-10-09T17:44:56", "milestone": "m3"}
+{"model": "anthropic/claude-sonnet-5.5", "spec": "bursty_offload", "seed": 3, "cost_usd": 0.09153, "arm": "structured", "ts": "2026-10-09T17:45:01", "milestone": "m3"}

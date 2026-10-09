@@ -298,3 +298,163 @@ One seed, the two specs the levers target, the cheapest model; recorded separate
 - low_area_control seed 1: stopped; decisions: refine → refine → refine → stop; HV 0.148; run `runs/eval/low_area_control/20261008-144056-2ab6`
 - low_area_control seed 2: stopped; decisions: refine → stop; HV 0.165; run `runs/eval/low_area_control/20261008-144158-572c`
 
+# Milestone 3: system-level specs (L2), the campaign agent, the A/B
+
+Everything below is generated from committed data as well. *simulated* = L2 SimPy system model (clock = the design's estimated Fmax) or the golden-model DDS; *estimate (L1 bound)* = the analytic bound L1 screens system constraints with. M3 runs use the same 400-evaluation budget per spec as M1/M2.
+
+## System specs: exhaustive ground truth, three views
+
+Truth = system metrics simulated for every one of the 635,040 designs (they share 1,092 distinct (latency, ii, Fmax) tuples). L1-bound view = what L1 screening sees. MSPS-only view = the same spec without its system constraints, throughput floor = the scenario's average offered rate (how it reads in M2 terms).
+
+| spec | system | feasible (simulated / L1 bound / MSPS-only) | true winner (simulated) | L1-bound winner | MSPS-only winner | winner changes vs MSPS-only |
+|---|---|---|---|---|---|---|
+| bursty_offload | bursty requests: bursts of 8 (0 ns apart) arriving as a Poisson process, 2 requests/us on average | 151,528 / 151,528 / 303,056 | `pipelined_m:data_width=15,n_iter=12,angle_guard=1,frac_guard=0,rounding=round,m=6` (745) | `pipelined_m:data_width=15,n_iter=12,angle_guard=1,frac_guard=0,rounding=round,m=6` (745) | `iterative:data_width=15,n_iter=12,angle_guard=1,frac_guard=0,rounding=round` (251) | **yes** |
+| dds_sfdr (ground truth only) | DDS feeding a mixer: one phase word every 5 ns (200 MS/s), FIFO depth 16, NCO stalls when it is full | 12,334 / 12,334 / 12,363 | `pipelined:data_width=18,n_iter=15,angle_guard=1,frac_guard=0,rounding=round` (905) | `pipelined:data_width=18,n_iter=15,angle_guard=1,frac_guard=0,rounding=round` (905) | `pipelined:data_width=18,n_iter=15,angle_guard=1,frac_guard=0,rounding=round` (905) | no |
+| multiaxis_control | control loop: a tick every 1 us issues 32 requests at once (32 requests/us on average) | 51,244 / 53,667 / 115,304 | `pipelined_m:data_width=17,n_iter=14,angle_guard=1,frac_guard=0,rounding=round,m=4` (1072) | `pipelined_m:data_width=17,n_iter=14,angle_guard=1,frac_guard=0,rounding=round,m=5` (1013) | `pipelined_m:data_width=17,n_iter=14,angle_guard=1,frac_guard=0,rounding=round,m=7` (953) | **yes** |
+
+- `bursty_offload` true winner: 608 LUTs / 137 FFs, 68.5 MSPS, 10.09 bits; sys_p99_latency_us = 0.1953 (limit 0.4) (simulated).
+- `dds_sfdr` true winner: 905 LUTs / 938 FFs, 264.5 MSPS, 13.04 bits; sys_stall_frac = 0 (limit 0), sys_sfdr_dbc = 100.3 (limit 90) (simulated).
+- `multiaxis_control` true winner: 800 LUTs / 272 FFs, 97.8 MSPS, 12.26 bits; sys_p99_batch_us = 0.378 (limit 0.44) (simulated).
+
+## L2 cycle model vs generated RTL
+
+48 short bursty traces (8 designs covering every family and both rounding modes x 3 seeds x Icarus Verilog 12.0, Verilator 5.020 2024-01-01), 28,424 clock edges: **48/48 identical** on ready, valid_out and the output codes (ready mismatches 0, valid 0, data 0). Source: `eval/data/l2_cycle_validation.csv`.
+
+## Comparability: the M2 runs replayed through the M3 graph
+
+**60/60 identical**: same decisions, status, rounds, front-mapping rounds, every evaluated design key in order, HV fraction, selection regret and selected design (`eval/data/m2_replay.json`). This is what allows the structured arm of the A/B to reuse the M2 live runs on the four M2 specs.
+
+## The map_front fix on the M2 specs (offline, scripted architects)
+
+Unconditional (every explored family without a feasible design gets a full-box share):
+
+| driver | spec | runs | HV M2 levers → fix-all | regret M2 levers → fix-all | runs whose selection changed |
+|---|---|---|---|---|---|
+| LLM replays (3 models x 5 seeds) | dds_250msps | 15 | 0.878 → 0.781 | +5.7% → +5.9% | 5 |
+| LLM replays (3 models x 5 seeds) | low_area_control | 15 | 0.895 → 0.885 | +3.4% → +3.4% | 0 |
+| LLM replays (3 models x 5 seeds) | high_precision | 15 | 0.951 → 0.966 | +8.0% → +5.2% | 10 |
+| LLM replays (3 models x 5 seeds) | infeasible_dds_400msps | 15 | n/a → n/a | n/a → n/a | 0 |
+| heuristic architect (fake) | dds_250msps | 5 | 0.885 → 0.856 | +6.5% → +7.3% | 2 |
+| heuristic architect (fake) | low_area_control | 5 | 0.870 → 0.870 | +3.7% → +3.7% | 0 |
+| heuristic architect (fake) | high_precision | 5 | 0.974 → 0.967 | +4.0% → +5.0% | 3 |
+| heuristic architect (fake) | infeasible_dds_400msps | 5 | n/a → n/a | n/a → n/a | 0 |
+
+Gated (the M3 default, `LEVERS_M3`; structural constraints must have been met by the family's own designs):
+
+| driver | spec | runs | HV M2 levers → fix | regret M2 levers → fix | runs whose selection changed |
+|---|---|---|---|---|---|
+| LLM replays (3 models x 5 seeds) | dds_250msps | 15 | 0.878 → 0.878 | +5.7% → +5.7% | 0 |
+| LLM replays (3 models x 5 seeds) | low_area_control | 15 | 0.895 → 0.885 | +3.4% → +3.4% | 0 |
+| LLM replays (3 models x 5 seeds) | high_precision | 15 | 0.951 → 0.974 | +8.0% → +4.0% | 1 |
+| LLM replays (3 models x 5 seeds) | infeasible_dds_400msps | 15 | n/a → n/a | n/a → n/a | 0 |
+| heuristic architect (fake) | dds_250msps | 5 | 0.885 → 0.885 | +6.5% → +6.5% | 0 |
+| heuristic architect (fake) | low_area_control | 5 | 0.870 → 0.870 | +3.7% → +3.7% | 0 |
+| heuristic architect (fake) | high_precision | 5 | 0.974 → 0.974 | +4.0% → +4.0% | 0 |
+| heuristic architect (fake) | infeasible_dds_400msps | 5 | n/a → n/a | n/a → n/a | 0 |
+
+## Structured graph on the system specs (5 seeds)
+
+### multiaxis_control
+
+| method | runs | evals used | HV fraction at end | evals to 95% HV | selected meets spec | selection regret on luts_plus_ffs (optimal) | infeasibility called correctly |
+|---|---|---|---|---|---|---|---|
+| baseline (a): NSGA-II + L2 shortlist | 5 | 400 ± 0 | 0.806 ± 0.071 | not reached (0/5) | 5/5 | +16.0% ± 7.0 (0/5) | 5/5 |
+| baseline (b): random + L2 shortlist | 5 | 400 ± 0 | 0.633 ± 0.032 | not reached (0/5) | 5/5 | +33.1% ± 10.5 (0/5) | 5/5 |
+| structured: `anthropic/claude-sonnet-5.5` | 5 | 400 ± 0 | 0.839 ± 0.019 | not reached (0/5) | 5/5 | +3.2% ± 2.3 (1/5) | 5/5 |
+| structured: `deepseek/deepseek-v4.1-flash` | 2 | 400 ± 0 | 0.853 ± 0.009 | not reached (0/2) | 2/2 | +11.3% ± 3.0 (0/2) | 2/2 |
+| structured: `qwen/qwen3.8-27b, reasoning off` | 5 | 400 ± 0 | 0.841 ± 0.027 | not reached (0/5) | 5/5 | +4.9% ± 3.8 (1/5) | 5/5 |
+
+L2 changed the L1 selection in: `anthropic/claude-sonnet-5.5` 0/5; `deepseek/deepseek-v4.1-flash` 0/2; `qwen/qwen3.8-27b, reasoning off` 0/5 runs.
+
+### bursty_offload
+
+| method | runs | evals used | HV fraction at end | evals to 95% HV | selected meets spec | selection regret on luts_plus_ffs (optimal) | infeasibility called correctly |
+|---|---|---|---|---|---|---|---|
+| baseline (a): NSGA-II + L2 shortlist | 5 | 400 ± 0 | 0.840 ± 0.020 | not reached (0/5) | 5/5 | +26.7% ± 6.4 (0/5) | 5/5 |
+| baseline (b): random + L2 shortlist | 5 | 400 ± 0 | 0.733 ± 0.032 | not reached (0/5) | 5/5 | +31.7% ± 11.6 (0/5) | 5/5 |
+| structured: `anthropic/claude-sonnet-5.5` | 4 | 400 ± 0 | 0.868 ± 0.017 | not reached (0/4) | 4/4 | +10.7% ± 4.4 (0/4) | 4/4 |
+
+L2 changed the L1 selection in: `anthropic/claude-sonnet-5.5` 0/4; `deepseek/deepseek-v4.1-flash` 0/0; `qwen/qwen3.8-27b, reasoning off` 0/0 runs.
+
+## A/B: structured graph vs campaign agent (same specs, seeds, budget)
+
+Structured arm: the M2 live runs on the four M2 specs (replay-proven identical graph) and the fresh M3 runs on the system specs. Campaign arm: one single-spec campaign per (spec, seed), memory off, the same model as both the campaign agent and the inner architect. Failure = the campaign raised (stuck, call cap, provider error) or left the spec unfinalized. Cells: mean ± population std over seeds.
+
+**HV fraction** (structured → campaign)
+
+| spec | `anthropic/claude-sonnet-5.5` | `deepseek/deepseek-v4.1-flash` | `qwen/qwen3.8-27b, reasoning off` |
+|---|---|---|---|
+| dds_250msps | 0.839 ± 0.079 → **—** | 0.897 ± 0.048 → **0.882** | 0.898 ± 0.036 → **0.871** |
+| high_precision | 0.975 ± 0.004 → **—** | 0.982 ± 0.012 → **0.984** | 0.895 ± 0.159 → **0.957** |
+| infeasible_dds_400msps | n/a → **—** | n/a → **—** | n/a → **—** |
+| low_area_control | 0.876 ± 0.025 → **—** | 0.919 ± 0.044 → **—** | 0.889 ± 0.011 → **—** |
+| multiaxis_control | 0.839 ± 0.019 → **—** | 0.853 ± 0.009 → **—** | 0.841 ± 0.027 → **—** |
+| bursty_offload | 0.868 ± 0.017 → **—** | — → **—** | — → **—** |
+
+**selection regret** (structured → campaign)
+
+| spec | `anthropic/claude-sonnet-5.5` | `deepseek/deepseek-v4.1-flash` | `qwen/qwen3.8-27b, reasoning off` |
+|---|---|---|---|
+| dds_250msps | +5.5% ± 2.8 → **—** | +7.6% ± 1.2 → **+0.0%** | +4.0% ± 2.7 → **+6.5%** |
+| high_precision | +3.9% ± 0.6 → **—** | +2.7% ± 1.9 → **+2.4%** | +17.5% ± 27.2 → **+6.5%** |
+| infeasible_dds_400msps | n/a → **—** | n/a → **—** | n/a → **—** |
+| low_area_control | +1.4% ± 1.3 → **—** | +5.1% ± 3.3 → **—** | +3.7% ± 0.7 → **—** |
+| multiaxis_control | +3.2% ± 2.3 → **—** | +11.3% ± 3.0 → **—** | +4.9% ± 3.8 → **—** |
+| bursty_offload | +10.7% ± 4.4 → **—** | — → **—** | — → **—** |
+
+**L1 evaluations used** (structured → campaign)
+
+| spec | `anthropic/claude-sonnet-5.5` | `deepseek/deepseek-v4.1-flash` | `qwen/qwen3.8-27b, reasoning off` |
+|---|---|---|---|
+| dds_250msps | 400 ± 0 → **—** | 400 ± 0 → **400** | 400 ± 0 → **400** |
+| high_precision | 400 ± 0 → **—** | 400 ± 0 → **400** | 400 ± 0 → **400** |
+| infeasible_dds_400msps | 100 ± 0 → **—** | 180 ± 40 → **—** | 100 ± 0 → **—** |
+| low_area_control | 400 ± 0 → **—** | 400 ± 0 → **—** | 400 ± 0 → **—** |
+| multiaxis_control | 400 ± 0 → **—** | 400 ± 0 → **—** | 400 ± 0 → **—** |
+| bursty_offload | 400 ± 0 → **—** | — → **—** | — → **—** |
+
+**Cost, tokens, time and failures per run** (structured → campaign; all specs)
+
+| model | runs | input tokens / run | output tokens / run | cost / run (USD) | wall time / run (s) | failure rate |
+|---|---|---|---|---|---|---|
+| `anthropic/claude-sonnet-5.5` | 29 → 0 | 18637 ± 6312 → — | 3664 ± 1119 → — | 0.0739 ± 0.0217 → — | 32 ± 9 → — | 0/29 → — |
+| `deepseek/deepseek-v4.1-flash` | 22 → 2 | 11917 ± 3411 → 72236 ± 2958 | 12297 ± 4632 → 18826 ± 2403 | 0.0117 ± 0.0042 → 0.0224 ± 0.0016 | 87 ± 53 → 148 ± 67 | 0/22 → 0/2 |
+| `qwen/qwen3.8-27b, reasoning off` | 25 → 2 | 9783 ± 3658 → 84490 ± 12860 | 2835 ± 959 → 4678 ± 348 | 0.0075 ± 0.0019 → 0.0100 ± 0.0014 | 53 ± 23 → 190 ± 66 | 0/25 → 0/2 |
+
+**What the campaign agent did** (tool sequence per run, condensed)
+
+`deepseek/deepseek-v4.1-flash`:
+
+- dds_250msps seed 0: run_dse → verify_rtl → synthesize → back_annotate → reexplore → verify_rtl → synthesize → back_annotate [run_dse(400)]; L5 re-explore → `pipelined:data_width=18,n_iter=15,angle_guard=1,frac_guard=0,rounding=round`
+- high_precision seed 0: run_dse → simulate_system → verify_rtl → synthesize → back_annotate [run_dse(400)]
+
+`qwen/qwen3.8-27b, reasoning off`:
+
+- dds_250msps seed 0: run_dse → simulate_system → verify_rtl → synthesize → back_annotate [run_dse(400)]
+- high_precision seed 0: run_dse → simulate_system → verify_rtl → synthesize → back_annotate [run_dse(400)]
+
+## Memory on vs off (campaign agent, fixed spec sequence, seeds 0–2)
+
+Sequence: low_area_control → bursty_offload → dds_250msps → multiaxis_control. Memory on: one LangGraph Store per seed, carried from spec to spec (lessons written by code after each spec, plus the agent's own notes). Memory off: the campaign arm's runs for the same spec and seed. The first spec of the sequence starts with an empty store in both conditions. Store contents after the eval: `eval/data/campaign_m3_memory_store.json`.
+
+| model | spec (position) | HV off → on | regret off → on | evals off → on | cost off → on (USD) |
+|---|---|---|---|---|---|
+| `qwen/qwen3.8-27b, reasoning off` | low_area_control (1) | — → 0.895 | — → +6.5% | — → 400 | — → 0.0140 |
+| `qwen/qwen3.8-27b, reasoning off` | bursty_offload (2) | — → 0.928 | — → +14.7% | — → 400 | — → 0.0119 |
+| `qwen/qwen3.8-27b, reasoning off` | dds_250msps (3) | — → — | — → — | — → — | — → — |
+| `qwen/qwen3.8-27b, reasoning off` | multiaxis_control (4) | — → — | — → — | — → — | — → — |
+
+## M3 spend
+
+| ledger entry | runs | provider-reported cost (USD) |
+|---|---|---|
+| campaign | 4 | 0.0647 |
+| campaign (memory-on) | 2 | 0.0258 |
+| campaign (pilot attempt 1 (failed: ls loop, killed)) | 1 | 0.0576 |
+| campaign (pilot) | 1 | 0.0177 |
+| structured | 16 | 0.9398 |
+| structured (pilot) | 1 | 0.0095 |
+| **total** | 25 | **1.1151** |
+
+Key usage snapshots (authoritative; `eval/data/key_usage_m3.json`): session_start 2026-10-09T16:28:55Z $4.1889; before_pilots 2026-10-09T17:20:44Z $4.1889; after_structured_pilot 2026-10-09T17:22:40Z $4.1963; check_no_run (campaign pilot skipped: file existed) 2026-10-09T17:22:47Z $4.2012; after_campaign_pilot1 2026-10-09T17:34:07Z $4.2598; after_campaign_pilot2 2026-10-09T17:38:03Z $4.2788; before_eval 2026-10-09T17:38:31Z $4.2805.
+

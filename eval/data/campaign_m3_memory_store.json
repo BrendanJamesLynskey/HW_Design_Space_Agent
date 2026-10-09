@@ -1,0 +1,156 @@
+{
+ "seed0": {
+  "hw_dse/memory/family": {
+   "iterative": {
+    "author": "code",
+    "lesson": "`iterative`: explored in 2 spec(s) (344 evaluations), on the front in 1; on the front in low_area_control",
+    "run_ids": [
+     "20261009-173845-039a",
+     "20261009-174055-b15d"
+    ],
+    "updated": "2026-10-09T17:43:26"
+   },
+   "pipelined": {
+    "author": "code",
+    "lesson": "`pipelined`: explored in 2 spec(s) (63 evaluations), on the front in 0; never reached a front on this device so far",
+    "run_ids": [
+     "20261009-173845-039a",
+     "20261009-174055-b15d"
+    ],
+    "updated": "2026-10-09T17:43:26"
+   },
+   "pipelined_m": {
+    "author": "code",
+    "lesson": "`pipelined_m`: explored in 2 spec(s) (340 evaluations), on the front in 1; on the front in bursty_offload",
+    "run_ids": [
+     "20261009-173845-039a",
+     "20261009-174055-b15d"
+    ],
+    "updated": "2026-10-09T17:43:26"
+   },
+   "unrolled_k": {
+    "author": "code",
+    "lesson": "`unrolled_k`: explored in 2 spec(s) (53 evaluations), on the front in 0; never reached a front on this device so far",
+    "run_ids": [
+     "20261009-173845-039a",
+     "20261009-174055-b15d"
+    ],
+    "updated": "2026-10-09T17:43:26"
+   }
+  },
+  "hw_dse/memory/note": {
+   "low_area_control": {
+    "author": "llm",
+    "lesson": "For area-min CORDIC specs, iterative family with data_width=16, n_iter=12, truncation wins (267 LUTs+FFs, 10.5 acc bits, 13.2 MSPS). L3/L4 have no recorded rows for this design class, so back_annotate returns no_measured_data and reexplore is refused; finalize directly after L2.",
+    "run_ids": [
+     "20261009-173845-039a"
+    ],
+    "updated": "2026-10-09T17:40:35"
+   },
+   "note/bursty_offload": {
+    "author": "llm",
+    "lesson": "For bursty specs (bursts of 8, Poisson 2 req/us, p99 <= 0.4 us), pipelined_m wins: dw=15, n_iter=14, m=7 (855 LUTs+FFs est, 10.6 acc bits, 59.6 MSPS, simulated p99 0.233 us). L1 analytic p99 bound was optimistic (~0.17 vs simulated 0.233) but still passed. pipelined_m reached the front here, unlike prior campaigns. No L3/L4 measured rows; back_annotate no_measured_data, finalize directly.",
+    "run_ids": [
+     "20261009-174055-b15d"
+    ],
+    "updated": "2026-10-09T17:43:09"
+   }
+  },
+  "hw_dse/memory/spec_class": {
+   "low-rate (< 10 MSPS), no system scenario": {
+    "author": "code",
+    "lesson": "spec class 'low-rate (< 10 MSPS), no system scenario': 1 front-mapping round(s) in 1 spec run(s), mean HV gain +443.7% (min +443.7%, max +443.7%)",
+    "run_ids": [
+     "20261009-173845-039a"
+    ],
+    "updated": "2026-10-09T17:43:26"
+   },
+   "low-rate (< 10 MSPS), system: bursty": {
+    "author": "code",
+    "lesson": "spec class 'low-rate (< 10 MSPS), system: bursty': 3 front-mapping round(s) in 1 spec run(s), mean HV gain +23.5% (min +0.3%, max +55.0%)",
+    "run_ids": [
+     "20261009-174055-b15d"
+    ],
+    "updated": "2026-10-09T17:43:26"
+   }
+  },
+  "hw_dse/observations/family": {
+   "20261009-173845-039a|low_area_control|iterative": {
+    "evals": 294,
+    "family": "iterative",
+    "on_front": true,
+    "run_id": "20261009-173845-039a",
+    "spec": "low_area_control"
+   },
+   "20261009-173845-039a|low_area_control|pipelined": {
+    "evals": 33,
+    "family": "pipelined",
+    "on_front": false,
+    "run_id": "20261009-173845-039a",
+    "spec": "low_area_control"
+   },
+   "20261009-173845-039a|low_area_control|pipelined_m": {
+    "evals": 40,
+    "family": "pipelined_m",
+    "on_front": false,
+    "run_id": "20261009-173845-039a",
+    "spec": "low_area_control"
+   },
+   "20261009-173845-039a|low_area_control|unrolled_k": {
+    "evals": 33,
+    "family": "unrolled_k",
+    "on_front": false,
+    "run_id": "20261009-173845-039a",
+    "spec": "low_area_control"
+   },
+   "20261009-174055-b15d|bursty_offload|iterative": {
+    "evals": 50,
+    "family": "iterative",
+    "on_front": false,
+    "run_id": "20261009-174055-b15d",
+    "spec": "bursty_offload"
+   },
+   "20261009-174055-b15d|bursty_offload|pipelined": {
+    "evals": 30,
+    "family": "pipelined",
+    "on_front": false,
+    "run_id": "20261009-174055-b15d",
+    "spec": "bursty_offload"
+   },
+   "20261009-174055-b15d|bursty_offload|pipelined_m": {
+    "evals": 300,
+    "family": "pipelined_m",
+    "on_front": true,
+    "run_id": "20261009-174055-b15d",
+    "spec": "bursty_offload"
+   },
+   "20261009-174055-b15d|bursty_offload|unrolled_k": {
+    "evals": 20,
+    "family": "unrolled_k",
+    "on_front": false,
+    "run_id": "20261009-174055-b15d",
+    "spec": "bursty_offload"
+   }
+  },
+  "hw_dse/observations/spec_class": {
+   "20261009-173845-039a|low_area_control": {
+    "class": "low-rate (< 10 MSPS), no system scenario",
+    "mapping_gains": [
+     4.437269746077162
+    ],
+    "run_id": "20261009-173845-039a",
+    "spec": "low_area_control"
+   },
+   "20261009-174055-b15d|bursty_offload": {
+    "class": "low-rate (< 10 MSPS), system: bursty",
+    "mapping_gains": [
+     0.550340564459336,
+     0.1528468273043273,
+     0.003108514212099678
+    ],
+    "run_id": "20261009-174055-b15d",
+    "spec": "bursty_offload"
+   }
+  }
+ }
+}
