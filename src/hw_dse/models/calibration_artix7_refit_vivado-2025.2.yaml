@@ -40,11 +40,11 @@ source_constants:
   t_carry_last_ns: 0.334
   activity_factor: 0.125
 fitted:
-  c_arith: 0.996378
-  c_mux: 0.942046
-  c_ff: 0.99047
-  t_logic_ns: 0.721297
-  t_mux_ns: 0.983113
+  c_arith: 1.001248
+  c_mux: 0.939441
+  c_ff: 0.999533
+  t_logic_ns: 0.776421
+  t_mux_ns: 1.040549
 power_reference:
   family: iterative
   params:
@@ -56,38 +56,39 @@ power_reference:
   f_mhz: 100.0
 fitted_per_family:
   iterative:
-    c_arith: 1.002343
-    c_ff: 1.080187
-    t_logic_ns: 0.975442
+    c_arith: 0.918288
+    c_ff: 1.061679
+    t_logic_ns: 1.090524
   pipelined:
-    c_arith: 0.99258
-    c_ff: 0.949227
-    t_logic_ns: 0.686028
+    c_arith: 0.98981
+    c_ff: 0.943112
+    t_logic_ns: 0.746668
   pipelined_m:
-    c_arith: 0.985418
-    c_ff: 0.985324
-    t_logic_ns: 0.807207
+    c_arith: 0.984487
+    c_ff: 0.983281
+    t_logic_ns: 0.84041
   unrolled_k:
-    c_arith: 1.185225
-    c_ff: 1.017589
-    t_logic_ns: 0.768844
+    c_arith: 1.224761
+    c_ff: 1.014179
+    t_logic_ns: 0.683455
 tool_corrections:
   vivado:
     luts: 1.0
     ffs: 1.0
     path: 1.0
   yosys+nextpnr-xilinx:
-    luts: 1.043008
-    ffs: 1.025718
-    path: 1.453848
+    luts: 1.046128
+    ffs: 1.032727
+    path: 1.41696
 refit:
   from_calibration: artix7-xc7a35t-vivado2025.2-2anchor-v1
-  n_points: 45
+  n_points: 51
   points_by_tool:
-    vivado: 8
+    vivado: 14
     yosys+nextpnr-xilinx: 37
   sources:
   - eval/data/vivado_measured.csv
+  - eval/data/vivado_measured_2.csv
   - eval/data/l4_synthesis.csv
   - eval/data/vivado_spotcheck.csv
   method: 'hw_dse.synth.recalibrate: relative least squares, per-family constants where a family has >= 9 points,
