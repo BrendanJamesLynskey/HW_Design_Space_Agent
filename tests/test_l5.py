@@ -31,12 +31,15 @@ def _vivado_csv(path: Path, rows: list[dict[str, object]]) -> Path:
     return path
 
 
-def _row(arch: ArchConfig, luts: float, ffs: float, fmax: float | None, tool: str = "vivado") -> dict[str, object]:
+def _row(arch: ArchConfig, luts: float, ffs: float, fmax: float | None, tool: str = "vivado",
+         kind: str | None = None) -> dict[str, object]:
+    """A measured row; Vivado rows default to post-synthesis (the anchors' flow), others to post-route."""
     p = arch.params()
+    kind = kind or ("post-synthesis (1000/(10-WNS))" if tool == "vivado" else "post-route")
     return {"tool": tool, "tool_version": "2025.2", "part": "xc7a35tcpg236-1", "rtl_source": "generated",
             "family": arch.family, "data_width": p["data_width"], "n_iter": p["n_iter"], "angle_guard": p["angle_guard"],
             "frac_guard": p["frac_guard"], "rounding": p["rounding"], "k": arch.k, "m": arch.m, "luts": luts, "ffs": ffs,
-            "fmax_mhz": "" if fmax is None else fmax, "fmax_kind": "post-route", "source_log": "test"}
+            "fmax_mhz": "" if fmax is None else fmax, "fmax_kind": kind, "source_log": "test"}
 
 
 def test_committed_l4_csv_follows_the_schema() -> None:
@@ -232,3 +235,63 @@ def test_back_annotation_scaled_diff_and_per_tool_winner_check(tmp_path: Path) -
     assert ys["luts"]["measured_scaled"] == 200.0  # 400 / LUT factor 2.0
     assert ys["fmax_mhz"]["measured_scaled"] == 225.0  # 150 * path factor 1.5
     assert ys["luts"]["diff_pct"] != ys["luts"]["diff_pct_scaled"]
+
+
+def test_post_route_vivado_rows_are_reported_not_fitted_and_duplicates_count_once(tmp_path: Path,
+                                                                                    monkeypatch: pytest.MonkeyPatch) -> None:
+    pipe = ArchConfig.from_params("pipelined", {"data_width": 16, "n_iter": 14})
+    it = ArchConfig.from_params("iterative", {"data_width": 16, "n_iter": 14})
+    full = _vivado_csv(tmp_path / "full.csv", [_row(pipe, 720, 751, 327.4), _row(pipe, 706, 751, 232.2, kind="post-route"),
+                                               _row(it, 175, 96, 172.8), _row(it, 164, 96, 158.1, kind="post-route")])
+    spot = _vivado_csv(tmp_path / "spot.csv", [_row(pipe, 720, 751, 327.4)])
+    fit_rows, report_only, dropped = recalibrate.split_rows([full, L4_CSV, spot])
+    viv = [p for p in fit_rows if p.tool == "vivado"]
+    assert sorted(p.arch.family for p in viv) == ["iterative", "pipelined"]  # spot-check counted once
+    assert dropped == [{"tool": "vivado", "key": pipe.key(), "csv": "spot.csv", "kept_from": "full.csv"}]
+    assert {p.tool for p in report_only} == {"vivado post-route"} and len(report_only) == 2
+    cal_dir = tmp_path / "models"
+    cal_dir.mkdir()
+    base = cal_dir / "calibration_artix7.yaml"
+    base.write_text((ROOT / "src/hw_dse/models/calibration_artix7.yaml").read_text())
+    monkeypatch.setattr(recalibrate, "REPO_ROOT", tmp_path)
+    rep = recalibrate.refit([full, L4_CSV, spot], "t", base_path=base, impact=False)
+    assert rep["anchors_used"] == []  # both reference anchors superseded by generated-RTL Vivado rows
+    assert rep["n_fit_points"] == 2 + sum(p.rtl_source == "generated" for p in measured.load(L4_CSV))
+    assert "vivado post-route (generated RTL)" in rep["summary_after"]
+    assert "vivado (reference RTL)" in rep["summary_after"]  # still reported
+    md = recalibrate.markdown(rep)
+    assert "Reported, not fitted: 2 Vivado post-route rows" in md and "Counted once" in md
+
+
+def test_ground_truth_re_evaluates_with_the_grids_cost_model(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The front and the selected design must carry the refit model's numbers, not the default's."""
+    from hw_dse import benchmark
+
+    designs = [ArchConfig.from_params("iterative", {"data_width": w, "n_iter": n}) for w, n in ((12, 10), (14, 12), (16, 14))]
+    monkeypatch.setattr(benchmark, "all_designs", lambda: designs)
+    refit_cm = FpgaCostModel(str(ROOT / "src/hw_dse/models/calibration_artix7_refit_vivado-2025.2.yaml"))
+    spec = load_spec(ROOT / "specs" / "low_area_control.yaml")
+    gt = benchmark.ground_truth(benchmark.build_grid(cost_model=refit_cm), spec, refit_cm)
+    sel = ArchConfig.from_key(gt["selected"]["key"])
+    assert gt["selected"]["luts"] == pytest.approx(refit_cm.estimate(sel).area["luts"])
+    assert gt["selected"]["luts"] != pytest.approx(FpgaCostModel().estimate(sel).area["luts"])
+
+
+def test_committed_vivado_measurements_and_refit() -> None:
+    pts = measured.load(ROOT / "eval/data/vivado_measured.csv")
+    synth = [p for p in pts if not recalibrate.is_post_route(p)]
+    keys = {p.arch.key() for p in synth}
+    assert len(pts) == 16 and len(synth) == 8 and len(keys) == 8
+    assert {a.key() for a in VIVADO_POINTS} < keys
+    assert all(p.tool == "vivado" and p.rtl_source == "generated" and p.fmax_mhz for p in pts)
+    for p in pts:  # every row's reports are committed
+        for f in p.extra["source_log"].split(", "):
+            assert (ROOT / "eval/data/vivado_logs" / f).exists()
+    spot = measured.load(ROOT / "eval/data/vivado_spotcheck.csv")[0]
+    same = next(p for p in synth if p.arch.key() == spot.arch.key())
+    assert (same.luts, same.ffs) == (spot.luts, spot.ffs) and same.fmax_mhz == pytest.approx(spot.fmax_mhz, abs=0.05)
+    cal = load_calibration(str(ROOT / "src/hw_dse/models/calibration_artix7_refit_vivado-2025.2.yaml"))
+    assert cal["tool_corrections"]["vivado"] == {"luts": 1.0, "ffs": 1.0, "path": 1.0}
+    assert cal["refit"]["points_by_tool"] == {"vivado": 8, "yosys+nextpnr-xilinx": 37}
+    assert (ROOT / "eval/data/l5_refit_vivado-2025.2.md").exists()  # not truncated at the version's dot
+    assert load_calibration()["id"] == "artix7-xc7a35t-vivado2025.2-2anchor-v1"  # the default is untouched

@@ -16,12 +16,16 @@ Step 3, here again: parse the reports into a measured-points CSV (the schema of
 
     python scripts/vivado_points.py collect --dir vivado_points/ --out eval/data/vivado_measured.csv
     python -m hw_dse.synth.recalibrate --measured eval/data/vivado_measured.csv \\
-        --measured eval/data/l4_synthesis.csv --name vivado-2025.2
+        --measured eval/data/l4_synthesis.csv --measured eval/data/vivado_spotcheck.csv --name vivado-2025.2
+
+(The committed ``eval/data/vivado_measured.csv`` was collected from the reports
+copied into ``eval/data/vivado_logs/``; see ``eval/data/README.md``.)
 
 Fmax is computed as the anchors' was, ``1000 / (10 - WNS)`` from the
 post-synthesis timing summary. Add ``--route`` to ``export`` to also place and
 route (``opt_design; place_design; route_design``) and report post-route
-timing; those rows are written with ``fmax_kind`` saying so.
+timing; those rows are written with ``fmax_kind`` saying so, and the refit
+reports them without fitting them.
 
 The points (``POINTS``): the six from ``hw_dse.synth.sweep.VIVADO_POINTS``
 (``unrolled_k`` k=2/4, ``pipelined_m`` m=2/4, ``pipelined`` W=12/24) plus the

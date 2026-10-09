@@ -155,8 +155,11 @@ def _feasible_mask(m: dict[str, np.ndarray], spec: Spec) -> np.ndarray:
     return mask
 
 
-def ground_truth(grid: Grid, spec: Spec) -> dict[str, Any]:
-    """True feasible set size, Pareto front, HV and auto-selected design."""
+def ground_truth(grid: Grid, spec: Spec, cost_model: Any = None) -> dict[str, Any]:
+    """True feasible set size, Pareto front, HV and auto-selected design.
+
+    ``cost_model`` must be the one ``grid`` was built with (default: the M1
+    calibration): the front and the selected design are re-evaluated with it."""
     m = grid.metrics(spec)
     feas = _feasible_mask(m, spec)
     out: dict[str, Any] = {"spec": spec.name, "n_designs": len(grid), "n_feasible": int(feas.sum())}
@@ -172,11 +175,11 @@ def ground_truth(grid: Grid, spec: Spec) -> dict[str, Any]:
     front_local = pareto_front_large(obj)
     front_idx = idx[front_local]
     out["hv_true"] = hypervolume(obj[front_local], reference_point(spec))
-    out["front"] = [evaluate(grid.arch(int(i)), spec) for i in front_idx]
+    out["front"] = [evaluate(grid.arch(int(i)), spec, cost_model) for i in front_idx]
     sel = m[spec.select_by][idx]
     best_val = sel.min() if spec.select_direction == "min" else sel.max()
     ties = idx[np.flatnonzero(sel == best_val)]
-    out["selected"] = select_design([evaluate(grid.arch(int(i)), spec) for i in ties], spec)
+    out["selected"] = select_design([evaluate(grid.arch(int(i)), spec, cost_model) for i in ties], spec)
     return out
 
 
