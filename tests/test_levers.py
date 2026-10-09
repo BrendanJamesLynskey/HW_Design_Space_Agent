@@ -80,7 +80,9 @@ def test_llm_map_front_decision_runs_a_coverage_round(tmp_path: Path) -> None:
                        AnalysisDecision(decision="map_front", rationale="front is narrow"),
                        AnalysisDecision(decision="stop", rationale="done")])
     res = run_agent(spec, llm=llm, run_root=tmp_path)
-    assert res["decisions"] == ["map_front", "stop"] and res["coverage_rounds"] == 1
+    # the LLM's map_front round, then (at stop) the code's final round with the leftover budget
+    assert res["decisions"] == ["map_front", "stop"] and res["coverage_rounds"] == 2
+    assert len(res["evaluations_ordered"]) == 100
     r2 = [r for r in res["evaluations_ordered"] if r["round"] == 2]
     assert r2 and max(r["data_width"] for r in r2) > 16  # explored beyond the LLM's narrow box
     report = (Path(res["run_dir"]) / "report.md").read_text()

@@ -39,6 +39,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 OUT = ROOT / "eval" / "data" / "levers_offline.json"
 OUT2 = ROOT / "eval" / "data" / "levers_offline_round2.json"
+OUT3 = ROOT / "eval" / "data" / "levers_offline_round3.json"
 
 VARIANTS_ROUND2: dict[str, dict[str, Any]] = {
     "M1 (levers off)": {"coverage_reserve": 0.0, "coverage_box": "full", "warm_start": False, "hv_epsilon": None},
@@ -52,6 +53,18 @@ VARIANTS_ROUND2: dict[str, dict[str, Any]] = {
 }
 """Round 2, after round 1 (VARIANTS): the reserve is gated on feasibility
 ("g-"), and warm starts are capped to a few front designs."""
+
+VARIANTS_ROUND3: dict[str, dict[str, Any]] = {
+    "g-reserve 0.40, anchored, slack (1,2)": {"coverage_reserve": 0.40, "coverage_box": "front_anchored",
+                                              "warm_start": False, "anchor_slack": (1, 2)},
+    "g-reserve 0.40, anchored, slack (2,3)": {"coverage_reserve": 0.40, "coverage_box": "front_anchored",
+                                              "warm_start": False, "anchor_slack": (2, 3)},
+    "g-reserve 0.40, anchored, slack (3,4)": {"coverage_reserve": 0.40, "coverage_box": "front_anchored",
+                                              "warm_start": False, "anchor_slack": (3, 4)},
+}
+"""Round 3, after the live pilot: how far below the front the box starts.
+Also re-scores slack (1,2) under the final stop rule (a final front-mapping
+round whenever budget is left)."""
 
 VARIANTS: dict[str, dict[str, Any]] = {
     "M1 (levers off)": {"coverage_reserve": 0.0, "coverage_box": "full", "warm_start": False, "hv_epsilon": None},
@@ -137,9 +150,9 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--report", action="store_true")
     ap.add_argument("--workers", type=int, default=4)
-    ap.add_argument("--round", type=int, choices=(1, 2), default=2)
+    ap.add_argument("--round", type=int, choices=(1, 2, 3), default=3)
     args = ap.parse_args()
-    variants, out = (VARIANTS, OUT) if args.round == 1 else (VARIANTS_ROUND2, OUT2)
+    variants, out = {1: (VARIANTS, OUT), 2: (VARIANTS_ROUND2, OUT2), 3: (VARIANTS_ROUND3, OUT3)}[args.round]
     if not args.report:
         rows = run_all(variants, args.workers)
         out.write_text(json.dumps({"variants": variants, "rows": rows}, indent=1))

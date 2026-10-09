@@ -195,8 +195,11 @@ class Runner:
         if self.mode == "docker":
             self.run("cp $(yosys-config --datdir)/xilinx/cells_sim.v /work/cells_sim.v", dest)
         else:
-            dat = subprocess.run(["yosys-config", "--datdir"], capture_output=True, text=True).stdout.strip()
-            shutil.copy(Path(dat) / "xilinx" / "cells_sim.v", dest / "cells_sim.v")
+            if shutil.which("yosys-config"):
+                dat = Path(subprocess.run(["yosys-config", "--datdir"], capture_output=True, text=True).stdout.strip())
+            else:  # e.g. distro packages without yosys-dev: <prefix>/bin/yosys -> <prefix>/share/yosys
+                dat = Path(shutil.which("yosys") or "yosys").resolve().parent.parent / "share" / "yosys"
+            shutil.copy(dat / "xilinx" / "cells_sim.v", dest / "cells_sim.v")
         return dest / "cells_sim.v"
 
 

@@ -87,17 +87,18 @@ MIN_TRIALS_PER_FAMILY = 5
 #
 # coverage_reserve
 #     Fraction of the evaluation budget the LLM's own rounds may not spend
-#     (once a feasible design exists). When the run would stop (LLM ``stop``, the HV-gain rule, the round cap
-#     or the LLM's share of the budget running out) and feasible designs
-#     exist, code first spends what is left of the budget (at least the
-#     reserve) on one front-mapping round. 0 disables it (milestone-1
-#     behaviour).
+#     (once a feasible design exists, and until a front-mapping round has
+#     run). Whenever the run would stop (LLM ``stop``, the HV-gain rule, the
+#     round cap or the LLM's share of the budget running out) with feasible
+#     designs and budget left, code first spends what is left on one final
+#     front-mapping round, then stops without another LLM call. 0 disables
+#     it (milestone-1 behaviour).
 # coverage_box
 #     The search box of a front-mapping round, per family on the merged
 #     front: ``"full"`` = the registry's full ranges; ``"front_anchored"`` =
 #     full ranges, except that data_width and n_iter start just below the
-#     smallest values on the front (smaller ones cannot meet the accuracy
-#     constraint the front designs barely meet).
+#     smallest values on the front, by ``anchor_slack`` = (W steps, N steps)
+#     (much smaller ones cannot meet the accuracy the front designs meet).
 # warm_start, warm_start_max
 #     Seed each front-mapping study with (up to warm_start_max of, spread
 #     along) the family's current front designs -- already evaluated, so
@@ -293,7 +294,8 @@ def coverage_plan(spec: Spec, records: list[dict[str, Any]], budget: int, levers
         box = {k: list(v) for k, v in full_box(fam).items()}
         rows = [r for r in front if r["family"] == fam]
         if levers.get("coverage_box") == "front_anchored":
-            for prm, slack in (("data_width", 1), ("n_iter", 2)):
+            w_slack, n_slack = levers.get("anchor_slack") or (1, 2)
+            for prm, slack in (("data_width", int(w_slack)), ("n_iter", int(n_slack))):
                 lo, hi = box[prm]
                 box[prm] = [max(lo, min(int(r[prm]) for r in rows) - slack), hi]
         seeds = []
@@ -462,8 +464,10 @@ def build_graph(llm: StructuredLLM, checkpointer: Any = None) -> Any:
                 else:
                     status = "stopped"
                 update["status"] = status
-                # Lever: never stop with an unmapped front while budget remains.
-                if (n_feas > 0 and levers.get("coverage_reserve", 0) > 0 and cov_rounds == 0
+                # Lever: never stop with budget left while there is a front to
+                # map (also after an LLM-chosen map_front round; the pending
+                # branch above ends the run after the code's own final round).
+                if (n_feas > 0 and levers.get("coverage_reserve", 0) > 0
                         and remaining >= MIN_TRIALS_PER_FAMILY):
                     cov = coverage_plan(spec, records, remaining, levers)
                     if cov is not None:
