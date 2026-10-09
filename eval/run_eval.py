@@ -879,8 +879,9 @@ def report_m3(L: list[str]) -> None:
         n_st = sum(len(rows) for rows in ag3.values())
         def cnt(pred: Any) -> int:
             return sum(1 for r in allc if pred(r))
+        which = ", ".join(sorted(_label(r) + " " + r["spec"] + " seed " + str(r["seed"]) for r in l2c)) or "none"
         L.append(f"**L2 re-selections in the live runs.** Structured arm: {len(l2s)}/{n_st}. Campaign arm: {len(l2c)}/{len(allc)} "
-                 f"({', '.join(sorted(f'{_label(r)} {r['spec']} seed {r['seed']}' for r in l2c)) or 'none'}).\n")
+                 f"({which}).\n")
         L.append("**What the ladder steps returned in the campaign arm.** "
                  f"`verify_rtl`: recorded L3 row {cnt(lambda r: str(r.get('l3') or '').startswith('exact, recorded'))}, fresh run "
                  f"{cnt(lambda r: str(r.get('l3') or '').startswith('exact, fresh'))}, not verified "
