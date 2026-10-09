@@ -13,7 +13,8 @@ path of the generator at least once and every knob at several values:
 * N both a multiple and not a multiple of k / m (the final-cycle bypass in
   ``unrolled_k`` and the short last stage in ``pipelined_m``), N < k, N = 4
   (fewest rotations) and N = 30 (most, more shifts than register bits);
-* the reference configuration (W=16, N=14) for every family.
+* the reference configuration (W=16, N=14) for every family;
+* the three ground-truth winners of the eval's feasible specs.
 
 ``python scripts/run_l3_sweep.py`` runs it with every available simulator
 and writes ``eval/data/l3_verification.csv``; gate-level rows (level
@@ -40,6 +41,14 @@ def _arch(family: str, w: int, n: int, ag: int = 0, g: int = 0, rnd: str = "trun
                                            "rounding": rnd, "k": km, "m": km})
 
 
+GT_WINNERS = [
+    _arch("pipelined", 18, 15, 1, 0, "round"),           # dds_250msps
+    _arch("iterative", 15, 12, 1, 0, "round"),           # low_area_control
+    _arch("pipelined_m", 26, 22, 0, 0, "round", 6),      # high_precision
+]
+"""The exhaustive ground truth's winner for each feasible spec."""
+
+
 def sweep_configs() -> list[ArchConfig]:
     """The full L3 sweep (deterministic order, duplicates removed)."""
     out: list[ArchConfig] = []
@@ -51,6 +60,7 @@ def sweep_configs() -> list[ArchConfig]:
         out.append(_arch(fam, 12, 5, 1, 1, "round", 8))                   # N < k, m
         out.append(_arch(fam, 10, 30, -2, 4, "trunc", 3))                 # N = 30 > register width
         out.append(_arch(fam, 8, 4, 0, 3, "round", 3))                    # fewest rotations
+    out += GT_WINNERS
     seen: set[str] = set()
     uniq = []
     for a in out:
