@@ -104,9 +104,10 @@ def all_designs() -> list[ArchConfig]:
     return out
 
 
-def build_grid(verbose: bool = False) -> Grid:
+def build_grid(verbose: bool = False, cost_model: Any = None) -> Grid:
+    """Every registry design under ``cost_model`` (default: the M1 calibration)."""
     t0 = time.time()
-    cm = default_cost_model()
+    cm = cost_model or default_cost_model()
     designs = all_designs()
     n = len(designs)
     cols = {c: np.zeros(n, dtype=np.int16) for c in (*PARAM_COLS, "rounding")}
