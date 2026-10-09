@@ -65,6 +65,7 @@ class Grid:
     accuracy_bits: np.ndarray
     power_norm: float
     activity: float
+    cost_model: Any = None  # the model the columns were computed with (build_grid sets it)
 
     def __len__(self) -> int:
         return int(self.family.size)
@@ -145,6 +146,7 @@ def build_grid(verbose: bool = False, cost_model: Any = None) -> Grid:
         accuracy_bits=f["bits"],
         power_norm=cm.power_norm,
         activity=cm.src["activity_factor"],
+        cost_model=cm,
     )
 
 
@@ -155,11 +157,12 @@ def _feasible_mask(m: dict[str, np.ndarray], spec: Spec) -> np.ndarray:
     return mask
 
 
-def ground_truth(grid: Grid, spec: Spec, cost_model: Any = None) -> dict[str, Any]:
+def ground_truth(grid: Grid, spec: Spec) -> dict[str, Any]:
     """True feasible set size, Pareto front, HV and auto-selected design.
 
-    ``cost_model`` must be the one ``grid`` was built with (default: the M1
-    calibration): the front and the selected design are re-evaluated with it."""
+    The front and the selected design are re-evaluated with the cost model the
+    grid was built with (``grid.cost_model``), never silently with the default."""
+    cost_model = grid.cost_model
     m = grid.metrics(spec)
     feas = _feasible_mask(m, spec)
     out: dict[str, Any] = {"spec": spec.name, "n_designs": len(grid), "n_feasible": int(feas.sum())}

@@ -306,12 +306,11 @@ def ground_truth_impact(cal_path: Path, specs_dir: Path | None = None) -> dict[s
 
     accuracy_table.preload()
     old = json.loads((REPO_ROOT / "eval" / "data" / "ground_truth.json").read_text())
-    model = FpgaCostModel(str(cal_path))
-    grid = build_grid(cost_model=model)
+    grid = build_grid(cost_model=FpgaCostModel(str(cal_path)))
     out = {}
     for sp in sorted((specs_dir or REPO_ROOT / "specs").glob("*.yaml")):
         s = load_spec(sp)
-        gt = ground_truth(grid, s, model)
+        gt = ground_truth(grid, s)
         new_sel = gt["selected"]["key"] if gt["selected"] else None
         old_sel = old[s.name]["selected"]["key"] if old[s.name]["selected"] else None
         fams: dict[str, int] = {}
@@ -324,6 +323,10 @@ def ground_truth_impact(cal_path: Path, specs_dir: Path | None = None) -> dict[s
     return out
 
 
+DUPLICATE_TOLERANCE = 0.005
+"""Relative difference above which a dropped duplicate row is flagged as disagreeing with the kept one."""
+
+
 def is_post_route(p: MeasuredPoint) -> bool:
     return p.extra.get("fmax_kind", "").strip().lower().startswith("post-route")
 
@@ -334,19 +337,25 @@ def split_rows(measured_csvs: list[Path]) -> tuple[list[MeasuredPoint], list[Mea
     * The calibration anchors and the eval's cost model are on Vivado's
       *post-synthesis* scale, so Vivado rows measured post-route are
       reported (as tool ``vivado post-route``, no tool factor) but not fitted.
-    * The same design measured twice by the same tool and flow (e.g. the
-      review's spot-check and the full Vivado run) is counted once: the row
-      from the CSV given first wins.
+    * The same design measured twice by the same tool, tool version and flow
+      (e.g. the review's spot-check and the full Vivado run) is counted once:
+      the row from the CSV given first wins. If the two rows disagree by more
+      than :data:`DUPLICATE_TOLERANCE` on any metric, the report says so.
     """
-    seen: dict[tuple[str, str, str, bool], str] = {}
+    seen: dict[tuple[str, str, str, str, bool], tuple[str, MeasuredPoint]] = {}
     fit_rows, report_only, dropped = [], [], []
     for c in measured_csvs:
         for p in load(c):
-            k = (p.tool, p.rtl_source, p.arch.key(), is_post_route(p))
+            k = (p.tool, p.tool_version, p.rtl_source, p.arch.key(), is_post_route(p))
             if k in seen:
-                dropped.append({"tool": p.tool, "key": p.arch.key(), "csv": c.name, "kept_from": seen[k]})
+                kept_csv, kept = seen[k]
+                diffs = {m: round((b / a - 1) * 100, 2) for m, a, b in (("luts", kept.luts, p.luts), ("ffs", kept.ffs, p.ffs),
+                                                                         ("fmax_mhz", kept.fmax_mhz, p.fmax_mhz))
+                         if a and b and abs(b / a - 1) > DUPLICATE_TOLERANCE}
+                dropped.append({"tool": f"{p.tool} {p.tool_version}", "key": p.arch.key(), "csv": c.name,
+                                "kept_from": kept_csv, "disagree_pct": diffs})
                 continue
-            seen[k] = c.name
+            seen[k] = (c.name, p)
             if p.tool == REFERENCE_TOOL and is_post_route(p):
                 report_only.append(dataclasses.replace(p, tool=f"{REFERENCE_TOOL} post-route"))
             else:
@@ -429,7 +438,10 @@ def markdown(rep: dict[str, Any]) -> str:
         L.append(f"\nReported, not fitted: {len(rep['report_only'])} Vivado post-route rows (tool `vivado post-route`; "
                  "the anchors and the default model are post-synthesis), shown with no tool factor.")
     for d in rep.get("duplicates_dropped", []):
-        L.append(f"\nCounted once: `{d['key']}` ({d['tool']}) is in both `{d['kept_from']}` (kept) and `{d['csv']}` (dropped).")
+        agree = ("**they disagree**: " + ", ".join(f"{m} {v:+.2f}%" for m, v in d["disagree_pct"].items())
+                 if d.get("disagree_pct") else f"they agree within {DUPLICATE_TOLERANCE:.1%}")
+        L.append(f"\nCounted once: `{d['key']}` ({d['tool']}) is in both `{d['kept_from']}` (kept) and `{d['csv']}` "
+                 f"(dropped); {agree}.")
     if rep.get("loo_summary"):
         L.append("\n## Out-of-sample check: leave-one-out RMS error (generated-RTL points)\n")
         L.append("Each point refitted without itself and predicted on its own tool's scale; in-sample → leave-one-out.\n")
