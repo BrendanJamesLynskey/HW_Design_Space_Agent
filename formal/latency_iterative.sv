@@ -17,15 +17,9 @@ module latency_iterative (
     // acc_hist[j] = an angle was accepted j cycles ago (0 after reset)
     wire accept = valid_in && ready && !rst;
     reg [9:1] acc_hist;
-    reg [9:0] since_rst;  // one-hot-ish: cycles since reset, saturating at 9
     always @(posedge clk) begin
-        if (rst) begin
-            acc_hist  <= '0;
-            since_rst <= '0;
-        end else begin
-            acc_hist  <= {acc_hist[8:1], accept};
-            since_rst <= (since_rst == 9) ? since_rst : since_rst + 1'b1;
-        end
+        if (rst) acc_hist <= '0;
+        else     acc_hist <= {acc_hist[8:1], accept};
     end
 
     always @(*) begin
@@ -33,7 +27,7 @@ module latency_iterative (
             // exactly one result per accepted angle, exactly 9 cycles later
             assert (valid_out == acc_hist[9]);
             // busy for the 8 cycles after an accept, then ready again
-            if (since_rst >= 9) assert (ready == !(acc_hist[1] || acc_hist[2] || acc_hist[3] || acc_hist[4] || acc_hist[5] || acc_hist[6] || acc_hist[7] || acc_hist[8]));
+            assert (ready == !(acc_hist[1] || acc_hist[2] || acc_hist[3] || acc_hist[4] || acc_hist[5] || acc_hist[6] || acc_hist[7] || acc_hist[8]));
         end
     end
 endmodule

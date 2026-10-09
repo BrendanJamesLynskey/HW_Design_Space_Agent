@@ -17,15 +17,9 @@ module latency_pipelined_m (
     // acc_hist[j] = an angle was accepted j cycles ago (0 after reset)
     wire accept = valid_in && ready && !rst;
     reg [5:1] acc_hist;
-    reg [5:0] since_rst;  // one-hot-ish: cycles since reset, saturating at 5
     always @(posedge clk) begin
-        if (rst) begin
-            acc_hist  <= '0;
-            since_rst <= '0;
-        end else begin
-            acc_hist  <= {acc_hist[4:1], accept};
-            since_rst <= (since_rst == 5) ? since_rst : since_rst + 1'b1;
-        end
+        if (rst) acc_hist <= '0;
+        else     acc_hist <= {acc_hist[4:1], accept};
     end
 
     always @(*) begin

@@ -46,6 +46,7 @@ import subprocess
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from hw_dse.families import ArchConfig
 from hw_dse.rtl.generator import REPO_ROOT, generate
@@ -165,15 +166,9 @@ def latency_wrapper(job: str, arch: ArchConfig, latency: int | None = None) -> s
         "    // acc_hist[j] = an angle was accepted j cycles ago (0 after reset)",
         "    wire accept = valid_in && ready && !rst;",
         f"    reg [{L}:1] acc_hist;",
-        f"    reg [{L}:0] since_rst;  // one-hot-ish: cycles since reset, saturating at {L}",
         "    always @(posedge clk) begin",
-        "        if (rst) begin",
-        "            acc_hist  <= '0;",
-        "            since_rst <= '0;",
-        "        end else begin",
-        f"            acc_hist  <= {{acc_hist[{L - 1}:1], accept}};" if L > 1 else "            acc_hist  <= accept;",
-        f"            since_rst <= (since_rst == {L}) ? since_rst : since_rst + 1'b1;",
-        "        end",
+        "        if (rst) acc_hist <= '0;",
+        f"        else     acc_hist <= {{acc_hist[{L - 1}:1], accept}};" if L > 1 else "        else     acc_hist <= accept;",
         "    end",
         "",
         "    always @(*) begin",
@@ -186,7 +181,9 @@ def latency_wrapper(job: str, arch: ArchConfig, latency: int | None = None) -> s
     else:
         lines.append(f"            // busy for the {L - 1} cycles after an accept, then ready again")
         busy = " || ".join(f"acc_hist[{j}]" for j in range(1, L))
-        lines.append(f"            if (since_rst >= {L}) assert (ready == !({busy}));")
+        # Checked from the first cycle after reset: the FSM resets to idle,
+        # so ready must be high until the first accept.
+        lines.append(f"            assert (ready == !({busy}));")
     lines += ["        end", "    end", "endmodule", ""]
     return "\n".join(lines)
 
@@ -270,13 +267,21 @@ def _sby_version(_: Path) -> str:
 
 
 def run_custom(name: str, wrapper: str, arches: list[ArchConfig], depth: int, directory: Path,
-               timeout_s: float = 900.0) -> str:
-    """Write and run a one-off job in ``directory`` (used by the mutation tests). Returns PASS/FAIL/ERROR."""
+               timeout_s: float = 900.0, mutate: Any = None) -> str:
+    """Write and run a one-off job in ``directory`` (used by the mutation tests).
+
+    ``mutate(module_name, text) -> text`` may rewrite a generated DUT first.
+    Returns PASS/FAIL/ERROR."""
     rtl = directory / "build" / "formal" / "rtl"
     fdir = directory / "formal"
     rtl.mkdir(parents=True, exist_ok=True)
     fdir.mkdir(parents=True, exist_ok=True)
-    mods = [generate(a).write(rtl).stem for a in arches]
+    mods = []
+    for a in arches:
+        d = generate(a)
+        text = mutate(d.module, d.text) if mutate else d.text
+        (rtl / f"{d.module}.sv").write_text(text)
+        mods.append(d.module)
     (fdir / f"{name}.sv").write_text(wrapper)
     (fdir / f"{name}.sby").write_text(sby_text(name, mods, depth))
     j = Job(name, "custom", arches[-1], wrapper, mods, depth)

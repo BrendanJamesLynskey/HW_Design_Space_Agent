@@ -62,3 +62,20 @@ def test_inequivalent_pipelines_are_caught(tmp_path: Path) -> None:
     ref = ArchConfig.from_params("pipelined", {"data_width": 8, "n_iter": 6, "rounding": "trunc"})
     w = formal.equiv_wrapper("mut_equiv", dut, ref_arch=ref)
     assert formal.run_custom("mut_equiv", w, [ref, dut], 12, tmp_path) == "FAIL"
+
+
+@needs_formal
+def test_fsm_not_ready_after_reset_is_caught(tmp_path: Path) -> None:
+    """An FSM that keeps ready low for one cycle after reset must fail the latency job
+    (the property is checked from the first cycle, not only after L cycles)."""
+    a = formal.LATENCY_DUTS["latency_iterative"]
+
+    def late_ready(_: str, text: str) -> str:
+        return text.replace(
+            "    assign ready = (state == S_IDLE);",
+            "    logic woke;\n    always_ff @(posedge clk) woke <= !rst;\n"
+            "    assign ready = (state == S_IDLE) && woke;")
+
+    assert "woke" in late_ready("", __import__("hw_dse.rtl.generator", fromlist=["generate"]).generate(a).text)
+    w = formal.latency_wrapper("mut_ready", a)
+    assert formal.run_custom("mut_ready", w, [a], 2 * a.latency_cycles + 8, tmp_path, mutate=late_ready) == "FAIL"
