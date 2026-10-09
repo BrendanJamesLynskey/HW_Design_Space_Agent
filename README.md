@@ -409,7 +409,8 @@ counts with **no Fmax** when nextpnr-xilinx is unavailable.
   than the untouched M1 model on the same points** (15.4 / 3.1 / 11.7%). Per family, an
   unseen `pipelined` / `pipelined_m` Vivado point is predicted within 4% on area and 2–13%
   on Fmax (M1: up to −17% on `pipelined` Fmax); `iterative` is +3 to +21% on LUTs and +16
-  to +18% on Fmax; `unrolled_k` is +30 / −31 / −29 / +11% on LUTs at k = 2 / 3 / 4 / 8.
+  to +18% on Fmax; `unrolled_k` is +30 / −31 / −29 / +11% on LUTs at k = 2 / 3 / 4 / 8,
+  and its Fmax is off by up to +23% at k=4 (in-sample +12 to +19% at k = 3–4).
   Tool factors (Vivado = 1): Yosys/nextpnr LUT ×1.05, FF ×1.03, path ×1.42. **Worst
   residuals:** in Vivado, `unrolled_k` LUTs (k=3 −28%, k=4 −25%, k=2 +24%) and `iterative`
   Fmax (+14 to +15%); over all points, `pipelined` Fmax (17.8% in-sample, 19.0%
