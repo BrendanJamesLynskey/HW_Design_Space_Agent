@@ -651,9 +651,7 @@ def _campaign_row(res: dict[str, Any], name: str, seed: int, model: str, reasoni
                   memory: bool, pilot: bool) -> dict[str, Any]:
     s = any_spec(name)
     ps = res["per_spec"][name]
-    from hw_dse.agent.graph import order_evaluations
-
-    recs = order_evaluations(ps["evaluations"]) if ps["evaluations"] and "round" in ps["evaluations"][0] else ps["evaluations"]
+    recs = ps["evaluations"]  # already in call order (run_dse runs are canonically ordered inside)
     declared = None if ps["selected"] else bool(ps["llm_declared_infeasible"]) or not ps["evaluations"]
     sc = score_m3(ps["evaluations"], s, declared, ps["selected"])
     failed = bool(res["error"]) or ps["left_open"]

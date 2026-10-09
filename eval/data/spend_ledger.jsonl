@@ -134,3 +134,9 @@
 {"model": "qwen/qwen3.8-27b", "spec": "multiaxis_control", "seed": 4, "cost_usd": 0.0089351896, "arm": "structured", "ts": "2026-10-09T17:44:38", "milestone": "m3"}
 {"model": "qwen/qwen3.8-27b", "spec": "high_precision", "seed": 0, "cost_usd": 0.008537687, "arm": "campaign", "ts": "2026-10-09T17:44:56", "milestone": "m3"}
 {"model": "anthropic/claude-sonnet-5.5", "spec": "bursty_offload", "seed": 3, "cost_usd": 0.09153, "arm": "structured", "ts": "2026-10-09T17:45:01", "milestone": "m3"}
+{"model": "anthropic/claude-sonnet-5.5", "spec": "bursty_offload", "seed": 4, "cost_usd": 0.095394, "arm": "structured", "ts": "2026-10-09T17:45:42", "milestone": "m3"}
+{"model": "qwen/qwen3.8-27b", "spec": "bursty_offload", "seed": 0, "cost_usd": 0.0065888299999999995, "arm": "structured", "ts": "2026-10-09T17:45:44", "milestone": "m3"}
+{"model": "deepseek/deepseek-v4.1-flash", "spec": "infeasible_dds_400msps", "seed": 0, "cost_usd": 0.020695653, "arm": "campaign", "ts": "2026-10-09T17:50:00", "milestone": "m3", "note": "lost to a scoring bug in run_eval (round tags), re-run"}
+{"model": "qwen/qwen3.8-27b", "spec": "?", "seed": -1, "cost_usd": 0.00767379, "arm": "campaign", "ts": "2026-10-09T17:52:00", "milestone": "m3", "note": "interrupted (restart after a scoring-bug fix), re-run"}
+{"model": "qwen/qwen3.8-27b", "spec": "?", "seed": -1, "cost_usd": 0.009047498, "arm": "campaign", "ts": "2026-10-09T17:52:00", "milestone": "m3", "note": "interrupted (restart after a scoring-bug fix), re-run [memory-on]"}
+{"model": "qwen/qwen3.8-27b", "spec": "bursty_offload", "seed": 1, "cost_usd": 0.007504732, "arm": "structured", "ts": "2026-10-09T17:46:41", "milestone": "m3"}

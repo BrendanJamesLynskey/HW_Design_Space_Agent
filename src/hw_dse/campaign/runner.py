@@ -155,6 +155,10 @@ def run_campaign(spec_names: list[str], *, seed: int = 0, chat: Any = None, mode
             "l5": {k: v for k, v in (led.l5 or {}).items() if k != "selected"} or None,
             "final_note": led.final_note,
         }
+    import gzip
+
+    with gzip.open(run_dir / "evaluations.json.gz", "wt") as fh:  # the pools, so a run can be re-scored
+        json.dump({n: v["evaluations"] for n, v in per_spec.items()}, fh, default=str)
     (run_dir / "tool_log.jsonl").write_text("\n".join(json.dumps(r, default=str) for r in ctx.log) + "\n")
     totals = tracer.totals()
     served = sorted({str(r.get("model_served")) for r in tracer.records if r.get("model_served")})
