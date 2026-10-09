@@ -108,7 +108,9 @@ def simulate(sources: list[Path], top: str, width: int, angles: np.ndarray, simu
             _run(["vvp", "-n", str(exe), f"+angles={af}", f"+out={of}"], timeout_s)
         else:
             obj = t / "obj"
-            cmd = ["verilator", "--binary", "--timing", "-j", "0", "-O2", "--top-module", "tb_generated",
+            # HW_DSE_JOBS caps Verilator's build parallelism (default 0 = every core).
+            jobs = os.environ.get("HW_DSE_JOBS", "0")
+            cmd = ["verilator", "--binary", "--timing", "-j", jobs, "-O2", "--top-module", "tb_generated",
                    "-Wno-fatal", "-Wno-lint", "-Wno-style", "--Mdir", str(obj)]
             cmd += [f"+define+{d}" for d in defines] + [str(HARNESS), *map(str, sources)]
             _run(cmd, timeout_s)

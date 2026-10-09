@@ -231,7 +231,14 @@ class SynthResult:
 
 
 def parse_stat(text: str) -> dict[str, int]:
-    """Cell counts from Yosys ``stat`` output (last module block)."""
+    """Cell counts from Yosys ``stat`` output, from the **last** module block.
+
+    With ``synth_xilinx -flatten`` there is one block; if hierarchy were kept,
+    Yosys prints one block per module and then the design totals last, so the
+    last block is the right one either way.
+    """
+    blocks = re.split(r"^=== .* ===$|^=== design hierarchy ===$", text, flags=re.M)
+    text = blocks[-1] if len(blocks) > 1 else text
     cells: dict[str, int] = {}
     # Yosys >= 0.4x prints "     <count>   <cell>"; older prints "     <cell>   <count>".
     for line in text.splitlines():

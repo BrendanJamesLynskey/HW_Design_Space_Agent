@@ -116,3 +116,32 @@ def test_coverage_plan_box_and_seeds() -> None:
     out = run_family_study("iterative", {k: tuple(v) for k, v in job["box"].items()}, spec, 20, 1,
                            seed_designs=job["seeds"])
     assert len(out) == 20
+
+
+def test_final_mapping_round_is_the_only_exemption_from_round_limits(tmp_path: Path) -> None:
+    """Budget semantics (documented on spec.Budget): LLM rounds respect max_rounds and
+    evals_per_round; only the code's final front-mapping round is exempt, so a run has at
+    most max_rounds + 1 rounds, and total_evals is never exceeded."""
+    spec = _small("low_area_control", 100, 20, rounds=3)
+    spec = spec.model_copy(update={"budget": spec.budget.model_copy(update={"hv_epsilon": 0.0})})  # reach the cap
+    nxt = _plan("iterative", data_width=(14, 15))
+    llm = ScriptedLLM([_plan("iterative", data_width=(14, 16)),
+                       AnalysisDecision(decision="refine", rationale="r", next_plan=nxt),
+                       AnalysisDecision(decision="refine", rationale="r", next_plan=nxt),
+                       AnalysisDecision(decision="refine", rationale="r", next_plan=nxt)])  # round 3 = cap
+    res = run_agent(spec, llm=llm, run_root=tmp_path, levers={**LEVERS_M2, "coverage_reserve": 0.4})
+    by_round: dict[int, int] = {}
+    for r in res["evaluations_ordered"]:
+        by_round[r["round"]] = by_round.get(r["round"], 0) + 1
+    assert res["rounds"] == spec.budget.max_rounds + 1 and res["coverage_rounds"] == 1
+    assert all(by_round[i] <= spec.budget.evals_per_round for i in range(1, spec.budget.max_rounds + 1))
+    assert by_round[spec.budget.max_rounds + 1] == 40 > spec.budget.evals_per_round  # the exempt code round
+    assert sum(by_round.values()) == spec.budget.total_evals
+
+
+def test_committed_m2_runs_stay_within_the_documented_bounds() -> None:
+    for p in (ROOT / "eval/data/agent_m2").glob("*/*.json"):
+        r = json.loads(p.read_text())
+        spec = load_spec(ROOT / "specs" / f"{r['spec']}.yaml")
+        assert r["rounds"] <= spec.budget.max_rounds + 1, p.name
+        assert r["n_evals"] <= spec.budget.total_evals, p.name
