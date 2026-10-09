@@ -157,3 +157,10 @@
 {"model": "deepseek/deepseek-v4.1-flash", "spec": "multiaxis_control", "seed": 0, "cost_usd": 0.0322882908, "arm": "campaign", "ts": "2026-10-09T17:54:20", "milestone": "m3"}
 {"model": "qwen/qwen3.8-27b", "spec": "multiaxis_control", "seed": 0, "cost_usd": 0.012542409000000003, "arm": "campaign", "ts": "2026-10-09T17:54:27", "milestone": "m3"}
 {"model": "qwen/qwen3.8-27b", "spec": "low_area_control", "seed": 1, "cost_usd": 0.012499849, "arm": "campaign", "ts": "2026-10-09T17:54:34", "milestone": "m3", "note": "memory-on"}
+{"model": "deepseek/deepseek-v4.1-flash", "spec": "bursty_offload", "seed": 2, "cost_usd": 0.015537405, "arm": "structured", "ts": "2026-10-09T17:55:17", "milestone": "m3"}
+{"model": "deepseek/deepseek-v4.1-flash", "spec": "bursty_offload", "seed": 3, "cost_usd": 0.008816076, "arm": "structured", "ts": "2026-10-09T17:56:01", "milestone": "m3"}
+{"model": "deepseek/deepseek-v4.1-flash", "spec": "bursty_offload", "seed": 0, "cost_usd": 0.023506602659999997, "arm": "campaign", "ts": "2026-10-09T17:56:34", "milestone": "m3"}
+{"model": "qwen/qwen3.8-27b", "spec": "bursty_offload", "seed": 0, "cost_usd": 0.012000250999999998, "arm": "campaign", "ts": "2026-10-09T17:56:48", "milestone": "m3"}
+{"model": "qwen/qwen3.8-27b", "spec": "bursty_offload", "seed": 1, "cost_usd": 0.010968462, "arm": "campaign", "ts": "2026-10-09T17:58:14", "milestone": "m3", "note": "memory-on"}
+{"model": "deepseek/deepseek-v4.1-flash", "spec": "bursty_offload", "seed": 4, "cost_usd": 0.009949673, "arm": "structured", "ts": "2026-10-09T17:58:24", "milestone": "m3"}
+{"model": "deepseek/deepseek-v4.1-flash", "spec": "dds_250msps", "seed": 1, "cost_usd": 0.022944603000000008, "arm": "campaign", "ts": "2026-10-09T17:58:30", "milestone": "m3"}
