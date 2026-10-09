@@ -4,10 +4,11 @@ What the harness gives us, and what we add or switch off
 --------------------------------------------------------
 ``create_deep_agent`` builds a LangGraph agent loop with middleware for:
 
-* a **virtual filesystem** (``ls``, ``read_file``, ``write_file``,
-  ``edit_file``; state-backed, so notes live in the run's state, not on
-  disk). We keep those four and drop ``glob`` / ``grep`` / ``delete`` to save
-  prompt tokens (a harness profile's ``excluded_tools``);
+* a **virtual filesystem** (``read_file``, ``write_file``, ``edit_file``;
+  state-backed, so notes live in the run's state, not on disk). We drop
+  ``ls``, ``glob``, ``grep`` and ``delete`` (a harness profile's
+  ``excluded_tools``): fewer prompt tokens, and in the first live pilot Qwen
+  called ``ls('.')`` 250 times in a row inside a sub-agent;
 * **sub-agents** through the ``task`` tool. We define one, ``ladder``, that
   walks a selected design up L3 -> L4 -> L5 with only those tools, and switch
   off the auto-added general-purpose sub-agent (it would duplicate the main
@@ -57,10 +58,10 @@ Lessons from earlier campaigns (memory):
 
 LADDER_PROMPT = """You take the CURRENT selection of one spec up the ladder: call verify_rtl, then
 synthesize, then back_annotate for the spec you are given; if back_annotate reports a WINNER
-CHANGE, call reexplore. Report the tools' findings in a few lines, quoting their provenance.
-Never compute or invent numbers."""
+CHANGE, call reexplore. Then stop and report the tools' findings in a few lines, quoting their
+provenance. Do not use file tools. Never compute or invent numbers."""
 
-EXCLUDED_TOOLS = frozenset({"glob", "grep", "delete", "execute"})
+EXCLUDED_TOOLS = frozenset({"ls", "glob", "grep", "delete", "execute"})
 
 
 def _register_profile(model: Any) -> None:

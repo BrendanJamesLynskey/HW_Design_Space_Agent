@@ -1,0 +1,42 @@
+{
+ "note": "OpenRouter GET /api/v1/key (free), read with the key from the environment; the key itself is never recorded.",
+ "m3_spend_cap_usd": 5.0,
+ "snapshots": {
+  "session_start": {
+   "ts": "2026-10-09T16:28:55Z",
+   "usage_usd": 4.188860782,
+   "limit_usd": 10,
+   "limit_remaining_usd": 5.811139218
+  },
+  "before_pilots": {
+   "ts": "2026-10-09T17:20:44Z",
+   "usage_usd": 4.188860782,
+   "limit_usd": 10,
+   "limit_remaining_usd": 5.811139218
+  },
+  "after_structured_pilot": {
+   "ts": "2026-10-09T17:22:40Z",
+   "usage_usd": 4.196268082,
+   "limit_usd": 10,
+   "limit_remaining_usd": 5.803731918
+  },
+  "after_campaign_pilot": {
+   "ts": "2026-10-09T17:22:47Z",
+   "usage_usd": 4.201228902,
+   "limit_usd": 10,
+   "limit_remaining_usd": 5.798771098
+  },
+  "after_campaign_pilot1": {
+   "ts": "2026-10-09T17:34:07Z",
+   "usage_usd": 4.259798367,
+   "limit_usd": 10,
+   "limit_remaining_usd": 5.740201633
+  },
+  "after_campaign_pilot2": {
+   "ts": "2026-10-09T17:38:03Z",
+   "usage_usd": 4.278784106,
+   "limit_usd": 10,
+   "limit_remaining_usd": 5.721215894
+  }
+ }
+}

@@ -109,3 +109,6 @@
 {"model": "deepseek/deepseek-v4.1-flash", "spec": "low_area_control", "seed": 2, "cost_usd": 0.010510108, "ts": "2026-10-09T08:15:54", "milestone": "m2"}
 {"model": "deepseek/deepseek-v4.1-flash", "spec": "low_area_control", "seed": 3, "cost_usd": 0.012151284, "ts": "2026-10-09T08:17:15", "milestone": "m2"}
 {"model": "deepseek/deepseek-v4.1-flash", "spec": "low_area_control", "seed": 4, "cost_usd": 0.010464414000000002, "ts": "2026-10-09T08:18:26", "milestone": "m2"}
+{"model": "qwen/qwen3.8-27b", "spec": "multiaxis_control", "seed": 0, "cost_usd": 0.00951347, "arm": "structured", "ts": "2026-10-09T17:22:38", "milestone": "m3", "note": "pilot"}
+{"model": "qwen/qwen3.8-27b", "spec": "multiaxis_control", "seed": 0, "cost_usd": 0.057575501, "arm": "campaign", "ts": "2026-10-09T17:33:00", "milestone": "m3", "note": "pilot attempt 1 (failed: ls loop, killed)"}
+{"model": "qwen/qwen3.8-27b", "spec": "multiaxis_control", "seed": 0, "cost_usd": 0.017698936999999998, "arm": "campaign", "ts": "2026-10-09T17:38:02", "milestone": "m3", "note": "pilot"}

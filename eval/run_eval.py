@@ -499,6 +499,238 @@ def cmd_report(_: argparse.Namespace) -> None:
     print(f"wrote {RESULTS}")
 
 
+# ---------------------------------------------------------------------------
+# Milestone 3: system specs, the structured arm, the campaign arm, memory A/B
+# ---------------------------------------------------------------------------
+
+M3_DIRS = {"agent": DATA / "agent_m3", "campaign": DATA / "campaign_m3", "memory": DATA / "campaign_m3_memory",
+           "pilot": DATA / "m3_pilot"}
+BASELINES_M3 = DATA / "baselines_m3.json"
+KEY_USAGE_M3 = DATA / "key_usage_m3.json"
+MEMORY_STORE = DATA / "campaign_m3_memory_store.json"
+M2_SPEC_NAMES = ("dds_250msps", "high_precision", "infeasible_dds_400msps", "low_area_control")
+MEMORY_SEQUENCE = ("low_area_control", "bursty_offload", "dds_250msps", "multiaxis_control")
+M3_CAP = 5.0
+
+
+def any_spec(name: str) -> Spec:
+    from hw_dse.campaign.tools import spec_path
+
+    return load_spec(spec_path(name))
+
+
+def gt_for(name: str) -> dict[str, Any]:
+    return load_gt_m3()[name] if name in M3_EVAL_SPECS + M3_GT_ONLY else load_gt()[name]
+
+
+def score_m3(records: list[dict[str, Any]], spec: Spec, declared_infeasible: bool | None,
+             selected: dict[str, Any] | None) -> dict[str, Any]:
+    """score_run, with system metrics re-scored by L2 simulation (the truth) for a system spec:
+    a design counts as feasible only if it passes the *simulated* system constraints."""
+    if spec.system is not None:
+        from hw_dse.l2.node import simulate_record
+
+        records = [simulate_record(r, spec) for r in records]
+        selected = simulate_record(selected, spec) if selected else None
+    return score_run(records, spec, gt_for(spec.name), declared_infeasible=declared_infeasible, selected=selected)
+
+
+def cmd_baselines_m3(_: argparse.Namespace) -> None:
+    """NSGA-II and random on the system specs, 5 seeds. Same L1 information as the agent
+    (system constraints screened by the L1 bound), the same L2 shortlist step at the end."""
+    from hw_dse.agent.summary import merged_front
+    from hw_dse.benchmark import select_design
+    from hw_dse.l2.node import l2_select
+
+    accuracy_table.preload()
+    out: dict[str, Any] = {}
+    for name in M3_EVAL_SPECS:
+        s = any_spec(name)
+        for sampler in ("nsga2", "random"):
+            for seed in SEEDS["m2"]:
+                recs = run_baseline(s, sampler, seed)
+                front = merged_front(recs, s)
+                sel = l2_select(front, select_design(front, s), s)["selected"]
+                sc = score_m3(recs, s, None if sel else True, sel)
+                out[f"{name}|{sampler}|{seed}"] = {"spec": name, "method": sampler, "seed": seed, **sc}
+                print(name, sampler, seed, "HV", sc["hv_frac"], "regret", sc["select_regret"])
+    BASELINES_M3.write_text(json.dumps(out, indent=1))
+    print(f"wrote {BASELINES_M3}")
+
+
+def _key_usage() -> dict[str, Any]:
+    import os
+    import urllib.request
+
+    if not os.environ.get("OPENROUTER_API_KEY"):
+        raise SystemExit("OPENROUTER_API_KEY is not set")
+    req = urllib.request.Request("https://openrouter.ai/api/v1/key",
+                                 headers={"Authorization": "Bearer " + os.environ["OPENROUTER_API_KEY"]})
+    with urllib.request.urlopen(req, timeout=30) as r:  # noqa: S310 - fixed https URL
+        d = json.loads(r.read())["data"]
+    return {"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "usage_usd": d.get("usage"),
+            "limit_usd": d.get("limit"), "limit_remaining_usd": d.get("limit_remaining")}
+
+
+def cmd_key_usage(args: argparse.Namespace) -> None:
+    """Record the key's usage (free endpoint) under a tag; the key itself is never recorded."""
+    data = json.loads(KEY_USAGE_M3.read_text()) if KEY_USAGE_M3.exists() else {
+        "note": "OpenRouter GET /api/v1/key (free), read with the key from the environment; the key itself is never "
+                "recorded.", "m3_spend_cap_usd": M3_CAP, "snapshots": {}}
+    snap = _key_usage()
+    data["snapshots"][args.tag] = snap
+    KEY_USAGE_M3.write_text(json.dumps(data, indent=1))
+    print(args.tag, snap)
+
+
+def _ledger_add(model: str, spec: str, seed: int, cost: float, arm: str, note: str = "") -> None:
+    with open(LEDGER, "a", encoding="utf-8") as fh:
+        fh.write(json.dumps({"model": model, "spec": spec, "seed": seed, "cost_usd": cost, "arm": arm,
+                             "ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "milestone": "m3",
+                             **({"note": note} if note else {})}) + "\n")
+
+
+def _expected(model: str, arm: str, default: float) -> float:
+    prior = [float(r.get("cost_usd") or 0) for r in ledger("m3") if r["model"] == model and r.get("arm") == arm]
+    return statistics.mean(prior) if prior else default
+
+
+def _cap_ok(model: str, arm: str, default: float, cap: float) -> bool:
+    spent, exp = spend("m3"), _expected(model, arm, default)
+    if spent + 2 * exp > cap:
+        print(f"STOP: M3 spend ${spent:.4f} + 2x expected next {arm} run ${exp:.4f} would pass ${cap}")
+        return False
+    return True
+
+
+def _model_dir(model: str, reasoning: str | None) -> str:
+    return _slug(model) + (f"__reasoning-{reasoning}" if reasoning else "")
+
+
+def cmd_agent_m3(args: argparse.Namespace) -> None:
+    """Structured arm, fresh, on the new system specs (the M2 specs reuse the M2 runs: replay-proven)."""
+    from hw_dse.agent.graph import default_levers
+    from hw_dse.agent.runner import run_agent
+
+    accuracy_table.preload()
+    outdir = (M3_DIRS["pilot"] / "structured" if args.pilot else M3_DIRS["agent"]) / _model_dir(args.model, args.reasoning)
+    outdir.mkdir(parents=True, exist_ok=True)
+    names = args.specs.split(",") if args.specs else list(M3_EVAL_SPECS)
+    for name in names:
+        s = any_spec(name)
+        for seed in SEEDS["m2"][: args.seeds]:
+            path = outdir / f"{name}_seed{seed}.json"
+            if path.exists() and not args.force:
+                print(f"skip (exists): {path.name}")
+                continue
+            if not _cap_ok(args.model, "structured", args.expected_cost, args.max_spend):
+                return
+            t0 = time.time()
+            res = run_agent(spec=s, provider="openrouter", model=args.model, seed=seed, reasoning=args.reasoning,
+                            run_root=ROOT / "runs" / ("eval_m3_pilot" if args.pilot else "eval_m3"))
+            sc = score_m3(res["evaluations_ordered"], s, res["llm_declared_infeasible"], res["selected"])
+            row = {"milestone": "m3", "arm": "structured", "pilot": bool(args.pilot), "levers": default_levers(s),
+                   "spec": name, "seed": seed, "provider": "openrouter", "model_requested": args.model,
+                   "models_served": res["models_served"], "reasoning": args.reasoning or "provider default",
+                   "structured_method": res["structured_method"], "status": res["status"], "rounds": res["rounds"],
+                   "coverage_rounds": res["coverage_rounds"], "llm_calls": res["llm"]["calls"],
+                   "llm_failures": res["llm"]["failures"], "input_tokens": res["llm"]["input_tokens"],
+                   "output_tokens": res["llm"]["output_tokens"], "cost_usd": res["llm"]["cost_usd"],
+                   "wall_s": round(time.time() - t0, 1), "run_dir": str(Path(res["run_dir"]).relative_to(ROOT)),
+                   "decisions": res["decisions"], "overrides": res["overrides"],
+                   "l1_selected_key": (res["selected_l1"] or {}).get("key"),
+                   "l2_winner_changed": bool((res["l2"] or {}).get("winner_changed")), "failed": False, **sc}
+            _ledger_add(args.model, name, seed, row["cost_usd"], "structured", "pilot" if args.pilot else "")
+            path.write_text(json.dumps(row, indent=1, default=str))
+            print(f"{name} seed {seed}: {res['status']}, HV {sc['hv_frac']}, regret {sc['select_regret']}, "
+                  f"L2 changed {row['l2_winner_changed']}, ${row['cost_usd']:.4f}, {row['wall_s']}s", flush=True)
+
+
+def _campaign_row(res: dict[str, Any], name: str, seed: int, model: str, reasoning: str | None, arm: str,
+                  memory: bool, pilot: bool) -> dict[str, Any]:
+    s = any_spec(name)
+    ps = res["per_spec"][name]
+    from hw_dse.agent.graph import order_evaluations
+
+    recs = order_evaluations(ps["evaluations"]) if ps["evaluations"] and "round" in ps["evaluations"][0] else ps["evaluations"]
+    declared = None if ps["selected"] else bool(ps["llm_declared_infeasible"]) or not ps["evaluations"]
+    sc = score_m3(ps["evaluations"], s, declared, ps["selected"])
+    failed = bool(res["error"]) or ps["left_open"]
+    return {"milestone": "m3", "arm": arm, "pilot": pilot, "memory": memory, "spec": name, "seed": seed,
+            "provider": "openrouter", "model_requested": model, "models_served": res["models_served"],
+            "reasoning": reasoning or "provider default", "error": res["error"], "failed": failed,
+            "left_open": ps["left_open"], "campaign_model_calls": res["campaign_model_calls"],
+            "tool_calls": res["tool_calls"], "ladder": ps["calls"], "dse_runs": ps["dse_runs"], "l2": ps["l2"],
+            "l3": ps["l3"], "l4": ps["l4"], "back_annotation": ps["back_annotation"], "l5": ps["l5"],
+            "llm_calls": res["llm"]["calls"], "llm_failures": res["llm"]["failures"],
+            "input_tokens": res["llm"]["input_tokens"], "output_tokens": res["llm"]["output_tokens"],
+            "cost_usd": res["llm"]["cost_usd"], "wall_s": res["wall_s"],
+            "run_dir": str(Path(res["run_dir"]).relative_to(ROOT)), "run_id": res["run_id"],
+            "final_text": res["final_text"], "n_recs_ordered": len(recs), **sc}
+
+
+def cmd_campaign_m3(args: argparse.Namespace) -> None:
+    """Campaign arm: one single-spec campaign per (spec, seed), memory off (the A/B condition)."""
+    from hw_dse.campaign.memory import CampaignMemory
+    from hw_dse.campaign.runner import run_campaign
+
+    accuracy_table.preload()
+    outdir = (M3_DIRS["pilot"] / "campaign" if args.pilot else M3_DIRS["campaign"]) / _model_dir(args.model, args.reasoning)
+    outdir.mkdir(parents=True, exist_ok=True)
+    names = args.specs.split(",") if args.specs else list(M2_SPEC_NAMES + M3_EVAL_SPECS)
+    for seed in SEEDS["m2"][: args.seeds]:
+        for name in names:
+            path = outdir / f"{name}_seed{seed}.json"
+            if path.exists() and not args.force:
+                print(f"skip (exists): {path.name}")
+                continue
+            if not _cap_ok(args.model, "campaign", args.expected_cost, args.max_spend):
+                return
+            res = run_campaign([name], seed=seed, model=args.model, reasoning=args.reasoning,
+                               memory=CampaignMemory(enabled=False),
+                               run_root=ROOT / "runs" / ("campaign_m3_pilot" if args.pilot else "campaign_m3"))
+            row = _campaign_row(res, name, seed, args.model, args.reasoning, "campaign", False, bool(args.pilot))
+            _ledger_add(args.model, name, seed, row["cost_usd"], "campaign", "pilot" if args.pilot else "")
+            path.write_text(json.dumps(row, indent=1, default=str))
+            print(f"{name} seed {seed}: HV {row['hv_frac']}, regret {row['select_regret']}, evals {row['n_evals']}, "
+                  f"ladder {row['ladder']}, failed {row['failed']} ({row['error']}), ${row['cost_usd']:.4f}, "
+                  f"{row['wall_s']}s", flush=True)
+
+
+def cmd_memory_m3(args: argparse.Namespace) -> None:
+    """Memory ON over a fixed spec sequence (one store per seed, carried from spec to spec).
+    The memory-OFF condition is the campaign arm's runs for the same specs and seeds."""
+    from hw_dse.campaign.memory import CampaignMemory
+    from hw_dse.campaign.runner import run_campaign
+
+    accuracy_table.preload()
+    outdir = M3_DIRS["memory"] / _model_dir(args.model, args.reasoning)
+    outdir.mkdir(parents=True, exist_ok=True)
+    stores = json.loads(MEMORY_STORE.read_text()) if MEMORY_STORE.exists() else {}
+    for seed in SEEDS["m2"][: args.seeds]:
+        mem = CampaignMemory(enabled=True)
+        for k, v in stores.get(f"seed{seed}", {}).items():
+            for kk, vv in v.items():
+                mem.store.put(tuple(k.split("/")), kk, vv)
+        for name in MEMORY_SEQUENCE:
+            path = outdir / f"{name}_seed{seed}.json"
+            if path.exists() and not args.force:
+                print(f"skip (exists): {path.name}")
+                continue
+            if not _cap_ok(args.model, "campaign", args.expected_cost, args.max_spend):
+                return
+            res = run_campaign([name], seed=seed, model=args.model, reasoning=args.reasoning, memory=mem,
+                               run_root=ROOT / "runs" / "campaign_m3_memory")
+            row = _campaign_row(res, name, seed, args.model, args.reasoning, "campaign", True, False)
+            row["memory_lessons_before"] = None
+            _ledger_add(args.model, name, seed, row["cost_usd"], "campaign", "memory-on")
+            path.write_text(json.dumps(row, indent=1, default=str))
+            stores[f"seed{seed}"] = mem.dump()
+            MEMORY_STORE.write_text(json.dumps(stores, indent=1, sort_keys=True))
+            print(f"[memory on] {name} seed {seed}: HV {row['hv_frac']}, regret {row['select_regret']}, "
+                  f"${row['cost_usd']:.4f}", flush=True)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -520,6 +752,21 @@ def main() -> None:
     a.add_argument("--force", action="store_true", help="re-run even if a result file exists")
     a.set_defaults(fn=cmd_agent)
     sub.add_parser("report").set_defaults(fn=cmd_report)
+    sub.add_parser("baselines-m3").set_defaults(fn=cmd_baselines_m3)
+    ku = sub.add_parser("key-usage")
+    ku.add_argument("--tag", required=True)
+    ku.set_defaults(fn=cmd_key_usage)
+    for nm, fn in (("agent-m3", cmd_agent_m3), ("campaign-m3", cmd_campaign_m3), ("memory-m3", cmd_memory_m3)):
+        p3 = sub.add_parser(nm)
+        p3.add_argument("--model", required=True)
+        p3.add_argument("--reasoning", default=None)
+        p3.add_argument("--seeds", type=int, default=5)
+        p3.add_argument("--specs", default="")
+        p3.add_argument("--pilot", action="store_true")
+        p3.add_argument("--force", action="store_true")
+        p3.add_argument("--max-spend", type=float, default=M3_CAP, help="M3 spend cap (USD) from the ledger")
+        p3.add_argument("--expected-cost", type=float, default=0.10)
+        p3.set_defaults(fn=fn)
     args = ap.parse_args()
     args.fn(args)
 

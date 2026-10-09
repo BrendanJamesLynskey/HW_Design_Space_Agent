@@ -146,3 +146,19 @@ def test_memory_written_with_run_ids_read_back_and_switchable(tmp_path: Path) ->
     assert "(memory is switched off)" in str(sys3.content) and off.dump() == {}
     texts = [str(m.content) for m in chat3.seen[-1] if isinstance(m, ToolMessage)]
     assert any("memory is switched off" in t for t in texts)
+
+
+def test_a_stuck_model_is_stopped_and_counted_as_a_failure(tmp_path: Path) -> None:
+    s = "low_area_control"
+    chat = ScriptedChatModel(script=[say("", tool("list_specs")) for _ in range(10)])
+    res = run_campaign([s], chat=chat, model="fake", architect=HeuristicArchitect(), run_root=tmp_path)
+    assert res["error"] and "repeated the same tool call" in res["error"]
+    assert res["campaign_model_calls"] <= 5 and res["per_spec"][s]["left_open"]
+
+
+def test_the_model_call_cap_stops_a_campaign(tmp_path: Path) -> None:
+    s = "low_area_control"
+    chat = ScriptedChatModel(script=[say("", tool("write_todos", todos=[{"content": f"step {i}", "status": "pending"}]))
+                                     for i in range(10)])
+    res = run_campaign([s], chat=chat, model="fake", architect=HeuristicArchitect(), run_root=tmp_path, max_model_calls=3)
+    assert res["error"] and "call limit (3)" in res["error"]

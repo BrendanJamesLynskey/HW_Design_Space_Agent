@@ -29,6 +29,9 @@ from hw_dse.campaign.memory import CampaignMemory
 from hw_dse.campaign.tools import CampaignContext, t_finalize
 
 
+REPEAT_LIMIT = 4  # identical tool calls in a row before the campaign is stopped as stuck
+
+
 class TraceCallback:
     """LangChain callback: log every campaign-model call (usage, cost, tool calls) to the tracer."""
 
@@ -38,11 +41,15 @@ class TraceCallback:
         outer = self
 
         class _H(BaseCallbackHandler):
+            raise_error = True  # LangChain swallows callback errors unless the handler asks otherwise
+
             def on_chat_model_start(self, serialized: Any, messages: Any, **kw: Any) -> None:
                 outer.t0 = time.time()
                 outer.calls += 1
                 if outer.calls > outer.max_calls:
                     raise RuntimeError(f"campaign model call limit ({outer.max_calls}) exceeded")
+                if outer.repeats >= REPEAT_LIMIT:
+                    raise RuntimeError(f"the model repeated the same tool call {outer.repeats} times in a row: {outer.last_sig}")
 
             def on_llm_end(self, response: Any, **kw: Any) -> None:
                 for gens in response.generations:
@@ -51,6 +58,10 @@ class TraceCallback:
                         meta = getattr(msg, "response_metadata", {}) or {}
                         tok = meta.get("token_usage") or {}
                         usage = dict(getattr(msg, "usage_metadata", None) or {})
+                        sig = json.dumps([(c.get("name"), c.get("args")) for c in getattr(msg, "tool_calls", []) or []],
+                                         sort_keys=True, default=str)
+                        outer.repeats = outer.repeats + 1 if (sig == outer.last_sig and sig != "[]") else 1
+                        outer.last_sig = sig
                         outer.tracer.log({
                             "node": "campaign", "provider": "openrouter" if outer.model != "fake" else "fake",
                             "model_requested": outer.model, "model_served": meta.get("model_name"),
@@ -66,6 +77,7 @@ class TraceCallback:
 
         self.tracer, self.model, self.max_calls = tracer, model, max_calls
         self.calls, self.t0 = 0, time.time()
+        self.repeats, self.last_sig = 0, ""
         self.handler = _H()
 
 
@@ -87,7 +99,7 @@ def make_campaign_chat(model: str, reasoning: str | None, callbacks: list[Any]) 
 
 def run_campaign(spec_names: list[str], *, seed: int = 0, chat: Any = None, model: str = "fake",
                  reasoning: str | None = None, architect: Any = None, memory: CampaignMemory | None = None,
-                 run_root: Path | None = None, max_model_calls: int = 80, run_id: str | None = None) -> dict[str, Any]:
+                 run_root: Path | None = None, max_model_calls: int = 40, run_id: str | None = None) -> dict[str, Any]:
     """One campaign over ``spec_names`` (a queue, worked through in one agent run)."""
     from hw_dse.agent.llm import make_llm
     from hw_dse.agent.runner import REPO_ROOT
