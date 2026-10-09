@@ -138,7 +138,9 @@ def _back_annotation_lines(ba: dict[str, Any] | None) -> list[str]:
         L.append("| tool | LUTs est → meas | FFs est → meas | Fmax MHz est → meas |")
         L.append("|---|---|---|---|")
         for c in ba["comparisons"]:
-            cells = [f"{c[m]['estimate']:.0f} → {c[m]['measured']:.0f} ({c[m]['diff_pct']:+.1f}%)" for m in ("luts", "ffs", "fmax_mhz")]
+            cells = [f"{c[m]['estimate']:.0f} → {c[m]['measured']:.0f} (raw {c[m]['diff_pct']:+.1f}%"
+                     + (f"; on the Vivado scale {c[m]['diff_pct_scaled']:+.1f}%)" if c.get("tool_factors_applied") else ")")
+                     for m in ("luts", "ffs", "fmax_mhz")]
             L.append(f"| {c['provenance']} | " + " | ".join(cells) + " |")
         L.append("")
         flag = "**WINNER CHANGES**" if ba["winner_changed"] else "winner unchanged"

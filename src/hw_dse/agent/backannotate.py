@@ -130,31 +130,51 @@ def back_annotate(spec: Spec, front: list[dict[str, Any]], selected: dict[str, A
         return out
     out["status"] = "compared"
     for p in idx[key]:
-        cmp = {"tool": p.tool, "tool_version": p.tool_version, "provenance": p.provenance}
-        for m, meas in (("luts", p.luts), ("ffs", p.ffs), ("fmax_mhz", p.fmax_mhz)):
+        f = factors.get(p.tool)
+        cmp: dict[str, Any] = {"tool": p.tool, "tool_version": p.tool_version, "provenance": p.provenance,
+                               "tool_factors_applied": bool(f)}
+        for m, meas, fk in (("luts", p.luts, "luts"), ("ffs", p.ffs, "ffs"), ("fmax_mhz", p.fmax_mhz, "path")):
             est = float(selected[m])
-            cmp[m] = {"estimate": round(est, 1), "measured": meas, "diff_pct": round((meas / est - 1) * 100, 1)}
+            # diff_pct: the tool's raw number vs the (Vivado-scale) estimate.
+            # diff_pct_scaled: the same number first converted to the Vivado
+            # scale by the tool's refit factor -- the like-for-like view, and
+            # the one the winner check below uses.
+            scaled = meas if not f else (meas * f["path"] if fk == "path" else meas / f[fk])
+            cmp[m] = {"estimate": round(est, 1), "measured": meas, "diff_pct": round((meas / est - 1) * 100, 1),
+                      "measured_scaled": round(scaled, 1), "diff_pct_scaled": round((scaled / est - 1) * 100, 1)}
         out["comparisons"].append(cmp)
-    # Winner check over the front designs that have measurements.
-    measured_front = []
-    for r in front:
-        for p in idx.get(r["key"], []):
-            measured_front.append(_measured_record(p, spec, factors))
-    sel_meas = [m for m in measured_front if m["key"] == key]
-    best = select_design(measured_front, spec)
-    out["n_front_designs_measured"] = len({m["key"] for m in measured_front})
+    # Winner check, one tool at a time: tools are never mixed in one ranking.
     out["n_front_designs"] = len(front)
-    if sel_meas and not all(m["feasible"] for m in sel_meas):
-        out["winner_changed"] = True
-        out["why"] = "the selected design violates the spec with measured numbers: " + "; ".join(
-            f"{k} by {v * 100:.1f}%" for m in sel_meas for k, v in m["violations"].items() if v > 0)
-    elif best is not None and best["key"] != key:
-        out["winner_changed"] = True
-        out["why"] = (f"with measured numbers the spec's rule prefers {best['key']} "
-                      f"({spec.select_by} {best[spec.select_by]:.4g} vs {sel_meas[0][spec.select_by]:.4g})")
-    else:
-        out["why"] = "the selected design is still the best measured front design" + (
-            "" if out["n_front_designs_measured"] > 1 else " (it is the only front design with measurements)")
+    checks = []
+    for tool in sorted({p.tool for p in idx[key]}, key=lambda t: (t != "vivado", t)):
+        measured_front = [_measured_record(p, spec, factors) for r in front for p in idx.get(r["key"], []) if p.tool == tool]
+        sel = next(m for m in measured_front if m["key"] == key) if any(m["key"] == key for m in measured_front) else None
+        best = select_design(measured_front, spec)
+        chk: dict[str, Any] = {"tool": tool, "n_front_designs_measured": len({m["key"] for m in measured_front}),
+                               "winner_changed": False}
+        if sel is None:
+            chk["why"] = "the selected design is not on the front set measured by this tool"
+        elif not sel["feasible"]:
+            chk["winner_changed"] = True
+            chk["why"] = "the selected design violates the spec with measured numbers: " + "; ".join(
+                f"{k} by {v * 100:.1f}%" for k, v in sel["violations"].items() if v > 0)
+        elif best is not None and best["key"] != key:
+            chk["winner_changed"] = True
+            chk["why"] = (f"with measured numbers the spec's rule prefers {best['key']} "
+                          f"({spec.select_by} {best[spec.select_by]:.4g} vs {sel[spec.select_by]:.4g})")
+        else:
+            chk["why"] = "the selected design is still the best measured front design" + (
+                "" if chk["n_front_designs_measured"] > 1 else " (it is the only front design with measurements)")
+        checks.append(chk)
+    out["winner_checks"] = checks
+    # The headline verdict comes from the reference tool (Vivado) when it has
+    # measured the design, otherwise from the first tool that has.
+    head = checks[0]
+    out["winner_changed"], out["why"] = head["winner_changed"], f"{head['tool']}: {head['why']}"
+    out["n_front_designs_measured"] = head["n_front_designs_measured"]
+    others = [c for c in checks[1:] if c["winner_changed"] != head["winner_changed"]]
+    if others:
+        out["notes"].append("tools disagree: " + "; ".join(f"{c['tool']}: {c['why']}" for c in others))
     if not factors:
         out["notes"].append("no tool factors: measured numbers compared as-is (they come from a different tool "
                             "than the Vivado-calibrated estimate)")

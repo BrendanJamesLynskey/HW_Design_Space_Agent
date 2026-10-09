@@ -81,15 +81,15 @@ Refit calibration `artix7-xc7a35t-refit-yosys-nextpnr` (`src/hw_dse/models/calib
 
 | metric | refit (Vivado scale) | refit × tool factor | measured | error |
 |---|---|---|---|---|
-| luts | 176.4 | 198.5 | 216.0 | -8.1% |
-| ffs | 98.5 | 103.9 | 107.0 | -2.9% |
-| fmax_mhz | 226.7 | 151.3 | 150.7 | +0.4% |
+| luts | 162.8 | 185.8 | 216.0 | -14.0% |
+| ffs | 93.5 | 98.5 | 107.0 | -8.0% |
+| fmax_mhz | 205.7 | 142.2 | 150.7 | -5.6% |
 
 The agent's `back_annotate` node, run on the true front with this design selected:
 
 - status: `compared`; 1 of 139 front designs have measurements;
-- winner changed: **False** (the selected design is still the best measured front design (it is the only front design with measurements)).
+- winner changed: **False** (yosys+nextpnr-xilinx: the selected design is still the best measured front design (it is the only front design with measurements)).
 
-- measured (yosys+nextpnr-xilinx yosys 0.68 (git 38e001a6f) + nextpnr-xilinx 0.8.2-81-g1743d0f4): LUTs 159 → 216 (+36.0%), FFs 92 → 107 (+16.5%), Fmax 198 → 151 MHz (-24.0%).
+- measured (yosys+nextpnr-xilinx yosys 0.68 (git 38e001a6f) + nextpnr-xilinx 0.8.2-81-g1743d0f4): LUTs 159 → 216 (raw +36.0%; on the Vivado scale 189, +19.1%), FFs 92 → 107 (raw +16.5%; on the Vivado scale 102, +10.6%), Fmax 198 → 151 MHz (raw -24.0%; on the Vivado scale 218 MHz, +9.9%).
 
 Throughput check with the measured clock: 150.7 MHz / 15 cycles per result = 10.0 MSPS against the spec's ≥ 1 MSPS: still feasible.

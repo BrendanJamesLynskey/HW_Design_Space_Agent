@@ -189,3 +189,46 @@ def test_vivado_points_export_and_collect(tmp_path: Path) -> None:
     vp.collect(tmp_path / "vp", out, "2025.2")
     pts = measured.load(out)
     assert len(pts) == 8 and all(p.tool == "vivado" and p.fmax_mhz == round(1000 / (10 - 6.336), 2) for p in pts)
+
+
+def test_each_tool_carries_equal_weight_and_generated_vivado_rows_replace_anchors(tmp_path: Path,
+                                                                                   monkeypatch: pytest.MonkeyPatch) -> None:
+    pts = measured.load(L4_CSV)
+    w = recalibrate.tool_weights(recalibrate.anchor_points(load_calibration()) + pts)
+    n_v = 2
+    assert sum(w[:n_v]) == pytest.approx(sum(w[n_v:]))  # 2 Vivado points weigh as much as all Yosys points
+    viv = _vivado_csv(tmp_path / "v.csv", [_row(ArchConfig.from_params("pipelined", {"data_width": 16, "n_iter": 14}),
+                                               720, 751, 327.4)])
+    cal_dir = tmp_path / "models"
+    cal_dir.mkdir()
+    base = cal_dir / "calibration_artix7.yaml"
+    base.write_text((ROOT / "src/hw_dse/models/calibration_artix7.yaml").read_text())
+    monkeypatch.setattr(recalibrate, "REPO_ROOT", tmp_path)
+    rep = recalibrate.refit([L4_CSV, viv], "t", base_path=base, impact=False)
+    assert rep["anchors_used"] == ["iterative:data_width=16,n_iter=14,angle_guard=0,frac_guard=0,rounding=trunc"]
+    viv_rows = [r for r in rep["residuals_after"] if r["tool"] == "vivado"]
+    assert all(abs(r["luts_err_pct"]) < 10 for r in viv_rows)  # the reference tool stays on its own scale
+    assert rep["loo_summary"]["all"]["n"] == 38 and "leave-one-out" in recalibrate.markdown(rep)
+    # per-family overrides never touch the shared shifter constants
+    assert all(set(d) <= set(recalibrate.PER_FAMILY_CONSTANTS) for d in rep["per_family"].values())
+
+
+def test_back_annotation_scaled_diff_and_per_tool_winner_check(tmp_path: Path) -> None:
+    spec = load_spec(ROOT / "specs" / "low_area_control.yaml")
+    sel_arch = ArchConfig.from_params("iterative", {"data_width": 16, "n_iter": 14})
+    other = ArchConfig.from_params("iterative", {"data_width": 15, "n_iter": 12, "angle_guard": 1, "rounding": "round"})
+    front = _front("low_area_control", [other, sel_arch])
+    # Vivado says the selected design is best; the open-source tool says the other one is.
+    csvp = _vivado_csv(tmp_path / "m.csv", [
+        _row(sel_arch, 150, 90, 200.0), _row(other, 170, 95, 200.0),
+        _row(sel_arch, 400, 150, 150.0, tool="yosys+nextpnr-xilinx"), _row(other, 160, 90, 150.0, tool="yosys+nextpnr-xilinx")])
+    cal = tmp_path / "cal.yaml"
+    cal.write_text("tool_corrections:\n  yosys+nextpnr-xilinx: {luts: 2.0, ffs: 1.0, path: 1.5}\n")
+    ba = back_annotate(spec, front, front[1], {"measured_csvs": [csvp], "calibration": str(cal)})
+    assert [c["tool"] for c in ba["winner_checks"]] == ["vivado", "yosys+nextpnr-xilinx"]
+    assert ba["winner_changed"] is False and ba["why"].startswith("vivado:")  # reference tool decides the headline
+    assert ba["winner_checks"][1]["winner_changed"] is True and any("disagree" in n for n in ba["notes"])
+    ys = next(c for c in ba["comparisons"] if c["tool"].startswith("yosys"))
+    assert ys["luts"]["measured_scaled"] == 200.0  # 400 / LUT factor 2.0
+    assert ys["fmax_mhz"]["measured_scaled"] == 225.0  # 150 * path factor 1.5
+    assert ys["luts"]["diff_pct"] != ys["luts"]["diff_pct_scaled"]

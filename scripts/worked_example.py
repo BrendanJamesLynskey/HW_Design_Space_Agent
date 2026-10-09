@@ -114,10 +114,12 @@ def main() -> None:
           "measurements;",
           f"- winner changed: **{ba['winner_changed']}** ({ba['why']}).", ""]
     for c in ba["comparisons"]:
-        L.append(f"- {c['provenance']}: LUTs {c['luts']['estimate']:.0f} → {c['luts']['measured']:.0f} "
-                 f"({c['luts']['diff_pct']:+.1f}%), FFs {c['ffs']['estimate']:.0f} → {c['ffs']['measured']:.0f} "
-                 f"({c['ffs']['diff_pct']:+.1f}%), Fmax {c['fmax_mhz']['estimate']:.0f} → {c['fmax_mhz']['measured']:.0f} MHz "
-                 f"({c['fmax_mhz']['diff_pct']:+.1f}%).")
+        cells = []
+        for m, label, unit in (("luts", "LUTs", ""), ("ffs", "FFs", ""), ("fmax_mhz", "Fmax", " MHz")):
+            d = c[m]
+            cells.append(f"{label} {d['estimate']:.0f} → {d['measured']:.0f}{unit} (raw {d['diff_pct']:+.1f}%; "
+                         f"on the Vivado scale {d['measured_scaled']:.0f}{unit}, {d['diff_pct_scaled']:+.1f}%)")
+        L.append(f"- {c['provenance']}: " + ", ".join(cells) + ".")
     L.append("")
     L.append(f"Throughput check with the measured clock: {p.fmax_mhz:.1f} MHz / {arch.latency_cycles} cycles per result = "
              f"{p.fmax_mhz / arch.latency_cycles:.1f} MSPS against the spec's ≥ 1 MSPS: still feasible.")
