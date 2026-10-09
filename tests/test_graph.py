@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 from langgraph.types import Command
 
-from hw_dse.agent.graph import build_graph, validate_plan
+from hw_dse.agent.graph import LEVERS_M1, build_graph, validate_plan
 from hw_dse.agent.llm import ScriptedLLM
 from hw_dse.agent.runner import run_agent, sqlite_checkpointer
 from hw_dse.agent.schemas import AnalysisDecision, ExplorationPlan, FamilyPlan, ParamRange, SpecDraft
@@ -88,7 +88,7 @@ def test_round_cap_overrides_continue(tmp_path: Path) -> None:
         decide("refine", plan("iterative", data_width=(13, 15))),
         decide("refine", plan("iterative", data_width=(14, 15))),  # round 2 == cap
     ])
-    res = run_agent(spec, llm=llm, run_root=tmp_path)
+    res = run_agent(spec, llm=llm, run_root=tmp_path, levers=LEVERS_M1)
     assert res["status"] == "round_cap" and res["rounds"] == 2
     assert len(res["evaluations_ordered"]) == 40
 
@@ -97,7 +97,7 @@ def test_hv_epsilon_rule_and_missing_plan_fallback(tmp_path: Path) -> None:
     # Huge epsilon: any continue after round 1 is stopped by the HV rule.
     spec = small("specs/low_area_control.yaml", total=90, per_round=30, eps=10.0)
     llm = ScriptedLLM([plan("iterative", data_width=(12, 16)), decide("refine"), decide("widen")])
-    res = run_agent(spec, llm=llm, run_root=tmp_path)
+    res = run_agent(spec, llm=llm, run_root=tmp_path, levers=LEVERS_M1)
     assert res["status"] == "converged" and res["rounds"] == 2
     report = (Path(res["run_dir"]) / "report.md").read_text()
     assert "deterministic fallback" in report and "HV gain" in report
@@ -124,7 +124,7 @@ def test_validate_plan_budget_split_and_clamp() -> None:
 def test_interrupt_and_resume_through_sqlite(tmp_path: Path) -> None:
     spec = small("specs/low_area_control.yaml", total=40, per_round=20, rounds=2)
     db = tmp_path / "ck.sqlite"
-    cfg = {"configurable": {"thread_id": "t1"}, "recursion_limit": 50}
+    cfg = {"configurable": {"thread_id": "t1", "levers": LEVERS_M1}, "recursion_limit": 50}
     run_dir = tmp_path / "run"
 
     # Process 1: starts, pauses for spec confirmation.

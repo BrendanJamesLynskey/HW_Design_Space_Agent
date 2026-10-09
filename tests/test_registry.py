@@ -57,3 +57,11 @@ def test_schedules_match_reference() -> None:
     assert ArchConfig.from_params("pipelined_m", {**p, "m": 4}).latency_cycles == 4 + 2
     # k is ignored outside unrolled_k
     assert ArchConfig.from_params("iterative", {**p, "k": 4}).k == 1
+
+
+def test_key_round_trips() -> None:
+    from hw_dse.families import ArchConfig
+
+    for a in (ArchConfig.from_params("unrolled_k", {"data_width": 12, "n_iter": 9, "angle_guard": -2, "rounding": "round", "k": 3}),
+              ArchConfig.from_params("pipelined", {"data_width": 20, "n_iter": 18, "frac_guard": 2})):
+        assert ArchConfig.from_key(a.key()) == a

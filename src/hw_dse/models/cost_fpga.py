@@ -287,17 +287,26 @@ class FpgaCostModel:
         self.src: dict[str, float] = self.cal["source_constants"]
         self.fit: dict[str, float] = self.cal["fitted"]
         self.calibration_id: str = self.cal["id"]
-        self.provenance = f"estimate: {self.name} ({self.calibration_id}, {len(self.cal['anchors'])} anchors)"
+        n_pts = self.cal.get("refit", {}).get("n_points") or len(self.cal["anchors"])
+        what = "measured points" if "refit" in self.cal else "anchors"
+        self.provenance = f"estimate: {self.name} ({self.calibration_id}, {n_pts} {what})"
         ref = self.cal["power_reference"]
         ref_cost = self._raw(ArchConfig.from_params(ref["family"], ref["params"]))
         self.power_norm = (ref_cost[0] + ref_cost[1]) * ref["f_mhz"] * self.src["activity_factor"]
 
+    def constants(self, family: str) -> dict[str, float]:
+        """Fitted constants for ``family``: the global ones, overridden by any
+        per-family values a refit calibration provides (``fitted_per_family``)."""
+        per = (self.cal.get("fitted_per_family") or {}).get(family) or {}
+        return {**self.fit, **per}
+
     def _raw(self, arch: ArchConfig) -> tuple[float, float, float, Structure]:
         s = structure(arch)
-        luts = self.fit["c_arith"] * s.arith_bits + self.fit["c_mux"] * s.mux_luts
-        ffs = self.fit["c_ff"] * s.reg_bits
+        c = self.constants(arch.family)
+        luts = c["c_arith"] * s.arith_bits + c["c_mux"] * s.mux_luts
+        ffs = c["c_ff"] * s.reg_bits
         fixed, n_logic, n_mux = _path_terms(s, arch, self.src)
-        path = fixed + n_logic * self.fit["t_logic_ns"] + n_mux * self.fit["t_mux_ns"]
+        path = fixed + n_logic * c["t_logic_ns"] + n_mux * c["t_mux_ns"]
         return luts, ffs, path, s
 
     def estimate(self, arch: ArchConfig) -> CostEstimate:

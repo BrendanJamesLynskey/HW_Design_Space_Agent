@@ -108,9 +108,15 @@ class Objective(BaseModel):
 
 
 class Budget(BaseModel):
-    total_evals: int = Field(400, ge=10, le=100_000)
-    evals_per_round: int = Field(100, ge=5)
-    max_rounds: int = Field(4, ge=1, le=20)
+    total_evals: int = Field(400, ge=10, le=100_000, description="hard limit on evaluations for the whole run")
+    evals_per_round: int = Field(
+        100, ge=5,
+        description="limit on the evaluations of each LLM-planned round. Exempt: the code's final front-mapping "
+                    "round (whole-curve levers), which spends whatever budget is left when the run would stop")
+    max_rounds: int = Field(
+        4, ge=1, le=20,
+        description="limit on LLM-planned rounds. Exempt: the code's final front-mapping round, so a run has at "
+                    "most max_rounds + 1 rounds; total_evals is never exceeded")
     hv_epsilon: float = Field(0.01, ge=0.0, description="stop when a round improves HV by less than this fraction")
 
 

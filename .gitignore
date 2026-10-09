@@ -14,7 +14,8 @@ build/
 .env.local
 
 # Reference RTL is fetched at a pinned commit by scripts/fetch_reference_rtl.sh
-third_party/
+third_party/*
+!third_party/CORDIC/
 
 # Simulation scratch
 rtl_harness/build/
@@ -34,3 +35,6 @@ eval/scratch/
 .vscode/
 .idea/
 .DS_Store
+
+# SymbiYosys work directories (only the .sby/.sv jobs are committed)
+formal/*/

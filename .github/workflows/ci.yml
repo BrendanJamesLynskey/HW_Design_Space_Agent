@@ -9,6 +9,9 @@ permissions:
   contents: read
 
 jobs:
+  # Fast: the offline Python suite on three Python versions. Icarus only (the
+  # golden model vs the vendored reference RTL, and generated vs reference RTL);
+  # the heavier HDL checks run once, in the `hdl` job below.
   test:
     name: tests (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
@@ -25,19 +28,17 @@ jobs:
           cache: pip
           cache-dependency-path: pyproject.toml
 
-      # Icarus Verilog for the golden-model vs RTL bit-exact test.
       - name: Install Icarus Verilog
         run: |
           sudo apt-get update -q
           sudo apt-get install -y -q iverilog
           iverilog -V | head -1
 
-      # Reference RTL lives in its own public repo; pinned commit.
-      - name: Fetch reference CORDIC RTL
-        run: scripts/fetch_reference_rtl.sh
+      # Reference RTL is vendored (third_party/CORDIC); check it is unmodified.
+      - name: Check vendored reference RTL hashes
+        run: python scripts/check_vendored.py
 
-      # Fully offline: the fake provider only, no API keys. The openrouter
-      # extra is installed so the provider-config test runs too.
+      # Fully offline: the fake/scripted/replay providers only, no API keys.
       - name: Install
         run: |
           python -m pip install --upgrade pip
@@ -52,3 +53,83 @@ jobs:
         run: |
           hw-dse run --spec specs/low_area_control.yaml --provider fake --auto-approve --auto-select
           hw-dse run --spec specs/infeasible_dds_400msps.yaml --provider fake --auto-approve --auto-select
+
+      - name: Eval report regenerates with no diff
+        run: |
+          python eval/run_eval.py report
+          git diff --exit-code eval/results.md
+
+  # L3 + gate level: Verilator and Icarus (full L3 sweep), SymbiYosys proofs,
+  # Yosys-mapped netlists simulated against the golden model. Every class of
+  # tool is *required* here: a missing tool fails instead of skipping.
+  hdl:
+    name: HDL (L3 sweep, formal, gate level)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      # Ubuntu 24.04 packages: Icarus 12, Verilator 5.020, Yosys 0.33, z3;
+      # SymbiYosys from source at a pinned commit (it is a Python tool).
+      - name: Install EDA tools
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q iverilog verilator yosys z3
+          git clone -q https://github.com/YosysHQ/sby.git /tmp/sby
+          git -C /tmp/sby checkout -q b1a1e98
+          sudo make -C /tmp/sby install PREFIX=/usr/local
+          verilator --version; iverilog -V | head -1; yosys -V; z3 --version
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e '.[dev,openrouter]' click   # click: needed by sby
+
+      - name: Full L3 sweep, formal proofs, gate-level simulation
+        env:
+          HW_DSE_REQUIRE_RTL: "1"
+          HW_DSE_REQUIRE_SIM: "1"
+          HW_DSE_REQUIRE_FORMAL: "1"
+          HW_DSE_REQUIRE_GATE: "1"
+          HW_DSE_REQUIRE_SYNTH: "1"
+          HW_DSE_SYNTH_RUNNER: native
+          HW_DSE_L3_FULL: "1"
+        run: >-
+          python -m pytest -v -rs
+          tests/test_rtl_generator.py tests/test_formal.py tests/test_synth.py tests/test_bitexact_rtl.py
+
+  # L4 smoke: one small design through Yosys + nextpnr-xilinx (openXC7
+  # container) on xc7a35tcpg236-1, including building the chip database.
+  # The full 39-point sweep is too heavy for every push; it is run with
+  # scripts/run_l4_sweep.py and its results are committed.
+  synth-smoke:
+    name: L4 synthesis smoke (Yosys + nextpnr-xilinx)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Pull the openXC7 image and build the chip database
+        run: |
+          docker pull regymm/openxc7@sha256:35c910739e3a4b40850b85de31ebc8954985a66e982009f09123b70dbb0e75da
+          docker tag regymm/openxc7@sha256:35c910739e3a4b40850b85de31ebc8954985a66e982009f09123b70dbb0e75da regymm/openxc7
+          scripts/build_chipdb.sh build/chipdb
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e '.[dev]'
+
+      - name: Synthesise, place and route one design
+        env:
+          HW_DSE_CHIPDB_DIR: build/chipdb
+          HW_DSE_SYNTH_RUNNER: docker
+        run: python scripts/run_l4_sweep.py --smoke

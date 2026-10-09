@@ -355,3 +355,61 @@ class HeuristicArchitect:
             return AnalysisDecision(decision="refine", rationale="Refine around the front.",
                                     next_plan=ExplorationPlan(families=fams[:4], rationale="refine"))
         return AnalysisDecision(decision="stop", rationale="Front found and refined once.")
+
+
+class ReplayArchitect:
+    """Replays the decisions a *real* LLM made in a recorded run (offline lever tuning).
+
+    It reads a recorded ``llm_trace.jsonl`` and answers each ``propose`` /
+    ``analyse`` call with the parsed object the live model returned for the
+    same call in the same order. A call whose attempts all failed in the
+    recording raises :class:`StructuredOutputError` again, as it did live. If
+    the graph asks for more decisions than were recorded (because a lever
+    changed the control flow), it answers ``stop``.
+
+    This lets deterministic code (the whole-curve levers) be tuned against
+    how the evaluated LLMs actually behaved, at zero cost and with no live
+    calls. It is labelled ``fake`` like the other stand-ins and never feeds
+    the eval's agent columns.
+    """
+
+    provider = "fake"
+
+    def __init__(self, trace_path: str, tracer: Tracer | None = None) -> None:
+        import ast
+        from pathlib import Path
+
+        self.model = f"replay:{Path(trace_path).parent.name}"
+        self.tracer = tracer or Tracer()
+        calls: list[list[dict[str, Any]]] = []
+        for line in Path(trace_path).read_text().splitlines():
+            r = json.loads(line)
+            if r.get("node") not in ("propose", "analyse"):
+                continue
+            if int(r.get("attempt") or 1) == 1 or not calls or calls[-1][0]["node"] != r["node"]:
+                calls.append([])
+            parsed = r.get("parsed")
+            if isinstance(parsed, str):
+                parsed = ast.literal_eval(parsed)
+            calls[-1].append({**r, "parsed": parsed})
+        self.calls = calls
+        self.served = 0
+
+    def structured(self, schema: type[T], system: str, user: str, *, node: str, context: dict[str, Any] | None = None) -> T:
+        if self.served >= len(self.calls):
+            if schema is AnalysisDecision:
+                obj: BaseModel = AnalysisDecision(decision="stop", rationale="[replay: no further recorded decision]")
+                self.tracer.log({"node": node, "provider": "fake", "model_requested": self.model, "parsed": obj.model_dump()})
+                return obj  # type: ignore[return-value]
+            raise StructuredOutputError("replay exhausted")
+        call = self.calls[self.served]
+        self.served += 1
+        if call[0]["node"] != node:
+            raise StructuredOutputError(f"replay out of step: recorded {call[0]['node']}, asked {node}")
+        ok = [c["parsed"] for c in call if c.get("parsed") is not None]
+        if not ok:
+            raise StructuredOutputError("recorded call failed live")
+        obj = schema.model_validate(ok[-1])
+        self.tracer.log({"node": node, "provider": "fake", "model_requested": self.model, "schema": schema.__name__,
+                         "parsed": obj.model_dump(), "usage": {}, "cost_usd": 0.0})
+        return obj  # type: ignore[return-value]

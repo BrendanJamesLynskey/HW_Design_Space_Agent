@@ -23,7 +23,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 FamilyName = Literal["iterative", "unrolled_k", "pipelined", "pipelined_m"]
-DecisionName = Literal["refine", "widen", "add_family", "infeasible", "stop"]
+DecisionName = Literal["refine", "widen", "add_family", "map_front", "infeasible", "stop"]
 
 
 class ParamRange(BaseModel):
@@ -60,13 +60,16 @@ class AnalysisDecision(BaseModel):
             "refine: narrow ranges around the promising region; "
             "widen: enlarge ranges that look too tight; "
             "add_family: bring in a family not yet explored; "
+            "map_front: hand this round to a code-driven coverage search (NSGA-II over the full "
+            "parameter ranges of the families on the front, seeded with the front) to map the whole "
+            "trade-off curve; no next_plan needed; "
             "infeasible: the constraints cannot be met by any family in the registry; "
             "stop: the front is good enough or not improving"
         )
     )
     rationale: str = Field(description="why, citing the summary's evidence")
     next_plan: ExplorationPlan | None = Field(
-        None, description="required for refine, widen and add_family; omit for stop and infeasible"
+        None, description="required for refine, widen and add_family; omit for map_front, stop and infeasible"
     )
 
 

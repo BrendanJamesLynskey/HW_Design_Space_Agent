@@ -126,6 +126,14 @@ def summarise(
         for r in _spread(front, MAX_FRONT):
             L.append(f"- {r['family']} [{_params_str(r)}] " + ", ".join(
                 f"{c}={fmt_metric(c, float(r[c]))}" for c in dict.fromkeys(obj_names + cols)))
+        # Coverage: how much of each objective's range the front spans. A
+        # narrow span is the signal for the map_front decision.
+        spans = []
+        for o in spec.objectives:
+            vals = [float(r[o.metric]) for r in front]
+            spans.append(f"{o.metric} {fmt_metric(o.metric, min(vals))}..{fmt_metric(o.metric, max(vals))} (HV reference {o.ref:g})")
+        ws = [int(r["data_width"]) for r in front]
+        L.append("Front coverage: " + "; ".join(spans) + f"; data_width on the front {min(ws)}..{max(ws)} (registry 8..28).")
     else:
         L.append("\nNo feasible design found yet. Least-violating designs:")
         ranked = sorted(records, key=lambda r: sum(max(v, 0.0) for v in r["violations"].values()))

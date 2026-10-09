@@ -166,6 +166,16 @@ class ArchConfig:
             m=int(params.get("m", 1)) if family == "pipelined_m" else 1,
         )
 
+    @staticmethod
+    def from_key(key: str) -> ArchConfig:
+        """Inverse of :meth:`key`: ``"iterative:data_width=15,n_iter=12,..."``."""
+        family, _, rest = key.partition(":")
+        params: dict[str, ParamValue] = {}
+        for item in rest.split(","):
+            name, _, value = item.partition("=")
+            params[name] = value if name == "rounding" else int(value)
+        return ArchConfig.from_params(family, params)
+
     def params(self) -> dict[str, ParamValue]:
         n = self.numerics
         out: dict[str, ParamValue] = {
