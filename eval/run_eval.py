@@ -551,7 +551,7 @@ def cmd_baselines_m3(_: argparse.Namespace) -> None:
             for seed in SEEDS["m2"]:
                 recs = run_baseline(s, sampler, seed)
                 front = merged_front(recs, s)
-                sel = l2_select(front, select_design(front, s), s)["selected"]
+                sel = l2_select(recs, select_design(front, s), s)["selected"]
                 sc = score_m3(recs, s, None if sel else True, sel)
                 out[f"{name}|{sampler}|{seed}"] = {"spec": name, "method": sampler, "seed": seed, **sc}
                 print(name, sampler, seed, "HV", sc["hv_frac"], "regret", sc["select_regret"])
@@ -718,10 +718,11 @@ def cmd_memory_m3(args: argparse.Namespace) -> None:
                 continue
             if not _cap_ok(args.model, "campaign", args.expected_cost, args.max_spend):
                 return
+            digest_before = mem.digest()
             res = run_campaign([name], seed=seed, model=args.model, reasoning=args.reasoning, memory=mem,
                                run_root=ROOT / "runs" / "campaign_m3_memory")
             row = _campaign_row(res, name, seed, args.model, args.reasoning, "campaign", True, False)
-            row["memory_lessons_before"] = None
+            row["memory_lessons_before"] = digest_before
             _ledger_add(args.model, name, seed, row["cost_usd"], "campaign", "memory-on")
             path.write_text(json.dumps(row, indent=1, default=str))
             stores[f"seed{seed}"] = mem.dump()
@@ -856,18 +857,38 @@ def report_m3(L: list[str]) -> None:
                 cells.append(f"{f(st)} → **{f(cp)}**")
             L.append(f"| {name} | " + " | ".join(cells) + " |")
         L.append("")
-    L.append("**Cost, tokens, time and failures per run** (structured → campaign; all specs)\n")
+    L.append("**Cost, tokens, time and failures per run** (structured → campaign, over the specs both arms ran for that "
+             "model: all six for DeepSeek and Qwen, `multiaxis_control` only for Sonnet). Wall-clock is not controlled: "
+             "structured, campaign and memory-on runs ran 3–4 at a time in this session, and the structured runs on the M2 "
+             "specs come from the M2 session.\n")
     L.append("| model | runs | input tokens / run | output tokens / run | cost / run (USD) | wall time / run (s) | failure rate |")
     L.append("|---|---|---|---|---|---|---|")
     for m in models:
-        st = [r for r in (ag2.get(m, []) + ag3.get(m, [])) if r["spec"] in all_specs]
         cp = cp3.get(m, [])
+        cp_specs = {r["spec"] for r in cp} or set(all_specs)
+        st = [r for r in (ag2.get(m, []) + ag3.get(m, [])) if r["spec"] in all_specs and r["spec"] in cp_specs]
         def pair(key: str, digits: int = 0) -> str:
             return " → ".join(_ms([float(r[key]) for r in rows], digits=digits) if rows else "—" for rows in (st, cp))
         L.append(f"| `{m}` | {len(st)} → {len(cp)} | {pair('input_tokens')} | {pair('output_tokens')} | {pair('cost_usd', 4)} | "
                  f"{pair('wall_s')} | {_fail_rate(st) if st else '—'} → {_fail_rate(cp) if cp else '—'} |")
     L.append("")
     if cp3:
+        allc = [r for rows in cp3.values() for r in rows]
+        l2c = [r for r in allc if (r.get("l2") or {}).get("winner_changed")]
+        l2s = [r for rows in ag3.values() for r in rows if r.get("l2_winner_changed")]
+        n_st = sum(len(rows) for rows in ag3.values())
+        def cnt(pred: Any) -> int:
+            return sum(1 for r in allc if pred(r))
+        L.append(f"**L2 re-selections in the live runs.** Structured arm: {len(l2s)}/{n_st}. Campaign arm: {len(l2c)}/{len(allc)} "
+                 f"({', '.join(sorted(f'{_label(r)} {r['spec']} seed {r['seed']}' for r in l2c)) or 'none'}).\n")
+        L.append("**What the ladder steps returned in the campaign arm.** "
+                 f"`verify_rtl`: recorded L3 row {cnt(lambda r: str(r.get('l3') or '').startswith('exact, recorded'))}, fresh run "
+                 f"{cnt(lambda r: str(r.get('l3') or '').startswith('exact, fresh'))}, not verified "
+                 f"{cnt(lambda r: str(r.get('l3') or '').startswith('not verified'))} (of {cnt(lambda r: r.get('l3'))} runs that called it); "
+                 f"`synthesize`: recorded measurements {cnt(lambda r: r.get('l4') and not str(r['l4']).startswith('no recorded'))} of "
+                 f"{cnt(lambda r: r.get('l4'))}; `back_annotate`: compared {cnt(lambda r: (r.get('back_annotation') or {}).get('status') == 'compared')} "
+                 f"of {cnt(lambda r: r.get('back_annotation'))}. Most selections have W ≥ 15, which has no recorded L3/L4 data "
+                 "and is too large for a fresh exhaustive run inside a campaign.\n")
         L.append("**What the campaign agent did** (tool sequence per run, condensed)\n")
         for m, rows in cp3.items():
             L.append(f"`{m}`:\n")

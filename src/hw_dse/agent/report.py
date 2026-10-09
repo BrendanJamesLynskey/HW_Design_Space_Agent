@@ -170,8 +170,9 @@ def _l2_lines(l2: dict[str, Any] | None, spec: Spec) -> list[str]:
         L.append("")
         return L
     assert spec.system is not None
-    L.append(f"System: {spec.system.describe()}. Shortlist: the front's top {l2.get('k')} by the selection rule, "
-             "simulated at their estimated Fmax (SimPy). L1 bound → L2 simulated:")
+    L.append(f"System: {spec.system.describe()}. Every L1-feasible design ({l2.get('n_l1_feasible')}) was simulated at its "
+             f"estimated Fmax (SimPy); {l2.get('n_simulated_feasible')} pass. Top {l2.get('k')} by the selection rule, "
+             "L1 bound → L2 simulated:")
     L.append("")
     cons = spec.system_constraints
     L.append("| design | " + " | ".join(f"{c} (bound → simulated)" for c in cons) + " | passes |")

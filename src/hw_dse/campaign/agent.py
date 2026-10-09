@@ -72,8 +72,9 @@ def _register_profile(model: Any) -> None:
     prof = HarnessProfile(excluded_tools=EXCLUDED_TOOLS,
                           general_purpose_subagent=GeneralPurposeSubagentProfile(enabled=False))
     prov, ident = get_model_provider(model), get_model_identifier(model)
-    for key in {f"{prov}:{ident}", str(prov)} if prov else {str(ident)}:
-        register_harness_profile(key, prof)
+    # The exact provider:model key only: a bare provider key would change every
+    # other deep agent in the process using that provider (M3 review, N12).
+    register_harness_profile(f"{prov}:{ident}" if prov else str(ident), prof)
 
 
 def build_campaign_agent(model: Any, ctx: CampaignContext) -> Any:

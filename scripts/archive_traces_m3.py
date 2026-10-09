@@ -17,6 +17,10 @@ its answer) and, per inner ``run_dse`` call, that run's ``report.md`` and
 ``evaluations.csv.gz``. Layout: ``traces/m3/<arm>/<spec>/<stamp>/``, plus
 ``INDEX.md``.
 
+After archiving, ``python eval/m3_rescore.py`` adds each campaign's
+``pool_keys.json.gz`` (its L1 pool, rebuilt or saved; re-run it after this
+script, which rewrites the directory).
+
 Every file is scanned for key material first (credential-looking
 environment variable values and provider-key shapes); a hit aborts.
 """

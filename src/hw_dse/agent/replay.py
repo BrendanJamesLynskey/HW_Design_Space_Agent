@@ -14,7 +14,9 @@ replays each committed M2 run:
 * the result is compared with the committed summary JSON
   (``eval/data/agent_m2/``) *and* the committed ``evaluations.csv.gz``:
   decisions, status, rounds, front-mapping rounds, every evaluated design key
-  in canonical order, HV fraction, selection regret and the selected design.
+  in canonical order, HV fraction, selection regret and the selected design;
+* and the architect's *inputs*: every system and user prompt the graph sent
+  is byte-identical to the recorded one, and every recorded call was consumed.
 
 ``tests/test_m2_replay.py`` replays a sample on every run of the suite and all
 60 runs when ``HW_DSE_REPLAY_FULL=1`` (CI sets it); ``eval/m3_offline.py``
@@ -64,13 +66,18 @@ def replay_run(row: dict[str, Any], levers: dict[str, Any] | None = None) -> dic
     spec = load_spec(REPO_ROOT / "specs" / f"{row['spec']}.yaml")
     gt = json.loads((DATA / "ground_truth.json").read_text())[spec.name]
     trace = Path(row["_trace_dir"]) / "llm_trace.jsonl"
+    arch = ReplayArchitect(str(trace))
     with tempfile.TemporaryDirectory() as tmp:
-        res = run_agent(spec, llm=ReplayArchitect(str(trace)), seed=int(row["seed"]), run_root=Path(tmp),
+        res = run_agent(spec, llm=arch, seed=int(row["seed"]), run_root=Path(tmp),
                         levers=levers if levers is not None else LEVERS_M2)
+    calls = [r for r in arch.tracer.records if r.get("recorded_system") is not None]
     sc = score_run(res["evaluations_ordered"], spec, gt, declared_infeasible=res["llm_declared_infeasible"],
                    selected=res["selected"])
     keys = [r["key"] for r in res["evaluations_ordered"]]
-    return {"res": res, "score": sc, "keys": keys}
+    return {"res": res, "score": sc, "keys": keys,
+            "inputs_identical": bool(calls) and all(c["system"] == c["recorded_system"] and c["user"] == c["recorded_user"]
+                                                    for c in calls),
+            "all_recorded_calls_consumed": arch.served == len(arch.calls)}
 
 
 def compare(row: dict[str, Any], rep: dict[str, Any]) -> dict[str, Any]:
@@ -86,6 +93,8 @@ def compare(row: dict[str, Any], rep: dict[str, Any]) -> dict[str, Any]:
         "hv_frac": sc["hv_frac"] == row["hv_frac"],
         "select_regret": sc["select_regret"] == row["select_regret"],
         "selected_key": sc["selected_key"] == row["selected_key"],
+        "architect_inputs": rep["inputs_identical"],  # every system/user prompt byte-identical to the recording
+        "all_recorded_calls_consumed": rep["all_recorded_calls_consumed"],
     }
     return {"spec": row["spec"], "seed": row["seed"], "model": row["model_requested"], "run_dir": row["run_dir"],
             "identical": all(checks.values()), "checks": checks,

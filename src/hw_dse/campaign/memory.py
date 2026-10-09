@@ -19,8 +19,10 @@ with a key, a text and **the run IDs it came from**:
     winner changed or not, why) and every L5 re-selection.
 ``note``
     Free-text notes the campaign LLM chose to keep (``remember`` tool),
-    labelled as LLM-authored. They are advice for the next campaign, never
-    data: nothing reads a number out of them.
+    labelled as LLM-authored, with every number masked (:func:`mask_numbers`):
+    they are advice for the next campaign, never data. (In the M3 live eval the
+    notes still carried numbers copied from tool outputs; masking was added
+    after review.)
 
 Code-derived lessons are recomputed from the accumulated *observations*
 (also in the Store, namespace ``("hw_dse", "observations")``), so a lesson's
@@ -33,6 +35,7 @@ eval commits.
 from __future__ import annotations
 
 import json
+import re
 import time
 from pathlib import Path
 from typing import Any
@@ -40,6 +43,19 @@ from typing import Any
 from langgraph.store.memory import InMemoryStore
 
 KINDS = ("family", "spec_class", "calibration", "note")
+
+_NUMBER = re.compile(r"(?<![A-Za-z_])[-+~≈]?\d+(?:[.,]\d+)*(?:\s*%)?")
+
+
+def mask_numbers(text: str) -> str:
+    """Replace every number in LLM-authored text with ``#``.
+
+    The LLM never produces a number, and that includes a number it *restates*:
+    a campaign note copied from a tool output can garble it (M3 review, S5: a
+    note gave Vivado-scale percentages next to a raw measurement pair). Notes
+    keep the reasoning; numbers stay in code-written lessons and tool outputs,
+    where they carry provenance."""
+    return _NUMBER.sub("#", text)
 
 
 def spec_class(spec: Any) -> str:
@@ -68,6 +84,8 @@ class CampaignMemory:
             return "memory is switched off for this campaign; nothing was stored"
         if kind not in KINDS:
             return f"unknown kind {kind!r}; use one of {KINDS}"
+        if author == "llm":
+            key, lesson = mask_numbers(key), mask_numbers(lesson)
         ns = ("hw_dse", "memory", kind)
         old = self.store.get(ns, key)
         ids = sorted(set((old.value.get("run_ids", []) if old else []) + list(run_ids)))

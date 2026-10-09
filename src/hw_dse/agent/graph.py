@@ -626,8 +626,7 @@ def build_graph(llm: StructuredLLM, checkpointer: Any = None) -> Any:
         selected = state.get("selected")
         if opts.get("enabled") is False:
             return {"l2": {"status": "skipped", "reason": "disabled"}, "selected_l1": selected}
-        front = merged_front(state.get("evaluations", []), spec)
-        out = l2_select(front, selected, spec, k=int(opts.get("k", DEFAULT_K)))
+        out = l2_select(state.get("evaluations", []), selected, spec, k=int(opts.get("k", DEFAULT_K)))
         new_sel = out.pop("selected")
         upd: dict[str, Any] = {"l2": out, "selected_l1": selected}
         if spec.system is not None:

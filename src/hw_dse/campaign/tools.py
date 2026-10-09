@@ -53,6 +53,14 @@ MIN_RUN = 40  # smallest run_dse budget (a 4-round graph needs room)
 MAX_TOOL_CALLS = 60  # per campaign; afterwards every tool asks the agent to finalize
 
 
+def _rel(path: str | Path) -> str:
+    """A path relative to the repository when it is inside it (no container paths in committed data)."""
+    try:
+        return str(Path(path).resolve().relative_to(REPO_ROOT))
+    except ValueError:
+        return str(path)
+
+
 def spec_path(name: str) -> Path:
     for p in (REPO_ROOT / "specs" / f"{name}.yaml", REPO_ROOT / "specs" / "system" / f"{name}.yaml"):
         if p.exists():
@@ -73,6 +81,7 @@ class SpecLedger:
     l5: dict[str, Any] | None = None
     finalized: bool = False
     final_note: str = ""
+    explore_calls: int = 0
     calls: list[str] = field(default_factory=list)
 
     @property
@@ -176,7 +185,9 @@ def t_run_dse(ctx: CampaignContext, spec_name: str, evals: int, notes: str = "")
     k = len(led.dse_runs)
     opts: dict[str, Any] = {"back_annotate": {"enabled": False}}  # the campaign runs L5 itself, when it decides to
     if notes:
-        opts["architect_notes"] = notes
+        from hw_dse.campaign.memory import mask_numbers
+
+        opts["architect_notes"] = mask_numbers(notes)  # text only: no LLM-restated numbers reach the architect
     res = run_agent(sub, llm=ctx.architect, seed=ctx.seed + 7 * k, run_root=ctx.run_dir / "dse", options=opts,
                     tracer=ctx.architect.tracer)
     recs = res["evaluations_ordered"]
@@ -185,7 +196,7 @@ def t_run_dse(ctx: CampaignContext, spec_name: str, evals: int, notes: str = "")
     led.pool += recs
     led.used += len(recs)
     led.dse_runs.append({"k": k, "evals": len(recs), "status": res["status"], "decisions": res["decisions"],
-                         "run_dir": res["run_dir"], "rounds_log": res["rounds_log"], "notes": notes,
+                         "run_dir": _rel(res["run_dir"]), "rounds_log": res["rounds_log"], "notes": notes,
                          "llm_declared_infeasible": res["llm_declared_infeasible"]})
     led.l2 = None
     led.calls.append("run_dse")
@@ -215,7 +226,10 @@ def t_explore_family(ctx: CampaignContext, spec_name: str, family: str, evals: i
     if family in ("iterative", "pipelined"):
         prop.pop("m", None)
     cl = clamp_ranges(family, prop)
-    k = len([c for c in led.calls if c == "explore_family"])
+    # Seed index taken at call start (parallel tool calls run concurrently; counting
+    # finished calls let two parallel calls share an index in the M3 live runs).
+    k = led.explore_calls
+    led.explore_calls += 1
     recs = run_family_study(family, cl.ranges, led.spec, n, ctx.seed * 131 + 17 * k + 3, tag={"round": f"campaign-{k}"})
     for r in recs:
         r["campaign_call"] = f"explore_family#{k}"
@@ -238,7 +252,7 @@ def t_simulate_system(ctx: CampaignContext, spec_name: str, top_k: int = 5) -> s
     if not front:
         return f"{spec_name}: nothing feasible to simulate yet"
     sel = select_design(front, led.spec)
-    out = l2_select(front, sel, led.spec, k=max(1, min(int(top_k), 20)))
+    out = l2_select(led.pool, sel, led.spec, k=max(1, min(int(top_k), 20)))
     out["pool_size"] = len(led.pool)
     led.l2 = out
     led.calls.append("simulate_system")
@@ -253,7 +267,8 @@ def t_simulate_system(ctx: CampaignContext, spec_name: str, top_k: int = 5) -> s
                       for c in led.spec.system_constraints)
         rows.append(f"  - `{r['key']}`: {m}: {'passes' if r['feasible'] else 'FAILS'}")
     s = out.get("selected")
-    return (f"simulate_system {spec_name} (L2, SimPy, at estimated Fmax; top {out.get('k')} of the front):\n"
+    return (f"simulate_system {spec_name} (L2, SimPy, at estimated Fmax; all {out.get('n_l1_feasible')} L1-feasible designs "
+            f"simulated, {out.get('n_simulated_feasible')} pass; top {out.get('k')} by the selection rule):\n"
             + "\n".join(rows) + f"\n{'WINNER CHANGED AT L2' if out['winner_changed'] else 'winner unchanged'}: {out.get('why')}."
             + (f"\nL2 selection: {_design_line(s, led.spec)}" if s else ""))
 
@@ -368,7 +383,7 @@ def t_recall(ctx: CampaignContext) -> str:
 
 
 def t_remember(ctx: CampaignContext, kind: str, key: str, lesson: str) -> str:
-    return ctx.memory.remember("note" if kind not in ("note",) else kind, key[:80], lesson[:500], [ctx.run_id], "llm")
+    return ctx.memory.remember("note", key[:80], lesson[:500], [ctx.run_id], "llm")
 
 
 # ---------------------------------------------------------------------------
@@ -411,7 +426,8 @@ def make_tools(ctx: CampaignContext) -> list[Any]:
 
     @tool
     def simulate_system(spec_name: str, top_k: int = 5) -> str:
-        """L2: simulate the front's top_k designs in the spec's system (SimPy) and re-select on simulated constraints."""
+        """L2: simulate every L1-feasible design in the spec's system (SimPy), re-select on simulated constraints;
+        shows the top_k."""
         return wrap("simulate_system", t_simulate_system, {"spec_name": spec_name, "top_k": top_k})
 
     @tool

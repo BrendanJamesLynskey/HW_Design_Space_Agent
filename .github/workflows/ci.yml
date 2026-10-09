@@ -42,7 +42,9 @@ jobs:
       - name: Install
         run: |
           python -m pip install --upgrade pip
-          pip install -e '.[dev,openrouter]'
+          # campaign = Deep Agents (needs Python >= 3.11; on 3.10 its marker
+          # installs nothing and tests/test_campaign.py skips).
+          pip install -e '.[dev,openrouter,campaign]'
 
       # HW_DSE_REQUIRE_RTL makes the Icarus checks mandatory: the golden model vs
       # the reference RTL, and (M3) the L2 cycle model vs the generated RTL.
@@ -51,6 +53,8 @@ jobs:
         env:
           HW_DSE_REQUIRE_RTL: "1"
           HW_DSE_REPLAY_FULL: "1"
+          # deepagents needs Python >= 3.11: there the campaign tests must run, not skip.
+          HW_DSE_REQUIRE_CAMPAIGN: ${{ matrix.python-version != '3.10' && '1' || '0' }}
         run: python -m pytest -v -rs
 
       - name: Smoke run with the rule-based fake architect

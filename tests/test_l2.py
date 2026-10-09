@@ -192,17 +192,24 @@ def test_l1_evaluate_carries_bounds_and_l2_replaces_them() -> None:
     assert sim["sys_p99_batch_us"] > rec["sys_p99_batch_us"] and not sim["feasible"]  # clock alignment costs it
 
 
-def test_l2_node_changes_the_winner_when_simulation_says_so() -> None:
+def test_l2_node_finds_a_winner_the_l1_front_has_pruned() -> None:
+    """Regression (M3 review, B1): m=4 has m=5's numerics (same accuracy) and more
+    area, so the L1 front holds m=5 alone; m=5 passes the L1 bound but fails the
+    simulation. L2 must search every L1-feasible design, not just the front."""
+    from hw_dse.agent.summary import merged_front
+
     spec = load_spec("specs/system/multiaxis_control.yaml")
-    keys = [("pipelined_m", 5, 17, 1), ("pipelined_m", 4, 17, 1), ("pipelined_m", 5, 18, 0)]
-    front = [evaluate(ArchConfig.from_params(f, {"data_width": w, "n_iter": 14, "angle_guard": ag, "rounding": "round", "m": m}), spec)
-             for f, m, w, ag in keys]
-    sl = shortlist(front, spec, 5)
-    assert sl[0]["key"] == front[0]["key"]
-    out = l2_select(front, sl[0], spec)
+    recs = [evaluate(ArchConfig.from_params("pipelined_m", {"data_width": 17, "n_iter": 14, "angle_guard": 1,
+                                                            "rounding": "round", "m": m}), spec) for m in (3, 4, 5)]
+    assert all(r["feasible"] for r in recs)
+    front = merged_front(recs, spec)
+    assert [r["m"] for r in front] == [5]
+    out = l2_select(recs, front[0], spec)
     assert out["status"] == "simulated" and out["winner_changed"]
+    assert out["n_l1_feasible"] == 3 and out["n_simulated_feasible"] == 2
     assert out["selected"]["m"] == 4 and out["selected"]["provenance"]["sys_p99_batch_us"].startswith("simulated")
     assert "fails the simulated system constraints" in out["why"]
+    assert shortlist(recs, spec, 2)[0]["m"] == 5
 
 
 def test_l2_node_on_a_spec_without_a_system_only_reports_facts() -> None:

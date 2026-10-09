@@ -410,6 +410,9 @@ class ReplayArchitect:
         if not ok:
             raise StructuredOutputError("recorded call failed live")
         obj = schema.model_validate(ok[-1])
+        # The prompts the replayed graph sent, so a replay can check its *inputs*
+        # match the recording, not only its outputs (M3 review, N2).
         self.tracer.log({"node": node, "provider": "fake", "model_requested": self.model, "schema": schema.__name__,
-                         "parsed": obj.model_dump(), "usage": {}, "cost_usd": 0.0})
+                         "system": system, "user": user, "recorded_system": call[0].get("system"),
+                         "recorded_user": call[0].get("user"), "parsed": obj.model_dump(), "usage": {}, "cost_usd": 0.0})
         return obj  # type: ignore[return-value]

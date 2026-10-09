@@ -263,7 +263,7 @@ def reexplore(spec: Spec, front: list[dict[str, Any]], selected: dict[str, Any] 
     if spec.system is not None and sel is not None:
         from hw_dse.l2.node import l2_select
 
-        l2 = l2_select(new_front, sel, spec)
+        l2 = l2_select(pool, sel, spec)
         sel, l2_note = l2["selected"], l2.get("why")
     before = selected["key"] if selected else None
     return {

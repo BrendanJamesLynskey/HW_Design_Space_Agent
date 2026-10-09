@@ -9,11 +9,15 @@ memory-off switch).
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import pytest
 
-pytest.importorskip("deepagents")
+if os.environ.get("HW_DSE_REQUIRE_CAMPAIGN") == "1":
+    import deepagents  # noqa: F401  (CI on Python >= 3.11: a missing install must fail, not skip)
+else:
+    pytest.importorskip("deepagents")
 
 from langchain_core.messages import SystemMessage, ToolMessage  # noqa: E402
 
@@ -162,3 +166,17 @@ def test_the_model_call_cap_stops_a_campaign(tmp_path: Path) -> None:
                                      for i in range(10)])
     res = run_campaign([s], chat=chat, model="fake", architect=HeuristicArchitect(), run_root=tmp_path, max_model_calls=3)
     assert res["error"] and "call limit (3)" in res["error"]
+
+
+def test_llm_notes_carry_no_numbers() -> None:
+    """M3 review S5: an LLM note restating tool numbers (and getting them wrong) must
+    not reach memory or the inner architect with its numbers."""
+    from hw_dse.campaign.memory import mask_numbers
+
+    mem = CampaignMemory(enabled=True)
+    mem.remember("note", "low_area_control", "M1 under-predicts LUTs ~19% (216 LUT vs est 159), use m=4", ["r"], "llm")
+    note = mem.lessons(("note",))[0]["lesson"]
+    assert not any(ch.isdigit() for ch in note.replace("M1", ""))
+    assert mask_numbers("2^-12 at 32 MSPS") == "#^# at # MSPS"
+    mem.remember("family", "iterative", "explored in 3 spec(s) (353 evaluations)", ["r"], "code")
+    assert "353" in mem.lessons(("family",))[0]["lesson"]  # code-written lessons keep their numbers

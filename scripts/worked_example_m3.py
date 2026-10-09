@@ -106,9 +106,21 @@ def main() -> None:
     L += ["", f"The MSPS-only winner meets the 32 requests/µs average, but serving a whole batch of {r_} within 0.44 µs needs "
           f"((32 - 1) + ({mo.latency_cycles} - 1)) cycles / 0.44 µs = {need:.1f} MHz even with perfect alignment, and its "
           f"estimated Fmax is {mo_rec['fmax_mhz']:.1f} MHz. The L1 bound (each tick served alone, starting on a clock edge) admits m=5; the "
-          "simulation adds the clock-domain crossing: a tick lands between CORDIC clock edges, so up to one cycle is lost "
-          "before the first accept, which pushes m=5 just past the deadline and makes m=4 the winner. The L2 node in the "
-          "graph makes exactly this switch when the L1 selection is m=5.", ""]
+          "simulation adds clock-edge alignment: a tick lands between CORDIC clock edges, so up to one cycle passes "
+          "before the first accept, which pushes m=5 just past the deadline and makes m=4 the winner. (No synchroniser is "
+          "modelled; a real clock-domain crossing would add about two cycles.)", ""]
+    from hw_dse.agent.summary import merged_front
+    from hw_dse.l2.node import l2_select
+
+    trio = [evaluate(ArchConfig.from_params("pipelined_m", {"data_width": 17, "n_iter": 14, "angle_guard": 1,
+                                                            "rounding": "round", "m": m}), spec2) for m in (3, 4, 5)]
+    fr = merged_front(trio, spec2)
+    out = l2_select(trio, fr[0], spec2)
+    L += [f"The L2 node makes this switch, and it can only do so because it simulates every L1-feasible design, not the L1 "
+          f"front: with m = 3, 4, 5 of this design evaluated, the L1 front is "
+          f"{', '.join('m=' + str(r['m']) for r in fr)} alone (m=4 has m=5's numerics, so the same accuracy, and more area), "
+          f"and `l2_select` returns m={out['selected']['m']} ({out['n_simulated_feasible']} of {out['n_l1_feasible']} "
+          "L1-feasible designs pass the simulation).", ""]
     OUT.write_text("\n".join(L) + "\n")
     print(f"wrote {OUT}")
 

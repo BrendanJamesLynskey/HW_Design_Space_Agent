@@ -21,7 +21,7 @@ from hw_dse.agent.replay import compare, m2_runs, replay_run
 
 RUNS = m2_runs()
 SAMPLE = {
-    ("qwen/qwen3.8-27b", "high_precision", 4),        # the M2 blind-spot run (+71.7% regret)
+    ("qwen/qwen3.8-27b", "high_precision", 1),        # the M2 blind-spot run (+71.7% regret)
     ("deepseek/deepseek-v4.1-flash", "dds_250msps", 0),  # map_front x3
     ("anthropic/claude-sonnet-5.5", "infeasible_dds_400msps", 0),
     ("anthropic/claude-sonnet-5.5", "low_area_control", 0),
