@@ -178,3 +178,4 @@
 {"model": "deepseek/deepseek-v4.1-flash", "spec": "low_area_control", "seed": 1, "cost_usd": 0.017148807168, "arm": "campaign", "ts": "2026-10-09T18:13:14", "milestone": "m3"}
 {"model": "qwen/qwen3.8-27b", "spec": "dds_250msps", "seed": 2, "cost_usd": 0.011165878, "arm": "campaign", "ts": "2026-10-09T18:14:28", "milestone": "m3", "note": "memory-on"}
 {"model": "deepseek/deepseek-v4.1-flash", "spec": "multiaxis_control", "seed": 1, "cost_usd": 0.023690443, "arm": "campaign", "ts": "2026-10-09T18:15:16", "milestone": "m3"}
+{"model": "qwen/qwen3.8-27b", "spec": "bursty_offload", "seed": 1, "cost_usd": 0.014265103000000001, "arm": "campaign", "ts": "2026-10-09T18:15:39", "milestone": "m3"}
