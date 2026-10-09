@@ -516,37 +516,40 @@
      "20261009-180432-41b1",
      "20261009-180818-45e2"
     ],
-    "updated": "2026-10-09T18:14:28"
+    "updated": "2026-10-09T18:18:13"
    },
    "pipelined": {
     "author": "code",
-    "lesson": "`pipelined`: explored in 3 spec(s) (267 evaluations), on the front in 1; on the front in dds_250msps",
+    "lesson": "`pipelined`: explored in 4 spec(s) (517 evaluations), on the front in 2; on the front in dds_250msps, multiaxis_control",
     "run_ids": [
      "20261009-180432-41b1",
      "20261009-180818-45e2",
-     "20261009-181137-7737"
+     "20261009-181137-7737",
+     "20261009-181428-7daf"
     ],
-    "updated": "2026-10-09T18:14:28"
+    "updated": "2026-10-09T18:18:13"
    },
    "pipelined_m": {
     "author": "code",
-    "lesson": "`pipelined_m`: explored in 3 spec(s) (485 evaluations), on the front in 1; on the front in bursty_offload",
+    "lesson": "`pipelined_m`: explored in 4 spec(s) (602 evaluations), on the front in 2; on the front in bursty_offload, multiaxis_control",
     "run_ids": [
      "20261009-180432-41b1",
      "20261009-180818-45e2",
-     "20261009-181137-7737"
+     "20261009-181137-7737",
+     "20261009-181428-7daf"
     ],
-    "updated": "2026-10-09T18:14:28"
+    "updated": "2026-10-09T18:18:13"
    },
    "unrolled_k": {
     "author": "code",
-    "lesson": "`unrolled_k`: explored in 3 spec(s) (115 evaluations), on the front in 0; never reached a front on this device so far",
+    "lesson": "`unrolled_k`: explored in 4 spec(s) (148 evaluations), on the front in 0; never reached a front on this device so far",
     "run_ids": [
      "20261009-180432-41b1",
      "20261009-180818-45e2",
-     "20261009-181137-7737"
+     "20261009-181137-7737",
+     "20261009-181428-7daf"
     ],
-    "updated": "2026-10-09T18:14:28"
+    "updated": "2026-10-09T18:18:13"
    }
   },
   "hw_dse/memory/note": {
@@ -573,6 +576,14 @@
      "20261009-181137-7737"
     ],
     "updated": "2026-10-09T18:14:15"
+   },
+   "note/multiaxis_control": {
+    "author": "llm",
+    "lesson": "For 32-req-per-tick batch specs (p99<=0.44us, min LUTs+FFs): pipelined_m m=2 dominated the front (dw 19..20, n_iter 14..16); winner pipelined_m dw=19/n_iter=14/m=2/trunc (est 1417 LUTs+FFs, 12.4 bits, 164 MSPS, sim p99 0.243us). L1 analytic p99 under-predicted sim by ~2.5% (0.237->0.243), much less than the ~1.4-1.5x on the bursty spec. No recorded L3/L4 rows for pipelined_m, so no measured confirmation.",
+    "run_ids": [
+     "20261009-181428-7daf"
+    ],
+    "updated": "2026-10-09T18:18:00"
    }
   },
   "hw_dse/memory/spec_class": {
@@ -582,7 +593,7 @@
     "run_ids": [
      "20261009-181137-7737"
     ],
-    "updated": "2026-10-09T18:14:28"
+    "updated": "2026-10-09T18:18:13"
    },
    "low-rate (< 10 MSPS), no system scenario": {
     "author": "code",
@@ -590,7 +601,7 @@
     "run_ids": [
      "20261009-180432-41b1"
     ],
-    "updated": "2026-10-09T18:14:28"
+    "updated": "2026-10-09T18:18:13"
    },
    "low-rate (< 10 MSPS), system: bursty": {
     "author": "code",
@@ -598,7 +609,15 @@
     "run_ids": [
      "20261009-180818-45e2"
     ],
-    "updated": "2026-10-09T18:14:28"
+    "updated": "2026-10-09T18:18:13"
+   },
+   "mid-rate (10-100 MSPS), system: control_loop": {
+    "author": "code",
+    "lesson": "spec class 'mid-rate (10-100 MSPS), system: control_loop': 1 front-mapping round(s) in 1 spec run(s), mean HV gain +79.6% (min +79.6%, max +79.6%)",
+    "run_ids": [
+     "20261009-181428-7daf"
+    ],
+    "updated": "2026-10-09T18:18:13"
    }
   },
   "hw_dse/observations/family": {
@@ -678,6 +697,27 @@
     "on_front": false,
     "run_id": "20261009-181137-7737",
     "spec": "dds_250msps"
+   },
+   "20261009-181428-7daf|multiaxis_control|pipelined": {
+    "evals": 250,
+    "family": "pipelined",
+    "on_front": true,
+    "run_id": "20261009-181428-7daf",
+    "spec": "multiaxis_control"
+   },
+   "20261009-181428-7daf|multiaxis_control|pipelined_m": {
+    "evals": 117,
+    "family": "pipelined_m",
+    "on_front": true,
+    "run_id": "20261009-181428-7daf",
+    "spec": "multiaxis_control"
+   },
+   "20261009-181428-7daf|multiaxis_control|unrolled_k": {
+    "evals": 33,
+    "family": "unrolled_k",
+    "on_front": false,
+    "run_id": "20261009-181428-7daf",
+    "spec": "multiaxis_control"
    }
   },
   "hw_dse/observations/spec_class": {
@@ -702,6 +742,14 @@
     "mapping_gains": [],
     "run_id": "20261009-181137-7737",
     "spec": "dds_250msps"
+   },
+   "20261009-181428-7daf|multiaxis_control": {
+    "class": "mid-rate (10-100 MSPS), system: control_loop",
+    "mapping_gains": [
+     0.7958127608793795
+    ],
+    "run_id": "20261009-181428-7daf",
+    "spec": "multiaxis_control"
    }
   }
  }
