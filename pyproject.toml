@@ -39,7 +39,7 @@ hw-dse = "hw_dse.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-hw_dse = ["models/*.yaml"]
+hw_dse = ["models/*.yaml", "synth/*.csv"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

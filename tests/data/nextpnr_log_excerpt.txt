@@ -1,0 +1,5 @@
+Info: 	          SLICE_LUTX:   195/65200     0%
+Info: 	           SLICE_FFX:    56/65200     0%
+Info: 	              CARRY4:    14/ 8150     0%
+Info: Max frequency for clock '$abc$5495$aiger$o178': 151.22 MHz (PASS at 100.00 MHz)
+Info: Max frequency for clock '$abc$5495$aiger$o178': 172.15 MHz (PASS at 100.00 MHz)

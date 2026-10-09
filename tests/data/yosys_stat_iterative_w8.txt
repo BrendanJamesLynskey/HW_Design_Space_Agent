@@ -1,0 +1,27 @@
+
+3. Printing statistics.
+
+=== cordic_iterative_w8_n6_ap0_g0_trunc ===
+
+        +----------Local Count, excluding submodules.
+        | 
+      221 wires
+      466 wire bits
+       18 public wires
+      101 public wire bits
+        8 ports
+       29 port bits
+      202 cells
+        1   BUFG
+       14   CARRY4
+       52   FDRE
+        4   FDSE
+       11   IBUF
+       13   INV
+       11   LUT2
+        7   LUT3
+       17   LUT4
+       42   LUT5
+       12   LUT6
+       18   OBUF
+

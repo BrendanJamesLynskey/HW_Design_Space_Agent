@@ -119,7 +119,7 @@ def simulate(sources: list[Path], top: str, width: int, angles: np.ndarray, simu
 
 
 def _run(cmd: list[str], timeout_s: float) -> None:
-    p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_s)
+    p = subprocess.run(cmd, capture_output=True, text=True, errors="replace", timeout=timeout_s)
     if p.returncode != 0:
         raise RuntimeError(f"{cmd[0]} failed ({p.returncode}):\n{p.stdout[-3000:]}\n{p.stderr[-3000:]}")
 
