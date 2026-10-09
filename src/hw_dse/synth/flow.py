@@ -190,7 +190,7 @@ class Runner:
                 "runner": self.mode + (f":{self.image}" if self.mode == "docker" else "")}
 
     def cells_sim(self, dest: Path) -> Path:
-        """Copy Yosys's Xilinx simulation models (matching *this* Yosys) to ``dest``."""
+        """Copy Yosys's 7-series cell simulation models (xilinx/cells_sim.v) (matching *this* Yosys) to ``dest``."""
         dest.mkdir(parents=True, exist_ok=True)
         if self.mode == "docker":
             self.run("cp $(yosys-config --datdir)/xilinx/cells_sim.v /work/cells_sim.v", dest)
