@@ -1,0 +1,1 @@
+iterative:data_width=24,n_iter=14,angle_guard=0,frac_guard=0,rounding=trunc
