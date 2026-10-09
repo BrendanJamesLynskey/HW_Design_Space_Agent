@@ -1,0 +1,31 @@
+1. Slice Logic
+--------------
+
++-------------------------+------+-------+------------+-----------+-------+
+|        Site Type        | Used | Fixed | Prohibited | Available | Util% |
++-------------------------+------+-------+------------+-----------+-------+
+| Slice LUTs*             |  745 |     0 |          0 |     20800 |  3.58 |
+|   LUT as Logic          |  745 |     0 |          0 |     20800 |  3.58 |
+|   LUT as Memory         |    0 |     0 |          0 |      9600 |  0.00 |
+| Slice Registers         |  784 |     0 |          0 |     41600 |  1.88 |
+|   Register as Flip Flop |  784 |     0 |          0 |     41600 |  1.88 |
+|   Register as Latch     |    0 |     0 |          0 |     41600 |  0.00 |
+| F7 Muxes                |    0 |     0 |          0 |     16300 |  0.00 |
+| F8 Muxes                |    0 |     0 |          0 |      8150 |  0.00 |
+| Unique Control Sets     |    2 |       |          0 |      8150 |  0.02 |
+| Ref Name | Used | Functional Category |
++----------+------+---------------------+
+| FDRE     |  784 |        Flop & Latch |
+| LUT3     |  501 |                 LUT |
+| LUT2     |  203 |                 LUT |
+| CARRY4   |  201 |          CarryLogic |
+| LUT1     |   81 |                 LUT |
+| OBUF     |   33 |                  IO |
+| IBUF     |   20 |                  IO |
+| BUFG     |    1 |               Clock |
++----------+------+---------------------+
+
+
+8. Black Boxes
+--------------
+

@@ -162,3 +162,30 @@ def test_back_annotate_node_runs_in_the_graph(tmp_path: Path) -> None:
     assert res["selected"]["key"] == "iterative:data_width=16,n_iter=14,angle_guard=0,frac_guard=0,rounding=trunc"
     report = (Path(res["run_dir"]) / "report.md").read_text()
     assert "L5 back-annotation" in report and "measured (yosys" in report
+
+
+def test_vivado_points_export_and_collect(tmp_path: Path) -> None:
+    """The Vivado PR path, offline: export the 8 designs, fake Vivado's reports from
+    excerpts of the anchors' real reports, collect into a schema-valid CSV."""
+    import importlib.util
+
+    spec_ = importlib.util.spec_from_file_location("vivado_points", ROOT / "scripts" / "vivado_points.py")
+    vp = importlib.util.module_from_spec(spec_)
+    spec_.loader.exec_module(vp)  # type: ignore[union-attr]
+    data = ROOT / "tests" / "data" / "vivado"
+    util = (data / "utilization_excerpt.rpt").read_text()
+    timing = (data / "timing_excerpt.rpt").read_text()
+    assert vp.parse_utilization(util) == {"luts": 745, "ffs": 784, "carry4": 201}
+    assert vp.parse_wns(timing) == 6.336
+    vp.export(tmp_path / "vp", route=False)
+    dirs = [d for d in (tmp_path / "vp").iterdir() if d.is_dir()]
+    assert len(dirs) == 8 and (tmp_path / "vp" / "run_all.sh").exists()
+    tcl = (dirs[0] / "run.tcl").read_text()
+    assert "synth_design -top" in tcl and "xc7a35tcpg236-1" in tcl and "route_design" not in tcl
+    for d in dirs:  # pretend Vivado ran
+        (d / "utilization.rpt").write_text(util)
+        (d / "timing.rpt").write_text(timing)
+    out = tmp_path / "vivado.csv"
+    vp.collect(tmp_path / "vp", out, "2025.2")
+    pts = measured.load(out)
+    assert len(pts) == 8 and all(p.tool == "vivado" and p.fmax_mhz == round(1000 / (10 - 6.336), 2) for p in pts)
