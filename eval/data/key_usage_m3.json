@@ -43,6 +43,30 @@
    "usage_usd": 4.280526004,
    "limit_usd": 10,
    "limit_remaining_usd": 5.719473996
+  },
+  "after_qwen_deepseek_arms": {
+   "ts": "2026-10-09T19:27:54Z",
+   "usage_usd": 6.694363901,
+   "limit_usd": 10,
+   "limit_remaining_usd": 3.305636099
+  },
+  "after_sonnet_campaign_1": {
+   "ts": "2026-10-09T19:29:11Z",
+   "usage_usd": 6.771989971,
+   "limit_usd": 10,
+   "limit_remaining_usd": 3.228010029
+  },
+  "after_sonnet_campaigns": {
+   "ts": "2026-10-09T19:33:50Z",
+   "usage_usd": 7.766393971,
+   "limit_usd": 10,
+   "limit_remaining_usd": 2.2336060289999997
+  },
+  "after_eval": {
+   "ts": "2026-10-09T19:34:30Z",
+   "usage_usd": 7.766393971,
+   "limit_usd": 10,
+   "limit_remaining_usd": 2.2336060289999997
   }
  }
 }

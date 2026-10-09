@@ -835,6 +835,85 @@ What this says, honestly:
   reasoning off made it **≈15× faster by wall-clock** (720 s vs 48 s per run on average)
   and ≈8× cheaper, not "~10×".
 
+## Eval M3: system specs, the A/B, memory on vs off
+
+Full tables, regenerated from committed data: the M3 section at the end of
+[`eval/results.md`](eval/results.md). Models re-confirmed in `/api/v1/models` with `tools` and
+`structured_outputs` on 2026-10-09 (no substitution). Cells are mean ± population std over seeds;
+400 L1 evaluations per spec for every method.
+
+**Structured graph on the new system specs** (5 seeds × 3 models, fresh live runs; baselines
+NSGA-II / random get the same L1 screening and the same L2 shortlist step; scored on
+*simulated* feasibility against the exhaustive ground truth):
+
+| spec | NSGA-II | random | Sonnet 5.5 | DeepSeek V4.1 Flash | Qwen3.8-27B, reasoning off |
+|---|---|---|---|---|---|
+| multiaxis_control HV | 0.806 ± 0.071 | 0.633 ± 0.032 | 0.839 ± 0.019 | 0.857 ± 0.016 | 0.841 ± 0.027 |
+| multiaxis_control regret | +16.0 ± 7.0% | +33.1 ± 10.5% | **+3.2 ± 2.3%** | +11.8 ± 5.0% | +4.9 ± 3.8% |
+| bursty_offload HV | 0.840 ± 0.020 | 0.733 ± 0.032 | 0.859 ± 0.025 | 0.869 ± 0.013 | 0.838 ± 0.030 |
+| bursty_offload regret | +26.7 ± 6.4% | +31.7 ± 11.6% | **+9.1 ± 5.1%** | +9.4 ± 8.8% | +15.8 ± 6.5% |
+
+Every selected design met the spec (simulated). The agents keep the M2 pattern: HV at or above
+NSGA-II and much lower regret. **L2 changed the L1 selection in 0 of 30 live runs**: the
+fronts the agents found did not put a design on the bound-vs-simulation boundary first, so the
+re-selection the ground truth shows (m=5 → m=4 on `multiaxis_control`) and the unit tests
+exercise never triggered live. Honest reading: on these specs the L1 bound did the work, and L2
+was a check that passed.
+
+**A/B: structured graph vs campaign agent** (same specs, seeds and budget; the structured arm
+reuses the M2 live runs on the four M2 specs, which the replay proof allows, and the fresh runs
+above on the system specs; campaign = one single-spec campaign per spec and seed, memory off):
+
+| model | HV, mean over the 5 feasible specs (structured → campaign) | regret, same | cost / run | input tokens / run | wall / run | failures |
+|---|---|---|---|---|---|---|
+| DeepSeek V4.1 Flash (30 → 30 runs) | 0.905 → 0.893 | +7.3% → +7.8% | $0.012 → $0.020 | 13k → 80k | 99 → 133 s | 0/30 → 0/30 |
+| Qwen3.8-27B, reasoning off (30 → 30) | 0.872 → 0.819 | +9.2% → +19.1% | $0.008 → $0.011 | 10k → 90k | 60 → 178 s | 0/30 → **4/30** |
+| Sonnet 5.5 (`multiaxis_control` only, 5 → 5) | 0.839 → 0.833 | +3.2% → +7.5% | $0.100 → $0.224 | 24k → 86k | 45 → 62 s | 0 → 0 |
+
+(Per-spec cells in `eval/results.md`. Structured HV/regret for DeepSeek and Qwen are the means of
+their five per-spec means; the infeasible spec is excluded from HV/regret and was called
+correctly by every run of both arms.)
+
+**The free-form loop loses, mildly, and costs more.** In 52 of 65 campaigns the agent spent its
+whole budget on one `run_dse(400)` (so its result is the structured graph's plus sampling noise)
+and then walked the ladder; it called `explore_family` in 13, `simulate_system` in 50, L3 in 55,
+`back_annotate` in 61 and `reexplore` once (the one flagged winner change it met). Where it
+deviated, it did not help: on `low_area_control` seed 0 its `notes` to the inner architect ("keep
+accuracy at the constraint floor") narrowed the first box and the run ended at HV 0.097,
++224% regret; on the infeasible spec it spent the remaining budget re-checking infeasibility
+(400 evaluations vs 100–180; still correct in 10/10). Qwen failed 4 of 30 campaigns by
+re-running verify/synthesize/back_annotate until the 40-call cap (every failed campaign had
+already used its 400 evaluations, so it is still scored). The campaign costs 1.4× (Qwen), 1.6×
+(DeepSeek) and 2.2× (Sonnet) per spec, with 3.5–9× the input tokens. What it did add: the ladder
+walked for every spec (L2, L3 recorded or fresh, L4 recorded, L5) and a forced re-plan when
+recorded data flagged the winner, which the structured graph also does in code.
+
+**Memory on vs off** (Qwen, sequence `low_area_control → bursty_offload → dds_250msps →
+multiaxis_control`, seeds 0–2; off = the campaign arm's runs):
+
+| spec (position) | HV off → on | regret off → on |
+|---|---|---|
+| low_area_control (1, empty store in both) | 0.564 ± 0.335 → 0.915 ± 0.016 | +89.2 ± 96.9% → +2.2 ± 3.1% |
+| bursty_offload (2) | 0.869 ± 0.028 → 0.881 ± 0.035 | +9.9 ± 6.9% → +11.1 ± 2.6% |
+| dds_250msps (3) | 0.872 ± 0.001 → 0.650 ± 0.213 | +5.0 ± 1.3% → +3.3 ± 1.3% |
+| multiaxis_control (4) | 0.826 ± 0.013 → 0.706 ± 0.079 | +4.1 ± 2.6% → +17.8 ± 10.8% |
+
+**No benefit from memory is visible.** Position 1 has an empty store in both conditions, so its
+large gap is run-to-run noise of the campaign (the seed-0 `notes` outlier above), which also
+tells how wide the noise is at 3 seeds. Later in the sequence memory-on is worse on HV for
+`dds_250msps` and `multiaxis_control` and worse on regret for `multiaxis_control`. The lessons
+were sensible (e.g. "`unrolled_k`: explored in 3 specs (63 evaluations), on the front in 0; never
+reached a front on this device so far"); passing them to the inner architect as `notes` seems to
+narrow its boxes, as in the seed-0 outlier. 3 seeds, one model: weak evidence either way.
+
+**Spend** (`eval/data/spend_ledger.jsonl`, `eval/data/key_usage_m3.json`): the key's usage went
+from **$4.1889** (session start, 2026-10-09T16:28:55Z) to **$7.7664** (2026-10-09T19:34:30Z):
+**$3.58 for M3**, under the $5 cap. Provider-reported ledger: $3.49 over 114 entries (structured
+$1.19, campaign $2.30 incl. memory-on $0.15 and pilots $0.08); the gap is calls that fail inside
+the client and report no usage. Pilots on the cheapest model first: structured (Qwen,
+`multiaxis_control` seed 0) $0.0095; campaign attempt 1 failed ($0.058, the `ls` loop above),
+attempt 2 succeeded ($0.018).
+
 ## Limitations
 
 - **The eval's cost model is still the two-anchor Vivado calibration.** It is the default
@@ -882,9 +961,24 @@ What this says, honestly:
   documented angle sets (exhaustive for W ≤ 16, up to 131,072 deduplicated angles above, so a lower bound on
   the worst case there). Gate-level simulation is zero-delay on the Yosys netlist, not the
   post-route netlist. Formal proofs cover W = 8 only (larger widths are simulated).
-- **Back-annotation reports; it does not re-explore.** `back_annotate` flags a winner
-  change but does not restart the search, and it only sees front designs that have
-  measurements.
+- **The L5 loop re-explores under the refit, but only around measured designs, with a
+  separate 60-evaluation budget**, and its result (`l5_selected`) is an estimate under the refit;
+  it is not scored against the (M1-model) ground truth. `back_annotate` still only sees front
+  designs that have measurements.
+- **L2 is a model, not silicon.** System metrics run the CORDIC at its *estimated* Fmax; the
+  interface contract is verified against the RTL, the clock is not. The L1 bound can be far
+  from the simulation (bursty: p99 2× the bound for an FSM design), so a spec whose winner sits
+  near a system limit can have its whole L1 shortlist rejected at L2 (with a 1.0 µs limit on
+  `bursty_offload`, 186,457 designs pass the bound and 151,528 the simulation; not used in the eval).
+- **Two system specs, and L2 never re-selected live.** The winner-change evidence is the
+  exhaustive ground truth and the tests; in the 30 live runs the L1 selection always passed L2.
+  The DDS scenario's constraints reduce to the MSPS-only view for this design space.
+- **The campaign A/B is small and partly reused.** Two models over all six specs (Sonnet only on
+  `multiaxis_control`, for the spend cap), 5 seeds; the structured arm on the M2 specs is the
+  M2 runs (identical graph by replay, but sampled on a different day). Memory on/off: one
+  model, 3 seeds. The campaign agent's notes copy numbers from tool outputs into memory; they
+  are labelled as LLM-authored and nothing reads a number back from them.
+- **`deepagents` needs Python ≥ 3.11**; on 3.10 the campaign extra is skipped and its tests skip.
 - **Lever tuning used replays.** The levers were tuned on recorded M1 decisions; a replay
   cannot show how the LLM would react to different summaries. The live 5-seed eval is
   the test, and it is a small sample per model and spec.

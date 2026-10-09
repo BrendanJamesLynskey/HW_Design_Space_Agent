@@ -361,10 +361,10 @@ Gated (the M3 default, `LEVERS_M3`; structural constraints must have been met by
 | baseline (a): NSGA-II + L2 shortlist | 5 | 400 ± 0 | 0.806 ± 0.071 | not reached (0/5) | 5/5 | +16.0% ± 7.0 (0/5) | 5/5 |
 | baseline (b): random + L2 shortlist | 5 | 400 ± 0 | 0.633 ± 0.032 | not reached (0/5) | 5/5 | +33.1% ± 10.5 (0/5) | 5/5 |
 | structured: `anthropic/claude-sonnet-5.5` | 5 | 400 ± 0 | 0.839 ± 0.019 | not reached (0/5) | 5/5 | +3.2% ± 2.3 (1/5) | 5/5 |
-| structured: `deepseek/deepseek-v4.1-flash` | 2 | 400 ± 0 | 0.853 ± 0.009 | not reached (0/2) | 2/2 | +11.3% ± 3.0 (0/2) | 2/2 |
+| structured: `deepseek/deepseek-v4.1-flash` | 5 | 400 ± 0 | 0.857 ± 0.016 | not reached (0/5) | 5/5 | +11.8% ± 5.0 (0/5) | 5/5 |
 | structured: `qwen/qwen3.8-27b, reasoning off` | 5 | 400 ± 0 | 0.841 ± 0.027 | not reached (0/5) | 5/5 | +4.9% ± 3.8 (1/5) | 5/5 |
 
-L2 changed the L1 selection in: `anthropic/claude-sonnet-5.5` 0/5; `deepseek/deepseek-v4.1-flash` 0/2; `qwen/qwen3.8-27b, reasoning off` 0/5 runs.
+L2 changed the L1 selection in: `anthropic/claude-sonnet-5.5` 0/5; `deepseek/deepseek-v4.1-flash` 0/5; `qwen/qwen3.8-27b, reasoning off` 0/5 runs.
 
 ### bursty_offload
 
@@ -372,9 +372,11 @@ L2 changed the L1 selection in: `anthropic/claude-sonnet-5.5` 0/5; `deepseek/dee
 |---|---|---|---|---|---|---|---|
 | baseline (a): NSGA-II + L2 shortlist | 5 | 400 ± 0 | 0.840 ± 0.020 | not reached (0/5) | 5/5 | +26.7% ± 6.4 (0/5) | 5/5 |
 | baseline (b): random + L2 shortlist | 5 | 400 ± 0 | 0.733 ± 0.032 | not reached (0/5) | 5/5 | +31.7% ± 11.6 (0/5) | 5/5 |
-| structured: `anthropic/claude-sonnet-5.5` | 4 | 400 ± 0 | 0.868 ± 0.017 | not reached (0/4) | 4/4 | +10.7% ± 4.4 (0/4) | 4/4 |
+| structured: `anthropic/claude-sonnet-5.5` | 5 | 400 ± 0 | 0.859 ± 0.025 | not reached (0/5) | 5/5 | +9.1% ± 5.1 (0/5) | 5/5 |
+| structured: `deepseek/deepseek-v4.1-flash` | 5 | 400 ± 0 | 0.869 ± 0.013 | not reached (0/5) | 5/5 | +9.4% ± 8.8 (1/5) | 5/5 |
+| structured: `qwen/qwen3.8-27b, reasoning off` | 5 | 400 ± 0 | 0.838 ± 0.030 | not reached (0/5) | 5/5 | +15.8% ± 6.5 (0/5) | 5/5 |
 
-L2 changed the L1 selection in: `anthropic/claude-sonnet-5.5` 0/4; `deepseek/deepseek-v4.1-flash` 0/0; `qwen/qwen3.8-27b, reasoning off` 0/0 runs.
+L2 changed the L1 selection in: `anthropic/claude-sonnet-5.5` 0/5; `deepseek/deepseek-v4.1-flash` 0/5; `qwen/qwen3.8-27b, reasoning off` 0/5 runs.
 
 ## A/B: structured graph vs campaign agent (same specs, seeds, budget)
 
@@ -384,54 +386,118 @@ Structured arm: the M2 live runs on the four M2 specs (replay-proven identical g
 
 | spec | `anthropic/claude-sonnet-5.5` | `deepseek/deepseek-v4.1-flash` | `qwen/qwen3.8-27b, reasoning off` |
 |---|---|---|---|
-| dds_250msps | 0.839 ± 0.079 → **—** | 0.897 ± 0.048 → **0.882** | 0.898 ± 0.036 → **0.871** |
-| high_precision | 0.975 ± 0.004 → **—** | 0.982 ± 0.012 → **0.984** | 0.895 ± 0.159 → **0.957** |
-| infeasible_dds_400msps | n/a → **—** | n/a → **—** | n/a → **—** |
-| low_area_control | 0.876 ± 0.025 → **—** | 0.919 ± 0.044 → **—** | 0.889 ± 0.011 → **—** |
-| multiaxis_control | 0.839 ± 0.019 → **—** | 0.853 ± 0.009 → **—** | 0.841 ± 0.027 → **—** |
-| bursty_offload | 0.868 ± 0.017 → **—** | — → **—** | — → **—** |
+| dds_250msps | 0.839 ± 0.079 → **—** | 0.897 ± 0.048 → **0.897 ± 0.059** | 0.898 ± 0.036 → **0.869 ± 0.004** |
+| high_precision | 0.975 ± 0.004 → **—** | 0.982 ± 0.012 → **0.980 ± 0.006** | 0.895 ± 0.159 → **0.895 ± 0.153** |
+| infeasible_dds_400msps | n/a → **—** | n/a → **n/a** | n/a → **n/a** |
+| low_area_control | 0.876 ± 0.025 → **—** | 0.919 ± 0.044 → **0.878 ± 0.051** | 0.889 ± 0.011 → **0.694 ± 0.304** |
+| multiaxis_control | 0.839 ± 0.019 → **0.833 ± 0.029** | 0.857 ± 0.016 → **0.831 ± 0.020** | 0.841 ± 0.027 → **0.817 ± 0.018** |
+| bursty_offload | 0.859 ± 0.025 → **—** | 0.869 ± 0.013 → **0.878 ± 0.010** | 0.838 ± 0.030 → **0.820 ± 0.069** |
 
 **selection regret** (structured → campaign)
 
 | spec | `anthropic/claude-sonnet-5.5` | `deepseek/deepseek-v4.1-flash` | `qwen/qwen3.8-27b, reasoning off` |
 |---|---|---|---|
-| dds_250msps | +5.5% ± 2.8 → **—** | +7.6% ± 1.2 → **+0.0%** | +4.0% ± 2.7 → **+6.5%** |
-| high_precision | +3.9% ± 0.6 → **—** | +2.7% ± 1.9 → **+2.4%** | +17.5% ± 27.2 → **+6.5%** |
-| infeasible_dds_400msps | n/a → **—** | n/a → **—** | n/a → **—** |
-| low_area_control | +1.4% ± 1.3 → **—** | +5.1% ± 3.3 → **—** | +3.7% ± 0.7 → **—** |
-| multiaxis_control | +3.2% ± 2.3 → **—** | +11.3% ± 3.0 → **—** | +4.9% ± 3.8 → **—** |
-| bursty_offload | +10.7% ± 4.4 → **—** | — → **—** | — → **—** |
+| dds_250msps | +5.5% ± 2.8 → **—** | +7.6% ± 1.2 → **+4.4% ± 3.5** | +4.0% ± 2.7 → **+5.0% ± 2.3** |
+| high_precision | +3.9% ± 0.6 → **—** | +2.7% ± 1.9 → **+3.1% ± 0.9** | +17.5% ± 27.2 → **+17.5% ± 26.1** |
+| infeasible_dds_400msps | n/a → **—** | n/a → **n/a** | n/a → **n/a** |
+| low_area_control | +1.4% ± 1.3 → **—** | +5.1% ± 3.3 → **+4.1% ± 1.2** | +3.7% ± 0.7 → **+54.8% ± 86.1** |
+| multiaxis_control | +3.2% ± 2.3 → **+7.5% ± 4.5** | +11.8% ± 5.0 → **+13.0% ± 6.7** | +4.9% ± 3.8 → **+6.3% ± 4.4** |
+| bursty_offload | +9.1% ± 5.1 → **—** | +9.4% ± 8.8 → **+14.3% ± 7.5** | +15.8% ± 6.5 → **+11.9% ± 5.9** |
 
 **L1 evaluations used** (structured → campaign)
 
 | spec | `anthropic/claude-sonnet-5.5` | `deepseek/deepseek-v4.1-flash` | `qwen/qwen3.8-27b, reasoning off` |
 |---|---|---|---|
-| dds_250msps | 400 ± 0 → **—** | 400 ± 0 → **400** | 400 ± 0 → **400** |
-| high_precision | 400 ± 0 → **—** | 400 ± 0 → **400** | 400 ± 0 → **400** |
-| infeasible_dds_400msps | 100 ± 0 → **—** | 180 ± 40 → **—** | 100 ± 0 → **—** |
-| low_area_control | 400 ± 0 → **—** | 400 ± 0 → **—** | 400 ± 0 → **—** |
-| multiaxis_control | 400 ± 0 → **—** | 400 ± 0 → **—** | 400 ± 0 → **—** |
-| bursty_offload | 400 ± 0 → **—** | — → **—** | — → **—** |
+| dds_250msps | 400 ± 0 → **—** | 400 ± 0 → **400 ± 0** | 400 ± 0 → **400 ± 0** |
+| high_precision | 400 ± 0 → **—** | 400 ± 0 → **400 ± 0** | 400 ± 0 → **400 ± 0** |
+| infeasible_dds_400msps | 100 ± 0 → **—** | 180 ± 40 → **400 ± 0** | 100 ± 0 → **400 ± 0** |
+| low_area_control | 400 ± 0 → **—** | 400 ± 0 → **400 ± 0** | 400 ± 0 → **400 ± 0** |
+| multiaxis_control | 400 ± 0 → **400 ± 0** | 400 ± 0 → **400 ± 0** | 400 ± 0 → **400 ± 0** |
+| bursty_offload | 400 ± 0 → **—** | 400 ± 0 → **400 ± 0** | 400 ± 0 → **400 ± 0** |
 
 **Cost, tokens, time and failures per run** (structured → campaign; all specs)
 
 | model | runs | input tokens / run | output tokens / run | cost / run (USD) | wall time / run (s) | failure rate |
 |---|---|---|---|---|---|---|
-| `anthropic/claude-sonnet-5.5` | 29 → 0 | 18637 ± 6312 → — | 3664 ± 1119 → — | 0.0739 ± 0.0217 → — | 32 ± 9 → — | 0/29 → — |
-| `deepseek/deepseek-v4.1-flash` | 22 → 2 | 11917 ± 3411 → 72236 ± 2958 | 12297 ± 4632 → 18826 ± 2403 | 0.0117 ± 0.0042 → 0.0224 ± 0.0016 | 87 ± 53 → 148 ± 67 | 0/22 → 0/2 |
-| `qwen/qwen3.8-27b, reasoning off` | 25 → 2 | 9783 ± 3658 → 84490 ± 12860 | 2835 ± 959 → 4678 ± 348 | 0.0075 ± 0.0019 → 0.0100 ± 0.0014 | 53 ± 23 → 190 ± 66 | 0/25 → 0/2 |
+| `anthropic/claude-sonnet-5.5` | 30 → 5 | 18782 ± 6255 → 85627 ± 4049 | 3706 ± 1124 → 5301 ± 981 | 0.0746 ± 0.0217 → 0.2243 ± 0.0056 | 33 ± 9 → 62 ± 6 | 0/30 → 0/5 |
+| `deepseek/deepseek-v4.1-flash` | 30 → 30 | 13170 ± 3677 → 80312 ± 10673 | 13059 ± 4993 → 18724 ± 4620 | 0.0123 ± 0.0042 → 0.0199 ± 0.0048 | 99 ± 81 → 133 ± 117 | 0/30 → 0/30 |
+| `qwen/qwen3.8-27b, reasoning off` | 30 → 30 | 10112 ± 3572 → 89869 ± 28280 | 2948 ± 960 → 5006 ± 1177 | 0.0075 ± 0.0019 → 0.0108 ± 0.0024 | 60 ± 30 → 178 ± 91 | 0/30 → 4/30 |
 
 **What the campaign agent did** (tool sequence per run, condensed)
 
+`anthropic/claude-sonnet-5.5`:
+
+- multiaxis_control seed 0: run_dse → simulate_system → verify_rtl → synthesize → back_annotate [run_dse(400)]
+- multiaxis_control seed 1: run_dse → explore_family → explore_family → simulate_system → verify_rtl → synthesize → back_annotate [run_dse(240)]
+- multiaxis_control seed 2: run_dse → simulate_system → verify_rtl → synthesize → back_annotate [run_dse(400)]
+- multiaxis_control seed 3: run_dse → explore_family → simulate_system → verify_rtl → synthesize → back_annotate [run_dse(300)]
+- multiaxis_control seed 4: run_dse → explore_family → simulate_system → verify_rtl → synthesize → back_annotate [run_dse(300)]
+
 `deepseek/deepseek-v4.1-flash`:
 
+- bursty_offload seed 0: run_dse → simulate_system → verify_rtl → synthesize → back_annotate [run_dse(400)]
+- bursty_offload seed 1: run_dse → simulate_system → verify_rtl → synthesize → back_annotate [run_dse(400)]
+- bursty_offload seed 2: run_dse → simulate_system → verify_rtl → synthesize → back_annotate [run_dse(400)]
+- bursty_offload seed 3: run_dse → simulate_system → verify_rtl → synthesize → back_annotate [run_dse(400)]
+- bursty_offload seed 4: run_dse → simulate_system → verify_rtl → synthesize → back_annotate [run_dse(400)]
 - dds_250msps seed 0: run_dse → verify_rtl → synthesize → back_annotate → reexplore → verify_rtl → synthesize → back_annotate [run_dse(400)]; L5 re-explore → `pipelined:data_width=18,n_iter=15,angle_guard=1,frac_guard=0,rounding=round`
+- dds_250msps seed 1: run_dse → simulate_system → verify_rtl → synthesize → back_annotate [run_dse(400)]
+- dds_250msps seed 2: run_dse → verify_rtl → synthesize → back_annotate [run_dse(400)]
+- dds_250msps seed 3: run_dse → verify_rtl → synthesize → back_annotate [run_dse(400)]
+- dds_250msps seed 4: run_dse → simulate_system → verify_rtl → synthesize → back_annotate [run_dse(400)]
 - high_precision seed 0: run_dse → simulate_system → verify_rtl → synthesize → back_annotate [run_dse(400)]
+- high_precision seed 1: run_dse → simulate_system → verify_rtl → synthesize → back_annotate [run_dse(400)]
+- high_precision seed 2: run_dse → simulate_system → verify_rtl → synthesize → back_annotate [run_dse(400)]
+- high_precision seed 3: run_dse → simulate_system → verify_rtl → synthesize → back_annotate [run_dse(400)]
+- high_precision seed 4: run_dse → simulate_system → verify_rtl → synthesize → back_annotate [run_dse(400)]
+- infeasible_dds_400msps seed 0: run_dse → explore_family → explore_family → back_annotate [run_dse(300)]
+- infeasible_dds_400msps seed 1: run_dse → explore_family → explore_family → explore_family → back_annotate [run_dse(100)]
+- infeasible_dds_400msps seed 2: run_dse → explore_family → explore_family → back_annotate [run_dse(200)]
+- infeasible_dds_400msps seed 3: run_dse → explore_family → explore_family → back_annotate [run_dse(200)]
+- infeasible_dds_400msps seed 4: run_dse → explore_family → explore_family → back_annotate [run_dse(200)]
+- low_area_control seed 0: run_dse → simulate_system → verify_rtl → synthesize → back_annotate [run_dse(400)]
+- low_area_control seed 1: run_dse → simulate_system → synthesize → verify_rtl → back_annotate [run_dse(400)]
+- low_area_control seed 2: run_dse → verify_rtl → synthesize → back_annotate [run_dse(400)]
+- low_area_control seed 3: run_dse → simulate_system → verify_rtl → synthesize → back_annotate [run_dse(400)]
+- low_area_control seed 4: run_dse → verify_rtl → synthesize → back_annotate [run_dse(400)]
+- multiaxis_control seed 0: run_dse → simulate_system → synthesize → verify_rtl → back_annotate [run_dse(400)]
+- multiaxis_control seed 1: run_dse → simulate_system → verify_rtl → synthesize → back_annotate [run_dse(400)]
+- multiaxis_control seed 2: run_dse → simulate_system → verify_rtl → synthesize → back_annotate [run_dse(400)]
+- multiaxis_control seed 3: run_dse → simulate_system → verify_rtl → synthesize → back_annotate [run_dse(400)]
+- multiaxis_control seed 4: run_dse → simulate_system → verify_rtl → synthesize → back_annotate [run_dse(400)]
 
 `qwen/qwen3.8-27b, reasoning off`:
 
+- bursty_offload seed 0: run_dse → simulate_system → verify_rtl → synthesize → back_annotate [run_dse(400)]
+- bursty_offload seed 1: run_dse → simulate_system → verify_rtl → synthesize → back_annotate → verify_rtl → synthesize → back_annotate → verify_rtl → synthesize → back_annotate → verify_rtl → synthesize → back_annotate → verify_rtl → synthesize → back_annotate → verify_rtl → synthesize → back_annotate → verify_rtl → synthesize → back_annotate → verify_rtl → synthesize → back_annotate → verify_rtl → synthesize → back_annotate → verify_rtl → synthesize → back_annotate → verify_rtl → synthesize → back_annotate [run_dse(400)]; **failed**: RuntimeError: campaign model call limit (40) exceeded
+- bursty_offload seed 2: run_dse → simulate_system → verify_rtl → synthesize → back_annotate [run_dse(400)]
+- bursty_offload seed 3: run_dse → simulate_system → verify_rtl → synthesize → back_annotate [run_dse(400)]
+- bursty_offload seed 4: run_dse → simulate_system → verify_rtl → synthesize → back_annotate → verify_rtl → synthesize → back_annotate → verify_rtl → synthesize → back_annotate → verify_rtl → synthesize → back_annotate → verify_rtl → synthesize → back_annotate → verify_rtl → synthesize → back_annotate → verify_rtl → synthesize → back_annotate → verify_rtl → synthesize → back_annotate → verify_rtl → synthesize → back_annotate → verify_rtl → synthesize → back_annotate → verify_rtl → synthesize → back_annotate [run_dse(400)]; **failed**: RuntimeError: campaign model call limit (40) exceeded
 - dds_250msps seed 0: run_dse → simulate_system → verify_rtl → synthesize → back_annotate [run_dse(400)]
+- dds_250msps seed 1: run_dse → simulate_system → verify_rtl → synthesize → back_annotate [run_dse(400)]
+- dds_250msps seed 2: run_dse → simulate_system → verify_rtl → synthesize → back_annotate → verify_rtl → synthesize → back_annotate → verify_rtl → synthesize → back_annotate → verify_rtl → synthesize → back_annotate → verify_rtl → synthesize → back_annotate → verify_rtl → synthesize → back_annotate → verify_rtl → synthesize → back_annotate → verify_rtl → synthesize → back_annotate → verify_rtl → synthesize → back_annotate → verify_rtl → synthesize → back_annotate → verify_rtl → synthesize → back_annotate [run_dse(400)]; **failed**: RuntimeError: campaign model call limit (40) exceeded
+- dds_250msps seed 3: run_dse → simulate_system → verify_rtl → synthesize → back_annotate [run_dse(400)]
+- dds_250msps seed 4: run_dse → simulate_system → verify_rtl → synthesize → back_annotate [run_dse(400)]
 - high_precision seed 0: run_dse → simulate_system → verify_rtl → synthesize → back_annotate [run_dse(400)]
+- high_precision seed 1: run_dse → simulate_system → verify_rtl → synthesize → back_annotate [run_dse(400)]
+- high_precision seed 2: run_dse → simulate_system → verify_rtl → synthesize → back_annotate [run_dse(400)]
+- high_precision seed 3: run_dse → simulate_system → verify_rtl → synthesize → back_annotate [run_dse(400)]
+- high_precision seed 4: run_dse → simulate_system → verify_rtl → synthesize → back_annotate [run_dse(400)]
+- infeasible_dds_400msps seed 0: run_dse → explore_family → explore_family → back_annotate [run_dse(200)]
+- infeasible_dds_400msps seed 1: run_dse → explore_family → explore_family [run_dse(100)]
+- infeasible_dds_400msps seed 2: run_dse → explore_family → explore_family → explore_family [run_dse(100)]
+- infeasible_dds_400msps seed 3: run_dse → explore_family → explore_family → explore_family [run_dse(100)]
+- infeasible_dds_400msps seed 4: run_dse → explore_family → explore_family → explore_family [run_dse(100)]
+- low_area_control seed 0: run_dse → simulate_system → verify_rtl → synthesize → back_annotate [run_dse(400)]
+- low_area_control seed 1: run_dse → simulate_system → verify_rtl → synthesize → back_annotate [run_dse(400)]
+- low_area_control seed 2: run_dse → simulate_system → verify_rtl → synthesize → back_annotate → verify_rtl → synthesize → back_annotate [run_dse(400)]
+- low_area_control seed 3: run_dse → simulate_system → verify_rtl → synthesize → back_annotate [run_dse(400)]
+- low_area_control seed 4: run_dse → simulate_system → verify_rtl → synthesize → back_annotate [run_dse(400)]
+- multiaxis_control seed 0: run_dse → simulate_system → verify_rtl → synthesize → back_annotate → verify_rtl → synthesize → back_annotate → verify_rtl → synthesize → back_annotate → verify_rtl → synthesize → back_annotate → verify_rtl → synthesize → back_annotate → verify_rtl → synthesize → back_annotate → verify_rtl → synthesize → back_annotate → verify_rtl → synthesize → back_annotate → verify_rtl → synthesize → back_annotate → verify_rtl → synthesize → back_annotate → verify_rtl → synthesize [run_dse(400)]; **failed**: RuntimeError: campaign model call limit (40) exceeded
+- multiaxis_control seed 1: run_dse → simulate_system → verify_rtl → synthesize → back_annotate [run_dse(400)]
+- multiaxis_control seed 2: run_dse → simulate_system → verify_rtl → synthesize → back_annotate → verify_rtl → synthesize → back_annotate [run_dse(400)]
+- multiaxis_control seed 3: run_dse → simulate_system → verify_rtl → synthesize → back_annotate [run_dse(400)]
+- multiaxis_control seed 4: run_dse → simulate_system → verify_rtl → synthesize → back_annotate → verify_rtl → synthesize → back_annotate [run_dse(400)]
 
 ## Memory on vs off (campaign agent, fixed spec sequence, seeds 0–2)
 
@@ -439,22 +505,26 @@ Sequence: low_area_control → bursty_offload → dds_250msps → multiaxis_cont
 
 | model | spec (position) | HV off → on | regret off → on | evals off → on | cost off → on (USD) |
 |---|---|---|---|---|---|
-| `qwen/qwen3.8-27b, reasoning off` | low_area_control (1) | — → 0.895 | — → +6.5% | — → 400 | — → 0.0140 |
-| `qwen/qwen3.8-27b, reasoning off` | bursty_offload (2) | — → 0.928 | — → +14.7% | — → 400 | — → 0.0119 |
-| `qwen/qwen3.8-27b, reasoning off` | dds_250msps (3) | — → — | — → — | — → — | — → — |
-| `qwen/qwen3.8-27b, reasoning off` | multiaxis_control (4) | — → — | — → — | — → — | — → — |
+| `qwen/qwen3.8-27b, reasoning off` | low_area_control (1) | 0.564 ± 0.335 → 0.915 ± 0.016 | +89.2% ± 96.9 → +2.2% ± 3.1 | 400 ± 0 → 400 ± 0 | 0.0121 ± 0.0027 → 0.0126 ± 0.0011 |
+| `qwen/qwen3.8-27b, reasoning off` | bursty_offload (2) | 0.869 ± 0.028 → 0.881 ± 0.035 | +9.9% ± 6.9 → +11.1% ± 2.6 | 400 ± 0 → 400 ± 0 | 0.0126 ± 0.0012 → 0.0114 ± 0.0004 |
+| `qwen/qwen3.8-27b, reasoning off` | dds_250msps (3) | 0.872 ± 0.001 → 0.650 ± 0.213 | +5.0% ± 1.3 → +3.3% ± 1.3 | 400 ± 0 → 400 ± 0 | 0.0122 ± 0.0009 → 0.0104 ± 0.0006 |
+| `qwen/qwen3.8-27b, reasoning off` | multiaxis_control (4) | 0.826 ± 0.013 → 0.706 ± 0.079 | +4.1% ± 2.6 → +17.8% ± 10.8 | 400 ± 0 → 400 ± 0 | 0.0112 ± 0.0010 → 0.0128 ± 0.0025 |
 
 ## M3 spend
 
 | ledger entry | runs | provider-reported cost (USD) |
 |---|---|---|
-| campaign | 4 | 0.0647 |
-| campaign (memory-on) | 2 | 0.0258 |
+| campaign | 65 | 2.0421 |
+| campaign (interrupted (restart after a scoring-bug fix), re-run [memory-on]) | 1 | 0.0090 |
+| campaign (interrupted (restart after a scoring-bug fix), re-run) | 1 | 0.0077 |
+| campaign (interrupted by a container restart, re-run) | 1 | 0.0008 |
+| campaign (lost to a scoring bug in run_eval (round tags), re-run) | 1 | 0.0207 |
+| campaign (memory-on) | 12 | 0.1416 |
 | campaign (pilot attempt 1 (failed: ls loop, killed)) | 1 | 0.0576 |
 | campaign (pilot) | 1 | 0.0177 |
-| structured | 16 | 0.9398 |
+| structured | 30 | 1.1835 |
 | structured (pilot) | 1 | 0.0095 |
-| **total** | 25 | **1.1151** |
+| **total** | 114 | **3.4901** |
 
-Key usage snapshots (authoritative; `eval/data/key_usage_m3.json`): session_start 2026-10-09T16:28:55Z $4.1889; before_pilots 2026-10-09T17:20:44Z $4.1889; after_structured_pilot 2026-10-09T17:22:40Z $4.1963; check_no_run (campaign pilot skipped: file existed) 2026-10-09T17:22:47Z $4.2012; after_campaign_pilot1 2026-10-09T17:34:07Z $4.2598; after_campaign_pilot2 2026-10-09T17:38:03Z $4.2788; before_eval 2026-10-09T17:38:31Z $4.2805.
+Key usage snapshots (authoritative; `eval/data/key_usage_m3.json`): session_start 2026-10-09T16:28:55Z $4.1889; before_pilots 2026-10-09T17:20:44Z $4.1889; after_structured_pilot 2026-10-09T17:22:40Z $4.1963; check_no_run (campaign pilot skipped: file existed) 2026-10-09T17:22:47Z $4.2012; after_campaign_pilot1 2026-10-09T17:34:07Z $4.2598; after_campaign_pilot2 2026-10-09T17:38:03Z $4.2788; before_eval 2026-10-09T17:38:31Z $4.2805; after_qwen_deepseek_arms 2026-10-09T19:27:54Z $6.6944; after_sonnet_campaign_1 2026-10-09T19:29:11Z $6.7720; after_sonnet_campaigns 2026-10-09T19:33:50Z $7.7664; after_eval 2026-10-09T19:34:30Z $7.7664.
 
