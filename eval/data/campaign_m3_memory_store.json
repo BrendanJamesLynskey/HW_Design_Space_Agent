@@ -3,39 +3,45 @@
   "hw_dse/memory/family": {
    "iterative": {
     "author": "code",
-    "lesson": "`iterative`: explored in 2 spec(s) (344 evaluations), on the front in 1; on the front in low_area_control",
+    "lesson": "`iterative`: explored in 3 spec(s) (353 evaluations), on the front in 1; on the front in low_area_control",
     "run_ids": [
      "20261009-173845-039a",
-     "20261009-174055-b15d"
+     "20261009-174055-b15d",
+     "20261009-174947-a817"
     ],
-    "updated": "2026-10-09T17:43:26"
+    "updated": "2026-10-09T17:52:36"
    },
    "pipelined": {
     "author": "code",
-    "lesson": "`pipelined`: explored in 2 spec(s) (63 evaluations), on the front in 0; never reached a front on this device so far",
+    "lesson": "`pipelined`: explored in 4 spec(s) (411 evaluations), on the front in 1; on the front in dds_250msps",
     "run_ids": [
      "20261009-173845-039a",
-     "20261009-174055-b15d"
+     "20261009-174055-b15d",
+     "20261009-174635-621b",
+     "20261009-174947-a817"
     ],
-    "updated": "2026-10-09T17:43:26"
+    "updated": "2026-10-09T17:52:36"
    },
    "pipelined_m": {
     "author": "code",
-    "lesson": "`pipelined_m`: explored in 2 spec(s) (340 evaluations), on the front in 1; on the front in bursty_offload",
+    "lesson": "`pipelined_m`: explored in 4 spec(s) (773 evaluations), on the front in 2; on the front in bursty_offload, multiaxis_control",
     "run_ids": [
      "20261009-173845-039a",
-     "20261009-174055-b15d"
+     "20261009-174055-b15d",
+     "20261009-174635-621b",
+     "20261009-174947-a817"
     ],
-    "updated": "2026-10-09T17:43:26"
+    "updated": "2026-10-09T17:52:36"
    },
    "unrolled_k": {
     "author": "code",
-    "lesson": "`unrolled_k`: explored in 2 spec(s) (53 evaluations), on the front in 0; never reached a front on this device so far",
+    "lesson": "`unrolled_k`: explored in 3 spec(s) (63 evaluations), on the front in 0; never reached a front on this device so far",
     "run_ids": [
      "20261009-173845-039a",
-     "20261009-174055-b15d"
+     "20261009-174055-b15d",
+     "20261009-174635-621b"
     ],
-    "updated": "2026-10-09T17:43:26"
+    "updated": "2026-10-09T17:52:36"
    }
   },
   "hw_dse/memory/note": {
@@ -54,16 +60,40 @@
      "20261009-174055-b15d"
     ],
     "updated": "2026-10-09T17:43:09"
+   },
+   "note/dds_250msps": {
+    "author": "llm",
+    "lesson": "For the 250 MSPS DDS spec (min LUTs, err <= 2^-13), plain pipelined family won: dw=19, n_iter=15, no guards, round (935 LUTs est, 13.2 acc bits, 264 MSPS, 2^-13.18). Notable: pipelined reached the front here, unlike prior campaigns where it never did; pipelined_m and unrolled_k did not beat it on LUTs at this throughput. L2 DDS sim: SFDR 100.5 dBc, SNR 88.3 dB. No L3/L4 measured rows; back_annotate no_measured_data, finalize directly.",
+    "run_ids": [
+     "20261009-174635-621b"
+    ],
+    "updated": "2026-10-09T17:49:32"
+   },
+   "note/multiaxis_control": {
+    "author": "llm",
+    "lesson": "For the 16-axis control spec (32 req/tick, p99 <= 0.44us, err <= 2^-12, min LUTs+FFs), pipelined_m dw=18, n_iter=16, no guards, round, m=4 won: 1236 LUTs+FFs est, 13 acc bits, 97.8 MSPS, simulated p99 0.378us. Key lesson: the m=5/dw=15 designs (1070-1145 LUTs) looked cheaper at L1 (analytic p99 0.434) but SimPy gave 0.4465 -> failed the 0.44us bound by 1.5%; L2 flipped the winner to the m=4/dw=18 design. The L1 analytic p99 bound is optimistic for bursty 32-request ticks; keep >= ~5% margin on t",
+    "run_ids": [
+     "20261009-174947-a817"
+    ],
+    "updated": "2026-10-09T17:52:22"
    }
   },
   "hw_dse/memory/spec_class": {
+   "high-rate (>= 100 MSPS), no system scenario": {
+    "author": "code",
+    "lesson": "spec class 'high-rate (>= 100 MSPS), no system scenario': 1 front-mapping round(s) in 1 spec run(s), mean HV gain +143.6% (min +143.6%, max +143.6%)",
+    "run_ids": [
+     "20261009-174635-621b"
+    ],
+    "updated": "2026-10-09T17:52:36"
+   },
    "low-rate (< 10 MSPS), no system scenario": {
     "author": "code",
     "lesson": "spec class 'low-rate (< 10 MSPS), no system scenario': 1 front-mapping round(s) in 1 spec run(s), mean HV gain +443.7% (min +443.7%, max +443.7%)",
     "run_ids": [
      "20261009-173845-039a"
     ],
-    "updated": "2026-10-09T17:43:26"
+    "updated": "2026-10-09T17:52:36"
    },
    "low-rate (< 10 MSPS), system: bursty": {
     "author": "code",
@@ -71,7 +101,15 @@
     "run_ids": [
      "20261009-174055-b15d"
     ],
-    "updated": "2026-10-09T17:43:26"
+    "updated": "2026-10-09T17:52:36"
+   },
+   "mid-rate (10-100 MSPS), system: control_loop": {
+    "author": "code",
+    "lesson": "spec class 'mid-rate (10-100 MSPS), system: control_loop': 1 front-mapping round(s) in 1 spec run(s), mean HV gain +419.4% (min +419.4%, max +419.4%)",
+    "run_ids": [
+     "20261009-174947-a817"
+    ],
+    "updated": "2026-10-09T17:52:36"
    }
   },
   "hw_dse/observations/family": {
@@ -130,6 +168,48 @@
     "on_front": false,
     "run_id": "20261009-174055-b15d",
     "spec": "bursty_offload"
+   },
+   "20261009-174635-621b|dds_250msps|pipelined": {
+    "evals": 330,
+    "family": "pipelined",
+    "on_front": true,
+    "run_id": "20261009-174635-621b",
+    "spec": "dds_250msps"
+   },
+   "20261009-174635-621b|dds_250msps|pipelined_m": {
+    "evals": 60,
+    "family": "pipelined_m",
+    "on_front": false,
+    "run_id": "20261009-174635-621b",
+    "spec": "dds_250msps"
+   },
+   "20261009-174635-621b|dds_250msps|unrolled_k": {
+    "evals": 10,
+    "family": "unrolled_k",
+    "on_front": false,
+    "run_id": "20261009-174635-621b",
+    "spec": "dds_250msps"
+   },
+   "20261009-174947-a817|multiaxis_control|iterative": {
+    "evals": 9,
+    "family": "iterative",
+    "on_front": false,
+    "run_id": "20261009-174947-a817",
+    "spec": "multiaxis_control"
+   },
+   "20261009-174947-a817|multiaxis_control|pipelined": {
+    "evals": 18,
+    "family": "pipelined",
+    "on_front": false,
+    "run_id": "20261009-174947-a817",
+    "spec": "multiaxis_control"
+   },
+   "20261009-174947-a817|multiaxis_control|pipelined_m": {
+    "evals": 373,
+    "family": "pipelined_m",
+    "on_front": true,
+    "run_id": "20261009-174947-a817",
+    "spec": "multiaxis_control"
    }
   },
   "hw_dse/observations/spec_class": {
@@ -150,6 +230,22 @@
     ],
     "run_id": "20261009-174055-b15d",
     "spec": "bursty_offload"
+   },
+   "20261009-174635-621b|dds_250msps": {
+    "class": "high-rate (>= 100 MSPS), no system scenario",
+    "mapping_gains": [
+     1.435595272616165
+    ],
+    "run_id": "20261009-174635-621b",
+    "spec": "dds_250msps"
+   },
+   "20261009-174947-a817|multiaxis_control": {
+    "class": "mid-rate (10-100 MSPS), system: control_loop",
+    "mapping_gains": [
+     4.19395278604305
+    ],
+    "run_id": "20261009-174947-a817",
+    "spec": "multiaxis_control"
    }
   }
  }
