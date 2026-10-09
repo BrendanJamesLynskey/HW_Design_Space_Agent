@@ -34,7 +34,9 @@ gemini = ["langchain-google-genai>=2.0"]
 ollama = ["langchain-ollama>=0.3"]
 # Milestone 3 campaign layer (optional outer agent): LangChain Deep Agents,
 # pinned because its API moves quickly (see README, "Campaign agent").
-campaign = ["deepagents==0.7.23", "langchain-openai>=0.3"]
+# deepagents 0.7.x needs Python >= 3.11; on 3.10 the extra installs nothing
+# extra and the campaign tests skip.
+campaign = ["deepagents==0.7.23; python_version >= '3.11'", "langchain-openai>=0.3"]
 
 [project.scripts]
 hw-dse = "hw_dse.cli:main"

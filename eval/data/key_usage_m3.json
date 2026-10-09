@@ -20,7 +20,7 @@
    "limit_usd": 10,
    "limit_remaining_usd": 5.803731918
   },
-  "after_campaign_pilot": {
+  "check_no_run (campaign pilot skipped: file existed)": {
    "ts": "2026-10-09T17:22:47Z",
    "usage_usd": 4.201228902,
    "limit_usd": 10,
@@ -37,6 +37,12 @@
    "usage_usd": 4.278784106,
    "limit_usd": 10,
    "limit_remaining_usd": 5.721215894
+  },
+  "before_eval": {
+   "ts": "2026-10-09T17:38:31Z",
+   "usage_usd": 4.280526004,
+   "limit_usd": 10,
+   "limit_remaining_usd": 5.719473996
   }
  }
 }

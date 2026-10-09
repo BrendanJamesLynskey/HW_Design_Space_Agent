@@ -495,6 +495,7 @@ def cmd_report(_: argparse.Namespace) -> None:
             L.append(f"- {r['spec']} seed {r['seed']}: {r['status']}; decisions: {' → '.join(r['decisions']) or '—'}; "
                      f"HV {_ms([r['hv_frac']])}; run `{r['run_dir']}`")
         L.append("")
+    report_m3(L)
     RESULTS.write_text("\n".join(L) + "\n")
     print(f"wrote {RESULTS}")
 
@@ -729,6 +730,196 @@ def cmd_memory_m3(args: argparse.Namespace) -> None:
             MEMORY_STORE.write_text(json.dumps(stores, indent=1, sort_keys=True))
             print(f"[memory on] {name} seed {seed}: HV {row['hv_frac']}, regret {row['select_regret']}, "
                   f"${row['cost_usd']:.4f}", flush=True)
+
+
+def _load_rows(d: Path) -> dict[str, list[dict[str, Any]]]:
+    out: dict[str, list[dict[str, Any]]] = {}
+    for p in sorted(d.glob("*/*.json")):
+        row = json.loads(p.read_text())
+        if "attempt" in row:
+            continue
+        out.setdefault(_label(row), []).append(row)
+    return out
+
+
+def _fail_rate(rows: list[dict[str, Any]]) -> str:
+    return f"{sum(bool(r.get('failed')) for r in rows)}/{len(rows)}"
+
+
+def report_m3(L: list[str]) -> None:
+    """Milestone 3 section of results.md (appended; the M1/M2 sections above are untouched)."""
+    if not GT_M3_FILE.exists():
+        return
+    import csv as _csv
+
+    gt3 = load_gt_m3()
+    gt2 = load_gt()
+    L.append("# Milestone 3: system-level specs (L2), the campaign agent, the A/B\n")
+    L.append("Everything below is generated from committed data as well. *simulated* = L2 SimPy system model (clock = the "
+             "design's estimated Fmax) or the golden-model DDS; *estimate (L1 bound)* = the analytic bound L1 screens "
+             "system constraints with. M3 runs use the same 400-evaluation budget per spec as M1/M2.\n")
+
+    # ---- ground truth --------------------------------------------------
+    L.append("## System specs: exhaustive ground truth, three views\n")
+    L.append("Truth = system metrics simulated for every one of the 635,040 designs (they share 1,092 distinct "
+             "(latency, ii, Fmax) tuples). L1-bound view = what L1 screening sees. MSPS-only view = the same spec without "
+             "its system constraints, throughput floor = the scenario's average offered rate (how it reads in M2 terms).\n")
+    L.append("| spec | system | feasible (simulated / L1 bound / MSPS-only) | true winner (simulated) | L1-bound winner | MSPS-only winner | winner changes vs MSPS-only |")
+    L.append("|---|---|---|---|---|---|---|")
+    for name, g in gt3.items():
+        s = any_spec(name)
+        sel, bsel, msel = g["selected"], g["l1_bound_selected"], g["msps_only"]["selected"]
+        def k(r: dict[str, Any] | None) -> str:
+            return f"`{r['key']}` ({r[s.select_by]:.0f})" if r else "none"
+        L.append(f"| {name}{'' if g['eval'] else ' (ground truth only)'} | {s.system.describe() if s.system else ''} | "
+                 f"{g['n_feasible']:,} / {g['n_feasible_l1_bound']:,} / {g['msps_only']['n_feasible']:,} | {k(sel)} | {k(bsel)} | "
+                 f"{k(msel)} | {'**yes**' if g['winner_changes_vs_msps_only'] else 'no'} |")
+    L.append("")
+    for name, g in gt3.items():
+        s = any_spec(name)
+        sel = g["selected"]
+        if sel:
+            sysv = ", ".join(f"{c.metric} = {sel[c.metric]:.4g} (limit {c.value:g})" for c in s.system_constraints)
+            L.append(f"- `{name}` true winner: {sel['luts']:.0f} LUTs / {sel['ffs']:.0f} FFs, {sel['throughput_msps']:.1f} MSPS, "
+                     f"{sel['accuracy_bits']:.2f} bits; {sysv} (simulated).")
+    L.append("")
+
+    # ---- L2 validation --------------------------------------------------
+    cv = DATA / "l2_cycle_validation.csv"
+    if cv.exists():
+        rows = list(_csv.DictReader(open(cv)))
+        sims = sorted({r["simulator_version"] for r in rows})
+        L.append("## L2 cycle model vs generated RTL\n")
+        L.append(f"{len(rows)} short bursty traces (8 designs covering every family and both rounding modes x 3 seeds x "
+                 f"{', '.join(sims)}), {sum(int(r['n_edges']) for r in rows):,} clock edges: **"
+                 f"{sum(r['passed'] == 'True' for r in rows)}/{len(rows)} identical** on ready, valid_out and the output codes "
+                 f"(ready mismatches {sum(int(r['ready_mismatches']) for r in rows)}, valid {sum(int(r['valid_mismatches']) for r in rows)}, "
+                 f"data {sum(int(r['data_mismatches']) for r in rows)}). Source: `eval/data/l2_cycle_validation.csv`.\n")
+
+    # ---- replay + map_front fix -------------------------------------------
+    rp, fx = DATA / "m2_replay.json", DATA / "m3_mapfront_fix.json"
+    if rp.exists():
+        r = json.loads(rp.read_text())
+        L.append("## Comparability: the M2 runs replayed through the M3 graph\n")
+        L.append(f"**{r['n_identical']}/{r['n_runs']} identical**: same decisions, status, rounds, front-mapping rounds, every "
+                 "evaluated design key in order, HV fraction, selection regret and selected design (`eval/data/m2_replay.json`). "
+                 "This is what allows the structured arm of the A/B to reuse the M2 live runs on the four M2 specs.\n")
+    if fx.exists():
+        rows = json.loads(fx.read_text())["rows"]
+        sys.path.insert(0, str(ROOT / "eval"))
+        from m3_offline import table_fix
+
+        L.append("## The map_front fix on the M2 specs (offline, scripted architects)\n")
+        L.append("Unconditional (every explored family without a feasible design gets a full-box share):\n")
+        L.append(table_fix(rows, "fix-all"))
+        L.append("\nGated (the M3 default, `LEVERS_M3`; structural constraints must have been met by the family's own designs):\n")
+        L.append(table_fix(rows, "fix"))
+        L.append("")
+
+    # ---- structured arm on the system specs --------------------------------
+    base3 = list(json.loads(BASELINES_M3.read_text()).values()) if BASELINES_M3.exists() else []
+    ag3 = _load_rows(M3_DIRS["agent"])
+    cp3 = _load_rows(M3_DIRS["campaign"])
+    gts_all = {**gt2, **gt3}
+    L.append("## Structured graph on the system specs (5 seeds)\n")
+    methods = [("baseline (a): NSGA-II + L2 shortlist", [r for r in base3 if r["method"] == "nsga2"]),
+               ("baseline (b): random + L2 shortlist", [r for r in base3 if r["method"] == "random"])]
+    methods += [(f"structured: `{m}`", rows) for m, rows in ag3.items()]
+    for name in M3_EVAL_SPECS:
+        s = any_spec(name)
+        L.append(f"### {name}\n")
+        _detail_table(L, s, gts_all, methods)
+        ch = [(m, sum(r.get("l2_winner_changed", False) for r in rows if r["spec"] == name),
+               len([r for r in rows if r["spec"] == name])) for m, rows in ag3.items()]
+        if ch:
+            L.append("L2 changed the L1 selection in: " + "; ".join(f"`{m}` {a}/{b}" for m, a, b in ch) + " runs.\n")
+
+    # ---- the A/B --------------------------------------------------------
+    ag2 = load_agents("m2")
+    L.append("## A/B: structured graph vs campaign agent (same specs, seeds, budget)\n")
+    L.append("Structured arm: the M2 live runs on the four M2 specs (replay-proven identical graph) and the fresh M3 runs on "
+             "the system specs. Campaign arm: one single-spec campaign per (spec, seed), memory off, the same model as both "
+             "the campaign agent and the inner architect. Failure = the campaign raised (stuck, call cap, provider error) or "
+             "left the spec unfinalized. Cells: mean ± population std over seeds.\n")
+    models = list(dict.fromkeys(list(ag2) + list(ag3) + list(cp3)))
+    all_specs = list(M2_SPEC_NAMES) + list(M3_EVAL_SPECS)
+    for metric, title, pct in (("hv_frac", "HV fraction", False), ("select_regret", "selection regret", True),
+                               ("n_evals", "L1 evaluations used", False)):
+        L.append(f"**{title}** (structured → campaign)\n")
+        L.append("| spec | " + " | ".join(f"`{m}`" for m in models) + " |")
+        L.append("|---|" + "---|" * len(models))
+        for name in all_specs:
+            cells = []
+            for m in models:
+                st = [r for r in (ag2.get(m, []) + ag3.get(m, [])) if r["spec"] == name]
+                cp = [r for r in cp3.get(m, []) if r["spec"] == name]
+                f = lambda rows: _ms([float(r[metric]) if r.get(metric) is not None else None for r in rows], pct=pct,
+                                     signed=pct, digits=0 if metric == "n_evals" else 3) if rows else "—"
+                cells.append(f"{f(st)} → **{f(cp)}**")
+            L.append(f"| {name} | " + " | ".join(cells) + " |")
+        L.append("")
+    L.append("**Cost, tokens, time and failures per run** (structured → campaign; all specs)\n")
+    L.append("| model | runs | input tokens / run | output tokens / run | cost / run (USD) | wall time / run (s) | failure rate |")
+    L.append("|---|---|---|---|---|---|---|")
+    for m in models:
+        st = [r for r in (ag2.get(m, []) + ag3.get(m, [])) if r["spec"] in all_specs]
+        cp = cp3.get(m, [])
+        def pair(key: str, digits: int = 0) -> str:
+            return " → ".join(_ms([float(r[key]) for r in rows], digits=digits) if rows else "—" for rows in (st, cp))
+        L.append(f"| `{m}` | {len(st)} → {len(cp)} | {pair('input_tokens')} | {pair('output_tokens')} | {pair('cost_usd', 4)} | "
+                 f"{pair('wall_s')} | {_fail_rate(st) if st else '—'} → {_fail_rate(cp) if cp else '—'} |")
+    L.append("")
+    if cp3:
+        L.append("**What the campaign agent did** (tool sequence per run, condensed)\n")
+        for m, rows in cp3.items():
+            L.append(f"`{m}`:\n")
+            for r in sorted(rows, key=lambda r: (r["spec"], r["seed"])):
+                runs = ", ".join(f"run_dse({d['evals']})" for d in r.get("dse_runs", []))
+                L.append(f"- {r['spec']} seed {r['seed']}: {' → '.join(r.get('ladder', [])) or '—'} [{runs}]"
+                         + (f"; **failed**: {r['error'][:160]}" if r.get("failed") else "")
+                         + (f"; L5 re-explore → `{r['l5'].get('selected_key')}`" if r.get("l5") else ""))
+            L.append("")
+
+    # ---- memory on/off ---------------------------------------------------
+    mem = _load_rows(M3_DIRS["memory"])
+    if mem:
+        L.append("## Memory on vs off (campaign agent, fixed spec sequence, seeds 0–2)\n")
+        L.append(f"Sequence: {' → '.join(MEMORY_SEQUENCE)}. Memory on: one LangGraph Store per seed, carried from spec to "
+                 "spec (lessons written by code after each spec, plus the agent's own notes). Memory off: the campaign arm's "
+                 "runs for the same spec and seed. The first spec of the sequence starts with an empty store in both "
+                 "conditions. Store contents after the eval: `eval/data/campaign_m3_memory_store.json`.\n")
+        L.append("| model | spec (position) | HV off → on | regret off → on | evals off → on | cost off → on (USD) |")
+        L.append("|---|---|---|---|---|---|")
+        for m, rows in mem.items():
+            for i, name in enumerate(MEMORY_SEQUENCE):
+                on = [r for r in rows if r["spec"] == name]
+                off = [r for r in cp3.get(m, []) if r["spec"] == name and r["seed"] in {x["seed"] for x in on}]
+                def c(key: str, pct: bool = False, digits: int = 3) -> str:
+                    return " → ".join(_ms([float(r[key]) if r.get(key) is not None else None for r in rows_], pct=pct,
+                                          signed=pct, digits=digits) if rows_ else "—" for rows_ in (off, on))
+                L.append(f"| `{m}` | {name} ({i + 1}) | {c('hv_frac')} | {c('select_regret', True)} | {c('n_evals', digits=0)} | "
+                         f"{c('cost_usd', digits=4)} |")
+        L.append("")
+
+    # ---- spend ------------------------------------------------------------
+    rows = ledger("m3")
+    if rows:
+        L.append("## M3 spend\n")
+        by: dict[str, float] = {}
+        for r in rows:
+            k2 = f"{r.get('arm', '?')}{' (' + r['note'] + ')' if r.get('note') else ''}"
+            by[k2] = by.get(k2, 0.0) + float(r.get("cost_usd") or 0)
+        L.append("| ledger entry | runs | provider-reported cost (USD) |")
+        L.append("|---|---|---|")
+        for k2 in sorted(by):
+            n = sum(1 for r in rows if f"{r.get('arm', '?')}{' (' + r['note'] + ')' if r.get('note') else ''}" == k2)
+            L.append(f"| {k2} | {n} | {by[k2]:.4f} |")
+        L.append(f"| **total** | {len(rows)} | **{sum(by.values()):.4f}** |")
+        L.append("")
+        if KEY_USAGE_M3.exists():
+            ku = json.loads(KEY_USAGE_M3.read_text())["snapshots"]
+            L.append("Key usage snapshots (authoritative; `eval/data/key_usage_m3.json`): " + "; ".join(
+                f"{k} {v['ts']} ${v['usage_usd']:.4f}" for k, v in ku.items()) + ".\n")
 
 
 def main() -> None:
