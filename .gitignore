@@ -35,3 +35,6 @@ eval/scratch/
 .vscode/
 .idea/
 .DS_Store
+
+# SymbiYosys work directories (only the .sby/.sv jobs are committed)
+formal/*/
