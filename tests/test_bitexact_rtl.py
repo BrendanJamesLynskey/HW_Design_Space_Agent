@@ -1,8 +1,8 @@
 """Golden model vs reference RTL: bit-exact on every 16-bit input angle.
 
-Skips cleanly when Icarus Verilog or the reference RTL is unavailable
-(run ``scripts/fetch_reference_rtl.sh`` and install ``iverilog``). CI
-installs both, so this runs on every push.
+Skips cleanly when Icarus Verilog is unavailable (``apt install iverilog``).
+The reference RTL is vendored in ``third_party/CORDIC``. CI installs Icarus,
+so this runs on every push.
 """
 
 from __future__ import annotations

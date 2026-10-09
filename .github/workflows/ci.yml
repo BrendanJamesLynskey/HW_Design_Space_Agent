@@ -32,9 +32,9 @@ jobs:
           sudo apt-get install -y -q iverilog
           iverilog -V | head -1
 
-      # Reference RTL lives in its own public repo; pinned commit.
-      - name: Fetch reference CORDIC RTL
-        run: scripts/fetch_reference_rtl.sh
+      # Reference RTL is vendored (third_party/CORDIC); check it is unmodified.
+      - name: Check vendored reference RTL hashes
+        run: python scripts/check_vendored.py
 
       # Fully offline: the fake provider only, no API keys. The openrouter
       # extra is installed so the provider-config test runs too.

@@ -130,7 +130,7 @@ configurations and 635,040 designs in total, small enough to enumerate for the e
 `src/hw_dse/models/cordic_bitexact.py` is a vectorised NumPy model of the datapath.
 For the reference configuration it is **bit-exact on all 65,536 input angles** against
 Icarus Verilog simulations of both reference modules (`rtl_harness/tb_bitexact.sv`,
-`tests/test_bitexact_rtl.py`; CI installs Icarus and fetches the RTL at a pinned commit).
+`tests/test_bitexact_rtl.py`; the RTL is vendored at a pinned commit and CI installs Icarus).
 Accuracy is measured over every angle for W ≤ 16, and over 131,072 angles (2¹⁶ strided
 plus 2¹⁶ seeded-random) above that. In the dense case the max error is exact for those
 angles, so it is a lower bound on the true worst case.
@@ -184,8 +184,9 @@ hw-dse resume --thread-id <id> --approve
 hw-dse resume --thread-id <id> --choice 3      # or --choice auto
 ```
 
-To run the RTL comparison locally, install Icarus (`apt install iverilog`) and run
-`scripts/fetch_reference_rtl.sh`.
+To run the RTL comparison locally, install Icarus (`apt install iverilog`); the
+reference RTL is vendored in `third_party/CORDIC/` (MIT, pinned commit, hashes in
+`VENDORED.md`).
 
 **Example specs** (`specs/`) lead to different winners on the exhaustive ground truth:
 

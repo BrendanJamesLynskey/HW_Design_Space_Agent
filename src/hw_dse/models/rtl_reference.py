@@ -16,10 +16,11 @@ How it works
 
 Where the reference RTL comes from
 ----------------------------------
-The reference lives in its own public repo (BrendanJamesLynskey/CORDIC).
-``scripts/fetch_reference_rtl.sh`` clones it at a pinned commit into
-``third_party/CORDIC`` (git-ignored). ``CORDIC_RTL_DIR`` overrides that
-location. If neither the RTL nor ``iverilog`` is available,
+The reference lives in its own public repo (BrendanJamesLynskey/CORDIC,
+MIT). The two modules are vendored verbatim into ``third_party/CORDIC``
+at a pinned commit (see ``third_party/CORDIC/VENDORED.md``; CI checks the
+file hashes with ``scripts/check_vendored.py``). ``CORDIC_RTL_DIR``
+overrides that location. If ``iverilog`` is not available,
 :func:`rtl_available` says so and the test is skipped cleanly.
 """
 
@@ -54,7 +55,7 @@ def rtl_available() -> tuple[bool, str]:
     d = reference_rtl_dir()
     missing = [f for f in MODULE_FILES.values() if not (d / f).exists()]
     if missing:
-        return False, f"reference RTL not found in {d} (run scripts/fetch_reference_rtl.sh)"
+        return False, f"reference RTL not found in {d} (expected the vendored copy, see third_party/CORDIC/VENDORED.md)"
     return True, ""
 
 
