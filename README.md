@@ -282,8 +282,9 @@ What the data says:
   the LUTs Vivado reports, and nextpnr's post-route Fmax is 0.60× / 0.63× Vivado's
   post-*synthesis* estimate. These are different measurements (mapper, LUT accounting,
   routed vs unplaced timing), not errors in either. Compared like with like on generated
-  RTL (post-route in both tools), nextpnr's Fmax is **0.78–0.84×** Vivado's on 6 of the 8
-  Vivado designs (`iterative`: 0.99×; `pipelined_m` m=4: 0.64×).
+  RTL (post-route in both tools), nextpnr's Fmax is **0.75–0.84×** Vivado's on 8 of the 11
+  designs both tools measured (`iterative`: 0.99×; the deep `pipelined_m` m=4: 0.64× and
+  W=26 m=6: 0.59×).
 * **In Yosys the generator's RTL synthesises smaller and faster** than the reference
   (−24% / −35% LUTs), probably because each micro-rotation is one add/sub with a carry-in
   rather than two adders and a mux (the reference also has reset and clock-enable on its
@@ -334,14 +335,17 @@ post-synthesis (as the anchors), with post-route alongside.
 The generated `pipelined` anchor reproduces the review's spot-check (720 / 751 / 327.4).
 What the data says:
 
-* **The `high_precision` winner is confirmed, by a thin margin.** The spec needs ≥ 50 MSPS
-  at max error ≤ 2⁻²⁰ and minimises LUT+FF. Vivado measures the ground-truth winner
-  (`pipelined_m` W=26 N=22 m=6) at **65.4 MSPS** (feasible, 2,176 LUT+FF) and its smaller
-  neighbour m=8 at **49.88 MSPS: 0.24% short** of the constraint (2,090 LUT+FF, 4% less
-  area). So m=6 stays the winner, but only because m=8 misses by a quarter of a percent;
-  any tool or seed noise of that size could flip it. Post-route both lose ~7% (60.8 / 46.5
-  MSPS), which widens m=8's miss. The M1 model, the refit and the measurement all agree on
-  the verdict (M1 predicts 62.5 / 48.0 MSPS).
+* **The `high_precision` winner is confirmed.** The spec needs ≥ 50 MSPS at max error
+  ≤ 2⁻²⁰ and minimises LUT+FF. Routed, the verdict is clear: the ground-truth winner
+  (`pipelined_m` W=26 N=22 m=6) runs at **60.8 MSPS (+21.5%)** and its smaller neighbour
+  m=8 (2,090 vs 2,176 LUT+FF, 4% less area) at **46.5 MSPS (−7.1%)**. Only the
+  post-synthesis view, the scale the anchors and the default model use, is borderline: 65.4
+  MSPS (+31%) for m=6 but **49.88 MSPS, 0.24% short**, for m=8. Vivado synthesis is
+  deterministic, so the open question there is not noise but the clock constraint: both
+  designs were synthesised against the anchors' 10 ns clock, not the 20 ns that 50 MSPS
+  needs, and m=8 at a 20 ns constraint is the measurement that would settle the
+  post-synthesis view. The M1 model, the refit and the measurement agree on the verdict
+  (M1 predicts 62.5 / 48.0 MSPS).
 * **Generated vs reference RTL in Vivado, both families.** Area agrees within 4%
   (`iterative` +3% LUT / +1% FF; `pipelined` −3% / −4%), Fmax does not, and in opposite
   directions: generated `iterative` is **13% slower** (172.8 vs 198.3 MHz), generated
@@ -417,15 +421,17 @@ counts with **no Fmax** when nextpnr-xilinx is unavailable.
   leave-one-out), almost all from Yosys/nextpnr (the three Vivado `pipelined` points are at
   −9 to −10%). **No spec's ground-truth winner changes** and `unrolled_k` reaches no front,
   so the eval was not re-run.
-* **The per-family-class path factor is not adopted.** One nextpnr path factor for the
-  FSM families and one for the pipelined ones (Vivado = 1 for both; ×1.18 and ×1.67) would
-  cut Fmax leave-one-out from 14.1% to 10.0% (Vivado points 12.5 → 7.4%, `pipelined`
-  19.0 → 11.5%). But it shifts the shared timing constants so that `pipelined_m` W=26 N=22
-  m=8 is predicted at 52.5 MHz (+5.3% against the measured 49.88), which makes it feasible
-  and the `high_precision` winner: a ground truth that the measurement contradicts. The
-  applied refit predicts 48.9 MHz (−1.9%) and M1 48.0 MHz (−3.8%), both on the right side
-  of the line. A better average does not outweigh getting the one decision-critical point
-  wrong; this was evaluated offline and is not committed.
+* **The per-family-class path factor is not adopted in this PR.** One nextpnr path factor
+  for the FSM families and one for the pipelined ones (Vivado = 1 for both; ×1.18 and
+  ×1.67) would cut Fmax leave-one-out from 14.1% to 10.0% (Vivado points 12.5 → 7.4%,
+  `pipelined` 19.0 → 11.5%). But it moves the refit's `high_precision` winner to m=8
+  (predicted 52.5 MHz), which Vivado measures 0.24% short post-synthesis and 7% short
+  post-route. No model resolves a 0.24% margin: the class factor's +5.3% error there is
+  within its own leave-one-out RMS, as M1's −3.8% and the applied refit's −1.9% are within
+  theirs; that those two land on the right side of the line is a matter of sign, not
+  accuracy. So the single factor stays until more points near the boundary (or m=8 at a
+  20 ns constraint) are measured. The default model uses neither. Evaluated offline, not
+  committed.
 * **Refit on the open-source points + the Vivado spot-check** (M2, `eval/data/l5_refit_yosys-nextpnr.md`):
   RMS error vs Yosys/nextpnr on the 37 generated points drops from 16.0 / 7.1 / 43.5%
   (LUT / FF / Fmax, M1 model as-is) to **11.3 / 4.4 / 14.2%** in-sample, **12.1 / 4.8 /
@@ -657,19 +663,23 @@ What this says, honestly:
 - **Yosys/nextpnr are not Vivado.** On the reference RTL Yosys maps 1.5–1.7× Vivado's
   LUTs; on generated RTL the two agree within 7% for the pipelined families but not for
   the FSM ones (`iterative` +29%, `unrolled_k` −11 to +9%). nextpnr's post-route Fmax is
-  ~0.8× Vivado's post-route Fmax (and ~0.6× Vivado's post-synthesis Fmax on the pipelined designs). The refit keeps them
+  0.75–0.84× Vivado's post-route Fmax on most designs (0.6× on the deep `pipelined_m`, 1.0×
+  on `iterative`), and ~0.6× Vivado's post-synthesis Fmax on the pipelined designs. The refit keeps them
   apart with per-tool factors, which assume one multiplicative factor per tool and metric
   for the whole space; for Fmax that does not hold across FSM and pipelined designs. A
-  per-family-class path factor fits better on average but misplaces `high_precision`'s m=8
-  (see above), so it is not used.
+  per-family-class path factor fits better on average but moves the `high_precision`
+  winner across a 0.24% margin no model can resolve (see above), so it is not used yet.
 - **Vivado post-synthesis Fmax is the cost model's timing scale**, as for the anchors.
   Post-route Fmax is 21–32% below it on the short-path pipelined designs, 4–9% below on
   `iterative` and the deeper `pipelined_m`, and within ±6% on `unrolled_k`, so the model's
   Fmax (and every throughput the eval reports) is an unrouted figure. Vivado points: 14
   generated designs, 3–4 per family, mostly at N=14.
 - **Feasibility margins can be thinner than any model's error.** `high_precision`'s m=8
-  misses 50 MSPS by 0.24% in Vivado; the M1 model's Fmax error there is −4%. Specs whose
-  winner sits that close to a constraint are only as settled as a measurement makes them.
+  misses 50 MSPS by 0.24% post-synthesis (7% post-route); the models' Fmax errors there are
+  −4% (M1) to +5% (class factor). Post-synthesis Fmax also depends on the clock
+  constraint, and the Vivado points were all synthesised at 10 ns. Specs whose winner sits
+  that close to a constraint are only as settled as a routed measurement (or one at the
+  spec's own clock) makes them.
 - **The `unrolled_k` area model is structurally off**: Vivado LUTs jump 2.2× from k=2 to
   k=3 and then grow slowly (246 / 532 / 561 / 681 at k = 2 / 3 / 4 / 8); the model grows
   smoothly and is −37 to −40% at k=3–4. It does not change any conclusion here
