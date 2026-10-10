@@ -352,6 +352,8 @@ Gated (the M3 default, `LEVERS_M3`; structural constraints must have been met by
 | heuristic architect (fake) | high_precision | 5 | 0.974 → 0.974 | +4.0% → +4.0% | 0 |
 | heuristic architect (fake) | infeasible_dds_400msps | 5 | n/a → n/a | n/a → n/a | 0 |
 
+The gated fix's `high_precision` gain comes from a single run (Qwen seed 1); it lowers HV on 4 `low_area_control` runs without changing a selection. `LEVERS_M3` stays the default for system specs only (owner's decision); the M2 specs keep `LEVERS_M2`.
+
 ## Structured graph on the system specs (5 seeds)
 
 ### multiaxis_control
@@ -380,7 +382,7 @@ L2 changed the L1 selection in: `anthropic/claude-sonnet-5.5` 0/5; `deepseek/dee
 
 ## A/B: structured graph vs campaign agent (same specs, seeds, budget)
 
-Structured arm: the M2 live runs on the four M2 specs (replay-proven identical graph) and the fresh M3 runs on the system specs. Campaign arm: one single-spec campaign per (spec, seed), memory off, the same model as both the campaign agent and the inner architect. Failure = the campaign raised (stuck, call cap, provider error) or left the spec unfinalized. Cells: mean ± population std over seeds.
+Structured arm: the M2 live runs on the four M2 specs (replay-proven identical graph) and the fresh M3 runs on the system specs. Campaign arm: one single-spec campaign per (spec, seed), memory off, the same model as both the campaign agent and the inner architect. Failure = the campaign raised (stuck, call cap, provider error) or left the spec unfinalized. Cells: mean ± population std over seeds. **Scope, as accepted by the owner:** the campaign arm covers Qwen and DeepSeek on all six specs and Sonnet 5.5 on `multiaxis_control` only (a full Sonnet campaign arm was skipped for the spend cap). The campaign agent is experimental, optional and off by default.
 
 **HV fraction** (structured → campaign)
 

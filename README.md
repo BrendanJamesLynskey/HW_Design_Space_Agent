@@ -67,7 +67,7 @@ report.
 | M2 follow-ups | **Vivado 2025.2 on 14 generated designs, refit `vivado-2025.2`** | **done** |
 | | measured power · `high_precision` m=8 synthesised at a 20 ns constraint · per-family-class path factor (deferred, not rejected) | planned |
 | **M3** | **L2** cycle-accurate interface model per family (validated against the RTL cycle for cycle) + SimPy system models (DDS + mixer, control loop, bursty stream) · system-level constraints in specs, L1 bounds, L2 shortlist and re-selection · **L5 loop**: re-explore under the refit when a measured winner changes · `map_front` blind-spot fix (gated lever) · M2 replay proof · **campaign agent** on Deep Agents with cross-run memory · A/B and memory on/off eval | **done** (see the A/B for what the campaign agent did and did not achieve) |
-| | campaign arm with Sonnet 5.5 (cut for the spend cap) · live L4 inside campaigns | planned |
+| | live L4 inside campaigns · any campaign-agent rework (only if the M4 fleet design needs it) | planned |
 | M4 | more functions and targets (an ASIC gate-equivalent `CostModel`), a fleet of agents, richer family registry, the write-up | planned |
 
 ## The fidelity ladder
@@ -597,12 +597,16 @@ The unconditional version spends budget on FSM families that can never reach 250
 gate was refined on these same replays, so it is fitted to them; the heuristic architect is
 unchanged by it. The gated fix also moves HV without changing a selection: in 4 Sonnet
 `low_area_control` replays (seeds 0, 1, 3, 4; seed 3 goes 0.893 → 0.802) a family that was
-explored without a feasible design takes part of the mapping budget from the front families. `LEVERS_M3` is the default only for specs with a system scenario; the M2
-specs keep `LEVERS_M2`, so the M2 results stand as recorded.
+explored without a feasible design takes part of the mapping budget from the front families.
+Read the `high_precision` gain with care: it comes from a single run (Qwen seed 1, regret
+71.7% → 11.1%); the other 14 replays' selections are unchanged, and the gate lowers HV on 4
+`low_area_control` runs. **By the owner's decision, `LEVERS_M3` stays the default only for specs
+with a system scenario**; the M2 specs keep `LEVERS_M2`, so the M2 results stand as recorded.
 
 ## Campaign agent on LangChain Deep Agents (M3)
 
-An optional outer agent (`src/hw_dse/campaign/`, `pip install -e '.[campaign]'`; Python ≥ 3.11,
+**Experimental: optional and off by default** (nothing in the structured graph or the CLI uses it;
+the A/B below found no gain). An outer agent (`src/hw_dse/campaign/`, `pip install -e '.[campaign]'`; Python ≥ 3.11,
 because `deepagents` 0.7 requires it; on 3.10 the campaign tests skip) for
 long-horizon work: take specs down the whole ladder, re-plan when a measurement changes the
 winner, work through a queue, carry lessons between runs. The structured graph stays the
@@ -884,7 +888,10 @@ evaluations from committed data and re-selects; rewritten rows keep their old va
 
 **A/B: structured graph vs campaign agent** (same specs, seeds and budget; the structured arm
 reuses the M2 live runs on the four M2 specs, which the replay proof allows, and the fresh runs
-above on the system specs; campaign = one single-spec campaign per spec and seed, memory off):
+above on the system specs; campaign = one single-spec campaign per spec and seed, memory off).
+**Scope, as accepted by the owner:** the campaign arm covers Qwen and DeepSeek on all six specs
+and Sonnet 5.5 on `multiaxis_control` only; a full Sonnet campaign arm (~$6.9) was skipped for
+the spend cap and will not be run for M3.
 
 | model | HV, mean over the 5 feasible specs (structured → campaign) | regret, same | cost / run | input tokens / run | wall / run | failures |
 |---|---|---|---|---|---|---|
