@@ -132,3 +132,22 @@ def test_committed_rows_remeasure_identically(tmp_path: Path) -> None:
         assert round(r.area_um2, 4) == p.area_um2 and r.ffs == p.ffs
         assert round(r.critical_path_ns or 0, 4) == p.critical_path_ns
         assert round(r.power["power_mw"], 6) == p.power_mw
+
+
+def test_asic_back_annotation_uses_sky130_measurements_and_flags_the_multiaxis_winner() -> None:
+    """The ASIC model's asic_multiaxis_control optimum measures 72.2 MHz (model 82.5): with
+    measured numbers it misses the 0.5 us batch deadline, so back-annotation flags it, and
+    never compares an ASIC design against FPGA measurements."""
+    import json
+
+    from hw_dse.agent.backannotate import back_annotate
+    from hw_dse.spec import load_spec
+
+    spec = load_spec("specs/asic/asic_multiaxis_control.yaml")
+    gt = json.loads(Path("eval/data/ground_truth_m4.json").read_text())[spec.name]
+    sel = evaluate(ArchConfig.from_key(gt["selected"]["key"]), spec)
+    ba = back_annotate(spec, [sel], sel)
+    assert ba["target"] == "asic" and ba["status"] == "compared" and ba["reexplore_available"] is False
+    assert all("luts" not in c for c in ba["comparisons"])
+    assert ba["comparisons"][0]["fmax_mhz"]["diff_pct"] < -10
+    assert ba["winner_changed"] and "sys_p99_batch_us" in ba["why"]

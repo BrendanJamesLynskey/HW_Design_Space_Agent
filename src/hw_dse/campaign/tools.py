@@ -62,7 +62,8 @@ def _rel(path: str | Path) -> str:
 
 
 def spec_path(name: str) -> Path:
-    for p in (REPO_ROOT / "specs" / f"{name}.yaml", REPO_ROOT / "specs" / "system" / f"{name}.yaml"):
+    for p in (REPO_ROOT / "specs" / f"{name}.yaml", REPO_ROOT / "specs" / "system" / f"{name}.yaml",
+              REPO_ROOT / "specs" / "asic" / f"{name}.yaml", REPO_ROOT / "specs" / "m4" / f"{name}.yaml"):
         if p.exists():
             return p
     raise KeyError(name)

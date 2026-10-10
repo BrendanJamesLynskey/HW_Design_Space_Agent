@@ -94,12 +94,107 @@ def _measured_record(p: Any, spec: Spec, factors: dict[str, dict[str, float]]) -
     return evaluate(p.arch, spec, cost_model=_MeasuredCost(luts, ffs, fmax, prov))  # type: ignore[arg-type]
 
 
+# ---------------------------------------------------------------------------
+# Milestone 4: the ASIC target is back-annotated against its own measurements
+# ---------------------------------------------------------------------------
+
+ASIC_MEASURED = [REPO_ROOT / "eval" / "data" / "asic_synthesis.csv", REPO_ROOT / "eval" / "data" / "asic_validation.csv"]
+
+
+class _MeasuredAsicCost:
+    """One ASIC design's measured area, FFs and Fmax as a 'cost model'; the power
+    index uses the default model's fitted weights on the measured counts."""
+
+    name = "measured"
+    target = "asic"
+
+    def __init__(self, p: Any) -> None:
+        from hw_dse.evaluate import default_asic_cost_model
+
+        cm = default_asic_cost_model()
+        self.calibration_id = p.provenance
+        self.power_norm = cm.power_norm
+        w = cm.fit
+        self._est = CostEstimate(area={"area_um2": p.area_um2, "gate_eq": p.gate_eq, "ffs": p.ffs},
+                                 fmax_mhz=float(p.fmax_mhz), critical_path_ns=float(p.critical_path_ns),
+                                 switching_resources=w["w_ff"] * p.ffs + w["w_area"] * p.area_um2,
+                                 activity_factor=cm.src["activity_factor"], provenance=p.provenance)
+
+    def estimate(self, arch: ArchConfig) -> CostEstimate:  # noqa: ARG002 - one design only
+        return self._est
+
+
+def back_annotate_asic(spec: Spec, front: list[dict[str, Any]], selected: dict[str, Any],
+                       opts: dict[str, Any]) -> dict[str, Any]:
+    """ASIC version of :func:`back_annotate`: the committed sky130 measurements
+    (calibration sweep + held-out validation set), never the FPGA ones. Compares
+    area, FFs and Fmax, re-checks feasibility of every measured front design with
+    its measured numbers (system metrics simulated at the measured clock) and
+    flags a winner change. There is no separate ASIC refit to re-explore under
+    (the default ASIC model *is* the fit to these points), so the L5 loop does
+    not run: ``reexplore_available`` is False and the report says so."""
+    from hw_dse.synth.asic import load_csv
+
+    csvs = [Path(c) for c in (opts.get("asic_measured_csvs") or ASIC_MEASURED)]
+    idx: dict[str, Any] = {}
+    for c in csvs:
+        if c.exists():
+            for p in load_csv(c):
+                idx.setdefault(p.arch.key(), p)
+
+    def measured_rec(p: Any) -> dict[str, Any]:
+        r = evaluate(p.arch, spec, cost_model=_MeasuredAsicCost(p))  # type: ignore[arg-type]
+        if spec.system is not None:
+            from hw_dse.l2.node import simulate_record
+
+            r = simulate_record(r, spec)
+        return r
+
+    key = selected["key"]
+    out: dict[str, Any] = {"status": "no_measured_data", "target": "asic", "selected_key": key,
+                           "produced_by_synthesis": False, "measured_sources": [str(c) for c in csvs],
+                           "comparisons": [], "winner_changed": False, "reexplore_available": False,
+                           "notes": ["ASIC target: no refit calibration to re-explore under; a flagged winner "
+                                     "change is reported, not acted on"]}
+    if key not in idx:
+        out["notes"].append("no measured data for the selected design; nothing to compare")
+        return out
+    p = idx[key]
+    out["status"] = "compared"
+    cmp: dict[str, Any] = {"tool": p.row["tool"], "tool_version": p.row["tool_version"], "provenance": p.provenance}
+    for m, meas in (("area_um2", p.area_um2), ("ffs", p.ffs), ("fmax_mhz", p.fmax_mhz)):
+        est = float(selected[m])
+        cmp[m] = {"estimate": round(est, 1), "measured": meas, "diff_pct": round((float(meas) / est - 1) * 100, 1)}
+    out["comparisons"].append(cmp)
+    mfront = [measured_rec(idx[r["key"]]) for r in front if r["key"] in idx]
+    sel = next((m for m in mfront if m["key"] == key), None) or measured_rec(p)
+    best = select_design(mfront + ([sel] if sel not in mfront else []), spec)
+    out["n_front_designs"] = len(front)
+    out["n_front_designs_measured"] = len({m["key"] for m in mfront})
+    if not sel["feasible"]:
+        out["winner_changed"] = True
+        out["why"] = "the selected design violates the spec with measured numbers: " + "; ".join(
+            f"{k} by {v * 100:.1f}%" for k, v in sel["violations"].items() if v > 0)
+    elif best is not None and best["key"] != key:
+        out["winner_changed"] = True
+        out["why"] = (f"with measured numbers the spec's rule prefers {best['key']} "
+                      f"({spec.select_by} {best[spec.select_by]:.4g} vs {sel[spec.select_by]:.4g})")
+    else:
+        out["why"] = "the selected design is still the best measured front design" + (
+            "" if out["n_front_designs_measured"] > 1 else " (it is the only front design with measurements)")
+    out["winner_checks"] = [{"tool": p.row["tool"], "winner_changed": out["winner_changed"], "why": out["why"],
+                             "n_front_designs_measured": out["n_front_designs_measured"]}]
+    return out
+
+
 def back_annotate(spec: Spec, front: list[dict[str, Any]], selected: dict[str, Any] | None,
                   options: dict[str, Any] | None = None) -> dict[str, Any]:
     """The node's logic, as a pure function of the run's front and selection."""
     opts = options or {}
     if opts.get("enabled") is False or selected is None:
         return {"status": "skipped", "reason": "disabled" if selected else "no design selected"}
+    if spec.target_kind == "asic":
+        return back_annotate_asic(spec, front, selected, opts)
     csvs = [Path(c) for c in (opts.get("measured_csvs") or DEFAULT_MEASURED)]
     calib = opts.get("calibration", DEFAULT_REFIT)
     factors = tool_factors(Path(calib) if calib else None)

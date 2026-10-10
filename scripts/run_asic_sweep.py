@@ -5,6 +5,7 @@
     python scripts/run_asic_sweep.py                 # every point: Yosys + OpenSTA (timing, power)
     python scripts/run_asic_sweep.py --smoke         # one design (CI); does not write the CSV
     python scripts/run_asic_sweep.py --check 3       # re-synthesise 3 committed rows, must match exactly
+    python scripts/run_asic_sweep.py --validate      # the held-out set from ground_truth_m4.json -> asic_validation.csv
 
 Needs ``yosys`` (Ubuntu 24.04: Yosys 0.33) and OpenSTA's ``sta`` on PATH (or
 HW_DSE_STA); see src/hw_dse/synth/asic.py and the README for installing them.
@@ -29,6 +30,7 @@ def main() -> int:
     ap.add_argument("--fetch-lib", action="store_true", help="download the pinned liberty file into build/pdk/")
     ap.add_argument("--smoke", action="store_true")
     ap.add_argument("--check", type=int, default=0, help="re-measure N committed rows and compare")
+    ap.add_argument("--validate", action="store_true", help="synthesise the held-out validation set")
     ap.add_argument("--workers", type=int, default=4)
     ap.add_argument("--out", default=str(asic.ASIC_CSV))
     args = ap.parse_args()
@@ -61,6 +63,12 @@ def main() -> int:
             print(old["family"], old["data_width"], old["n_iter"], "identical" if not diff else f"DIFFERS {diff}")
             bad += bool(diff)
         return 1 if bad else 0
+    if args.validate:
+        pts = asic_sweep.validation_points()
+        rows = asic_sweep.to_rows(asic_sweep.run(pts, tools, args.workers), versions)
+        asic.write_csv(asic_sweep.VALIDATION_CSV, rows)
+        print(f"wrote {asic_sweep.VALIDATION_CSV} ({len(rows)} held-out points)")
+        return 0
     results = asic_sweep.run(asic_sweep.points(), tools, args.workers)
     rows = asic_sweep.to_rows(results, versions)
     asic.write_csv(Path(args.out), rows)

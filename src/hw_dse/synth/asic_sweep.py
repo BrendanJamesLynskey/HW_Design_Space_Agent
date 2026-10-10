@@ -38,18 +38,39 @@ ASIC_EXTRA = [
     _a("pipelined_m", 20, 18, m=2), _a("pipelined_m", 20, 18, m=3), _a("pipelined_m", 20, 18, m=5),
     _a("pipelined_m", 20, 18, m=7), _a("pipelined_m", 20, 18, 1, 1, "round", m=4), _a("pipelined_m", 12, 10, m=8),
 ]
-# Filled in once the ASIC ground truth exists (eval/run_eval.py ground-truth-m4).
-ASIC_GT_WINNERS: list[ArchConfig] = []
+VALIDATION_CSV = REPO_ROOT / "eval" / "data" / "asic_validation.csv"
 
 
 def points() -> list[ArchConfig]:
+    """The calibration set: what ``cost_asic`` is fitted to."""
     seen: set[str] = set()
     out = []
-    for a in fpga_points() + ASIC_EXTRA + ASIC_GT_WINNERS:
+    for a in fpga_points() + ASIC_EXTRA:
         if a.key() not in seen:
             seen.add(a.key())
             out.append(a)
     return out
+
+
+def validation_points(gt_path: Path | None = None) -> list[ArchConfig]:
+    """The held-out set: per ASIC spec, the ground truth's best design of every
+    family, the FPGA twin's best of every family (the winners the other target
+    would pick), and for a system spec the L1 bound's choice. None of them is in
+    the calibration set unless it already was; they are never fitted, only
+    compared (``eval/run_eval.py report``, the M4 section)."""
+    import json
+
+    gt = json.loads((gt_path or REPO_ROOT / "eval" / "data" / "ground_truth_m4.json").read_text())
+    keys: list[str] = []
+    for name, row in gt.items():
+        if not isinstance(row, dict) or "family_bests" not in row:
+            continue
+        keys += [b["key"] for b in row["family_bests"].values() if b]
+        keys += [b["key"] for b in row["fpga_twin"]["family_bests"].values() if b]
+        if row.get("l1_bound_selected"):
+            keys.append(row["l1_bound_selected"]["key"])
+    calib = {a.key() for a in points()}
+    return [ArchConfig.from_key(k) for k in dict.fromkeys(keys) if k not in calib]
 
 
 def run(arches: list[ArchConfig], tools: asic.AsicTools | None = None, workers: int = 4,
