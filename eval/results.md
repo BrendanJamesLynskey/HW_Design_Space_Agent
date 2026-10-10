@@ -577,17 +577,17 @@ Per spec, the best design of each family by the spec's selection rule (system me
 
 Each spec's per-family optima, the FPGA twin's optima and the L1-bound pick, synthesised and timed (`eval/data/asic_validation.csv`, never fitted), against the model's estimates; *meets* = the spec's constraints with the measured numbers (system metrics simulated at the measured clock).
 
-| design | area um2 meas / est (err) | Fmax MHz meas / est (err) | power mW (100 MHz) meas | meets: asic_low_area / asic_power_50msps / asic_multiaxis_control |
-|---|---|---|---|---|
-| `unrolled_k:data_width=15,n_iter=13,angle_guard=0,frac_guard=0,rounding=round,k=2` | 9031 / 8854 (-2.0%) | 58.3 / 81.4 (+39.6%) | 0.670 | yes / no / no |
-| `pipelined:data_width=15,n_iter=12,angle_guard=1,frac_guard=0,rounding=round` | 29068 / 28625 (-1.5%) | 143.3 / 155.9 (+8.8%) | 3.303 | yes / no / no |
-| `pipelined_m:data_width=15,n_iter=12,angle_guard=1,frac_guard=0,rounding=round,m=6` | 17096 / 17713 (+3.6%) | 36.6 / 31.1 (-14.9%) | 1.116 | yes / no / no |
-| `pipelined:data_width=17,n_iter=14,angle_guard=1,frac_guard=0,rounding=round` | 37823 / 37422 (-1.1%) | 119.1 / 143.2 (+20.2%) | 4.296 | yes / yes / yes |
-| `pipelined_m:data_width=17,n_iter=14,angle_guard=1,frac_guard=0,rounding=round,m=3` | 27096 / 26576 (-1.9%) | 54.0 / 54.3 (+0.7%) | 2.189 | yes / yes / no |
-| `pipelined_m:data_width=17,n_iter=14,angle_guard=1,frac_guard=0,rounding=round,m=7` | 22102 / 22713 (+2.8%) | 26.7 / 24.2 (-9.3%) | 1.359 | yes / no / no |
-| `pipelined_m:data_width=17,n_iter=16,angle_guard=0,frac_guard=0,rounding=round,m=2` | 34517 / 32845 (-4.8%) | 72.2 / 82.5 (+14.2%) | 3.051 | yes / yes / no |
-| `pipelined_m:data_width=17,n_iter=14,angle_guard=1,frac_guard=0,rounding=round,m=5` | 23785 / 24000 (+0.9%) | 38.0 / 33.5 (-11.8%) | 1.636 | yes / no / no |
-| `pipelined_m:data_width=17,n_iter=14,angle_guard=1,frac_guard=0,rounding=round,m=2` | 30352 / 29151 (-4.0%) | 69.0 / 78.8 (+14.2%) | 2.702 | yes / yes / no |
+| design | area um2 meas / est (err) | Fmax MHz meas / est (err) | power mW (100 MHz) meas | meets: asic_low_area / asic_power_50msps / asic_multiaxis_control | sys_p99_batch_us at the measured clock (asic_multiaxis_control, limit 0.5) |
+|---|---|---|---|---|---|
+| `unrolled_k:data_width=15,n_iter=13,angle_guard=0,frac_guard=0,rounding=round,k=2` | 9031 / 8854 (-2.0%) | 58.3 / 81.4 (+39.6%) | 0.670 | yes / no / no | 1778.270 |
+| `pipelined:data_width=15,n_iter=12,angle_guard=1,frac_guard=0,rounding=round` | 29068 / 28625 (-1.5%) | 143.3 / 155.9 (+8.8%) | 3.303 | yes / no / no | 0.314 |
+| `pipelined_m:data_width=15,n_iter=12,angle_guard=1,frac_guard=0,rounding=round,m=6` | 17096 / 17713 (+3.6%) | 36.6 / 31.1 (-14.9%) | 1.116 | yes / no / no | 0.956 |
+| `pipelined:data_width=17,n_iter=14,angle_guard=1,frac_guard=0,rounding=round` | 37823 / 37422 (-1.1%) | 119.1 / 143.2 (+20.2%) | 4.296 | yes / yes / yes | 0.394 |
+| `pipelined_m:data_width=17,n_iter=14,angle_guard=1,frac_guard=0,rounding=round,m=3` | 27096 / 26576 (-1.9%) | 54.0 / 54.3 (+0.7%) | 2.189 | yes / yes / no | 0.704 |
+| `pipelined_m:data_width=17,n_iter=14,angle_guard=1,frac_guard=0,rounding=round,m=7` | 22102 / 22713 (+2.8%) | 26.7 / 24.2 (-9.3%) | 1.359 | yes / no / no | 79.113 |
+| `pipelined_m:data_width=17,n_iter=16,angle_guard=0,frac_guard=0,rounding=round,m=2` | 34517 / 32845 (-4.8%) | 72.2 / 82.5 (+14.2%) | 3.051 | yes / yes / no | 0.567 |
+| `pipelined_m:data_width=17,n_iter=14,angle_guard=1,frac_guard=0,rounding=round,m=5` | 23785 / 24000 (+0.9%) | 38.0 / 33.5 (-11.8%) | 1.636 | yes / no / no | 0.946 |
+| `pipelined_m:data_width=17,n_iter=14,angle_guard=1,frac_guard=0,rounding=round,m=2` | 30352 / 29151 (-4.0%) | 69.0 / 78.8 (+14.2%) | 2.702 | yes / yes / no | 0.579 |
 
 ## ASIC specs: structured graph vs baselines (5 seeds, 400 evaluations)
 
@@ -622,64 +622,80 @@ Same specs (asic_low_area, asic_power_50msps, asic_multiaxis_control, low_area_c
 | model | arm | runs | HV fraction | selection regret | L1 evals | input tokens | output tokens | cost / run (USD) | failures | failed LLM calls | wall / run (s) |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | `anthropic/claude-sonnet-5.5` | single | 5 | 0.820 ± 0.069 | +17.9% ± 3.2 | 400 ± 0 | 22318 ± 349 | 4843 ± 225 | 0.0931 ± 0.0016 | 0/5 | 0 | 41 ± 2 |
-| `anthropic/claude-sonnet-5.5` | fleet | 5 | 0.794 ± 0.051 | +19.9% ± 3.6 | 400 ± 0 | 41738 ± 289 | 6532 ± 237 | 0.1488 ± 0.0023 | 0/5 | 0 | 49 ± 1 |
+| `anthropic/claude-sonnet-5.5` | fleet before_fix | 5 | 0.794 ± 0.051 | +19.9% ± 3.6 | 400 ± 0 | 41738 ± 289 | 6532 ± 237 | 0.1488 ± 0.0023 | 0/5 | 0 | 49 ± 1 |
 | `deepseek/deepseek-v4.1-flash` | single | 25 | 0.870 ± 0.061 | +12.1% ± 11.9 | 400 ± 0 | 14535 ± 2301 | 21445 ± 7436 | 0.0167 ± 0.0052 | 0/25 | 2 | 153 ± 148 |
-| `deepseek/deepseek-v4.1-flash` | fleet | 25 | 0.834 ± 0.080 | +15.8% ± 21.5 | 400 ± 0 | 22233 ± 3960 | 27471 ± 7922 | 0.0257 ± 0.0084 | 0/25 | 10 | 229 ± 260 |
+| `deepseek/deepseek-v4.1-flash` | fleet before_fix | 25 | 0.834 ± 0.080 | +15.8% ± 21.5 | 400 ± 0 | 22233 ± 3960 | 27471 ± 7922 | 0.0257 ± 0.0084 | 0/25 | 10 | 229 ± 260 |
 | `qwen/qwen3.8-27b, reasoning off` | single | 25 | 0.829 ± 0.071 | +14.8% ± 11.4 | 400 ± 0 | 10594 ± 1573 | 3540 ± 653 | 0.0090 ± 0.0020 | 0/25 | 1 | 57 ± 48 |
-| `qwen/qwen3.8-27b, reasoning off` | fleet | 25 | 0.796 ± 0.099 | +11.7% ± 19.9 | 400 ± 1 | 20029 ± 3227 | 5869 ± 1362 | 0.0127 ± 0.0024 | 0/25 | 7 | 171 ± 188 |
+| `qwen/qwen3.8-27b, reasoning off` | fleet before_fix | 25 | 0.796 ± 0.099 | +11.7% ± 19.9 | 400 ± 1 | 20029 ± 3227 | 5869 ± 1362 | 0.0127 ± 0.0024 | 0/25 | 7 | 171 ± 188 |
+| `qwen/qwen3.8-27b, reasoning off` | fleet after fix | 25 | 0.788 ± 0.117 | +6.3% ± 6.0 | 400 ± 0 | 19513 ± 3087 | 5502 ± 1246 | 0.0131 ± 0.0031 | 0/25 | 0 | 89 ± 38 |
+
+*fleet before_fix* is the first A/B's fleet: phase-2 members started cold (the Store was written but not read back) and the member minimum was 10, which the 40% coverage reserve could not always spend. *fleet after fix* (run after review, Qwen only, same specs and seeds): each phase-2 study is warm-started from the Store (the fleet's stored front designs of its family, as NSGA-II seeds) and the member minimum is 20.
+
+**Paired tests** (fleet − single on the same spec and seed; for *after fix vs before_fix*, the fixed fleet − the first fleet; sign test exact, two-sided, ties dropped; paired t two-sided). HV: + = fleet (after fix) higher. Regret: + = worse.
+
+| model | fleet arm | pairs | HV: fleet higher / lower | HV sign p | HV mean diff | HV t | HV t p | regret: fleet lower / higher | regret sign p | regret mean diff (pts) | regret t | regret t p |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| `anthropic/claude-sonnet-5.5` | fleet before_fix | 5 | 2 / 3 | 1.000 | -0.026 | -0.66 | 0.548 | 2 / 3 | 1.000 | +1.9 | 0.72 | 0.509 |
+| `deepseek/deepseek-v4.1-flash` | fleet before_fix | 25 | 6 / 19 | 0.015 | -0.036 | -3.03 | 0.006 | 12 / 12 | 1.000 | +3.7 | 1.20 | 0.243 |
+| `qwen/qwen3.8-27b, reasoning off` | fleet before_fix | 25 | 10 / 15 | 0.424 | -0.033 | -1.51 | 0.145 | 18 / 6 | 0.023 | -3.2 | -0.63 | 0.536 |
+| `pooled` | fleet before_fix | 55 | 18 / 37 | 0.014 | -0.033 | -2.89 | 0.006 | 32 / 21 | 0.169 | +0.4 | 0.15 | 0.883 |
+| `qwen/qwen3.8-27b, reasoning off` | fleet after fix | 25 | 8 / 17 | 0.108 | -0.040 | -1.66 | 0.111 | 22 / 3 | <0.001 | -8.6 | -3.61 | 0.001 |
+| `qwen/qwen3.8-27b, reasoning off` | after fix vs before_fix | 25 | 12 / 13 | 1.000 | -0.007 | -0.43 | 0.674 | 13 / 11 | 0.839 | -5.4 | -1.29 | 0.211 |
 
 Per spec (HV fraction / regret, single → fleet):
 
-| spec | `anthropic/claude-sonnet-5.5` | `deepseek/deepseek-v4.1-flash` | `qwen/qwen3.8-27b, reasoning off` |
-|---|---|---|---|
-| asic_low_area | n/a → n/a; n/a → n/a | 0.923 ± 0.025 → 0.907 ± 0.022; +4.7% ± 4.6 → +2.7% ± 1.8 | 0.859 ± 0.062 → 0.891 ± 0.049; +10.6% ± 13.5 → +2.4% ± 2.9 |
-| asic_power_50msps | n/a → n/a; n/a → n/a | 0.794 ± 0.059 → 0.768 ± 0.091; +15.6% ± 19.5 → +35.4% ± 38.5 | 0.754 ± 0.073 → 0.754 ± 0.069; +10.1% ± 6.4 → +22.5% ± 39.2 |
-| asic_multiaxis_control | 0.820 ± 0.069 → 0.794 ± 0.051; +17.9% ± 3.2 → +19.9% ± 3.6 | 0.864 ± 0.051 → 0.803 ± 0.078; +25.1% ± 3.0 → +23.4% ± 4.5 | 0.844 ± 0.043 → 0.728 ± 0.089; +21.6% ± 2.5 → +16.9% ± 2.0 |
-| low_area_control | n/a → n/a; n/a → n/a | 0.910 ± 0.035 → 0.895 ± 0.036; +5.2% ± 1.8 → +5.4% ± 3.3 | 0.846 ± 0.077 → 0.872 ± 0.084; +22.8% ± 15.1 → +9.6% ± 12.5 |
-| multiaxis_control | n/a → n/a; n/a → n/a | 0.856 ± 0.022 → 0.796 ± 0.022; +10.0% ± 2.9 → +12.0% ± 6.9 | 0.840 ± 0.030 → 0.734 ± 0.041; +9.2% ± 3.1 → +6.9% ± 5.0 |
+| spec | `anthropic/claude-sonnet-5.5`, fleet before_fix | `deepseek/deepseek-v4.1-flash`, fleet before_fix | `qwen/qwen3.8-27b, reasoning off`, fleet before_fix | `qwen/qwen3.8-27b, reasoning off`, fleet after fix |
+|---|---|---|---|---|
+| asic_low_area | n/a → n/a; n/a → n/a | 0.923 ± 0.025 → 0.907 ± 0.022; +4.7% ± 4.6 → +2.7% ± 1.8 | 0.859 ± 0.062 → 0.891 ± 0.049; +10.6% ± 13.5 → +2.4% ± 2.9 | 0.859 ± 0.062 → 0.882 ± 0.052; +10.6% ± 13.5 → +0.9% ± 1.2 |
+| asic_power_50msps | n/a → n/a; n/a → n/a | 0.794 ± 0.059 → 0.768 ± 0.091; +15.6% ± 19.5 → +35.4% ± 38.5 | 0.754 ± 0.073 → 0.754 ± 0.069; +10.1% ± 6.4 → +22.5% ± 39.2 | 0.754 ± 0.073 → 0.677 ± 0.079; +10.1% ± 6.4 → +8.0% ± 5.8 |
+| asic_multiaxis_control | 0.820 ± 0.069 → 0.794 ± 0.051; +17.9% ± 3.2 → +19.9% ± 3.6 | 0.864 ± 0.051 → 0.803 ± 0.078; +25.1% ± 3.0 → +23.4% ± 4.5 | 0.844 ± 0.043 → 0.728 ± 0.089; +21.6% ± 2.5 → +16.9% ± 2.0 | 0.844 ± 0.043 → 0.740 ± 0.122; +21.6% ± 2.5 → +15.5% ± 1.5 |
+| low_area_control | n/a → n/a; n/a → n/a | 0.910 ± 0.035 → 0.895 ± 0.036; +5.2% ± 1.8 → +5.4% ± 3.3 | 0.846 ± 0.077 → 0.872 ± 0.084; +22.8% ± 15.1 → +9.6% ± 12.5 | 0.846 ± 0.077 → 0.899 ± 0.050; +22.8% ± 15.1 → +2.7% ± 2.0 |
+| multiaxis_control | n/a → n/a; n/a → n/a | 0.856 ± 0.022 → 0.796 ± 0.022; +10.0% ± 2.9 → +12.0% ± 6.9 | 0.840 ± 0.030 → 0.734 ± 0.041; +9.2% ± 3.1 → +6.9% ± 5.0 | 0.840 ± 0.030 → 0.745 ± 0.066; +9.2% ± 3.1 → +4.2% ± 2.3 |
 
 **Throughput, measured** (L1 evaluations per hour of wall-clock, one run at a time; cost per spec = mean provider-reported cost of one 400-evaluation run):
 
 | model | arm | designs evaluated / hour | cost per spec (USD) | *projection*: designs / 24 h | *projection*: specs / 24 h | *projection*: cost / 24 h (USD) |
 |---|---|---|---|---|---|---|
 | `anthropic/claude-sonnet-5.5` | single | 35,002 | 0.0931 | 840,058 | 2100 | 195.45 |
-| `anthropic/claude-sonnet-5.5` | fleet | 29,256 | 0.1488 | 702,154 | 1755 | 261.19 |
+| `anthropic/claude-sonnet-5.5` | fleet before_fix | 29,256 | 0.1488 | 702,154 | 1755 | 261.19 |
 | `deepseek/deepseek-v4.1-flash` | single | 9,410 | 0.0167 | 225,847 | 565 | 9.43 |
-| `deepseek/deepseek-v4.1-flash` | fleet | 6,292 | 0.0257 | 151,007 | 378 | 9.71 |
+| `deepseek/deepseek-v4.1-flash` | fleet before_fix | 6,292 | 0.0257 | 151,007 | 378 | 9.71 |
 | `qwen/qwen3.8-27b, reasoning off` | single | 25,212 | 0.0090 | 605,084 | 1513 | 13.64 |
-| `qwen/qwen3.8-27b, reasoning off` | fleet | 8,400 | 0.0127 | 201,609 | 504 | 6.40 |
+| `qwen/qwen3.8-27b, reasoning off` | fleet before_fix | 8,400 | 0.0127 | 201,609 | 504 | 6.40 |
+| `qwen/qwen3.8-27b, reasoning off` | fleet after fix | 16,094 | 0.0131 | 386,266 | 966 | 12.64 |
 
 The three *projection* columns multiply the measured rates by 24 hours of back-to-back runs on one machine like this one; they assume nothing else changes (provider latency, rate limits, the spec mix) and were not run.
 
 Fleet behaviour (from the run records):
 
-- `anthropic/claude-sonnet-5.5`: phase 2 went entirely to the pipelined member in 5 of 5 runs; the fsm member's architect declared its families infeasible 0 times; distinct designs in the store per run 341 ± 9.
-- `deepseek/deepseek-v4.1-flash`: phase 2 went entirely to the pipelined member in 15 of 25 runs; the fsm member's architect declared its families infeasible 2 times; distinct designs in the store per run 355 ± 7.
-- `qwen/qwen3.8-27b, reasoning off`: phase 2 went entirely to the pipelined member in 14 of 25 runs; the fsm member's architect declared its families infeasible 16 times; distinct designs in the store per run 334 ± 16.
+- `anthropic/claude-sonnet-5.5`, fleet before_fix: phase 2 went entirely to the pipelined member in 5 of 5 runs; the fsm member's architect declared its families infeasible 0 times; distinct designs in the store per run 341 ± 9.
+- `deepseek/deepseek-v4.1-flash`, fleet before_fix: phase 2 went entirely to the pipelined member in 15 of 25 runs; the fsm member's architect declared its families infeasible 2 times; distinct designs in the store per run 355 ± 7.
+- `qwen/qwen3.8-27b, reasoning off`, fleet before_fix: phase 2 went entirely to the pipelined member in 14 of 25 runs; the fsm member's architect declared its families infeasible 16 times; distinct designs in the store per run 334 ± 16.
+- `qwen/qwen3.8-27b, reasoning off`, fleet after fix: phase 2 went entirely to the pipelined member in 15 of 25 runs; the fsm member's architect declared its families infeasible 15 times; distinct designs in the store per run 323 ± 13.
 
 ## L2 -> L1 feedback
 
-Recorded data (M3 structured runs rebuilt from their archived evaluations, M3 campaign pools, NSGA-II/random baselines on every system spec, and the live M4 runs on the system specs): the feedback **fires in 0 of 92 recorded searches and 0 of 50 live M4 runs**: L2 always found a passing design among the L1-feasible ones, so on the committed specs it never fires.
+Recorded data (M3 structured runs rebuilt from their archived evaluations, M3 campaign pools, NSGA-II/random baselines on every system spec, and the live M4 runs on the system specs): the feedback **fires in 0 of 92 recorded searches and 0 of 60 live M4 runs**: L2 always found a passing design among the L1-feasible ones, so on the committed specs it never fires.
 
-The constructed spec `l2_feedback_bursty` (bursts of 32 at 130 MS/s, p99 <= 0.4 us, 61,461 designs pass the L1 bound, 447 the simulation; true winner `pipelined:data_width=15,n_iter=12,angle_guard=1,frac_guard=0,rounding=round`): it fires in **6 of 15** searches (5 NSGA-II, 5 random, 5 rule-based-architect runs of 400 evaluations). With the correction it recovers a passing design in **6 of 6** (regret +19.5% ± 12.1); the ablation, the same re-exploration budget screened with the uncorrected bound, recovers in **2 of 6**.
+The constructed spec `l2_feedback_bursty` (bursts of 32 at 130 MS/s, throughput >= 130 MS/s, p99 <= 0.4 us, 37,882 designs pass the L1 bound, 447 the simulation; true winner `pipelined:data_width=15,n_iter=12,angle_guard=1,frac_guard=0,rounding=round`): it fires in **3 of 15** searches (5 NSGA-II, 5 random, 5 rule-based-architect runs of 400 evaluations). With the correction it recovers a passing design in **3 of 3** (regret +17.3% ± 11.0); the ablation, the same re-exploration budget screened with the uncorrected bound, recovers in **1 of 3**.
 
 | search | L1-feasible | pass L2 | fires | corrected: outcome, evals, regret | uncorrected: outcome, evals |
 |---|---|---|---|---|---|
-| nsga2 s0 | 193 | 2 | no | — | — |
-| nsga2 s1 | 215 | 1 | no | — | — |
-| nsga2 s2 | 214 | 2 | no | — | — |
-| nsga2 s3 | 169 | 2 | no | — | — |
-| nsga2 s4 | 166 | 0 | yes | recovered, 120, +30.7% | no_feasible, 180 |
-| random s0 | 60 | 2 | no | — | — |
-| random s1 | 64 | 0 | yes | recovered, 60, +17.3% | recovered, 60 |
-| random s2 | 71 | 1 | no | — | — |
-| random s3 | 63 | 0 | yes | recovered, 60, +3.8% | no_feasible, 180 |
-| random s4 | 56 | 0 | yes | recovered, 120, +30.7% | no_feasible, 180 |
-| rule-based architect s0 | 182 | 0 | yes | recovered, 60, +30.7% | recovered, 60 |
-| rule-based architect s1 | 159 | 2 | no | — | — |
-| rule-based architect s2 | 170 | 4 | no | — | — |
-| rule-based architect s3 | 155 | 0 | yes | recovered, 60, +3.8% | no_feasible, 180 |
-| rule-based architect s4 | 181 | 4 | no | — | — |
+| nsga2 s0 | 188 | 4 | no | — | — |
+| nsga2 s1 | 205 | 1 | no | — | — |
+| nsga2 s2 | 206 | 16 | no | — | — |
+| nsga2 s3 | 173 | 5 | no | — | — |
+| nsga2 s4 | 164 | 1 | no | — | — |
+| random s0 | 48 | 2 | no | — | — |
+| random s1 | 48 | 0 | yes | recovered, 60, +17.3% | recovered, 60 |
+| random s2 | 62 | 1 | no | — | — |
+| random s3 | 57 | 0 | yes | recovered, 60, +3.8% | no_feasible, 180 |
+| random s4 | 48 | 0 | yes | recovered, 120, +30.7% | no_feasible, 180 |
+| rule-based architect s0 | 212 | 20 | no | — | — |
+| rule-based architect s1 | 180 | 18 | no | — | — |
+| rule-based architect s2 | 140 | 15 | no | — | — |
+| rule-based architect s3 | 159 | 14 | no | — | — |
+| rule-based architect s4 | 163 | 27 | no | — | — |
 
 
 ## Models and spend
@@ -695,10 +711,11 @@ Model check (`eval/data/models_check_m4.json`, 2026-10-10T16:23:12Z, 458 models 
 | deepseek/deepseek-v4.1-flash / structured (structured) | 15 | 0.2459 |
 | qwen/qwen3.8-27b / fleet | 25 | 0.3175 |
 | qwen/qwen3.8-27b / fleet (pilot) | 1 | 0.0158 |
+| qwen/qwen3.8-27b / fleet (v2) | 25 | 0.3273 |
 | qwen/qwen3.8-27b / structured (pilot) | 1 | 0.0071 |
 | qwen/qwen3.8-27b / structured (single) | 10 | 0.0961 |
 | qwen/qwen3.8-27b / structured (structured) | 15 | 0.1292 |
-| **total** | 122 | **3.5165** |
+| **total** | 147 | **3.8438** |
 
-Key usage snapshots (authoritative; `eval/data/key_usage_m4.json`): session_start_before_any_m4_call 2026-10-10T16:23:17Z $7.8163; after_pilot_structured 2026-10-10T16:25:37Z $7.8185; after_pilot_fleet 2026-10-10T16:27:23Z $7.8363; after_qwen 2026-10-10T18:03:43Z $8.5719; after_deepseek 2026-10-10T20:44:12Z $9.7514; after_sonnet_structured 2026-10-10T20:52:32Z $10.8584; after_sonnet_fleet_subset 2026-10-10T20:57:21Z $11.5831; after_eval_final 2026-10-10T20:59:36Z $11.6459.
+Key usage snapshots (authoritative; `eval/data/key_usage_m4.json`): session_start_before_any_m4_call 2026-10-10T16:23:17Z $7.8163; after_pilot_structured 2026-10-10T16:25:37Z $7.8185; after_pilot_fleet 2026-10-10T16:27:23Z $7.8363; after_qwen 2026-10-10T18:03:43Z $8.5719; after_deepseek 2026-10-10T20:44:12Z $9.7514; after_sonnet_structured 2026-10-10T20:52:32Z $10.8584; after_sonnet_fleet_subset 2026-10-10T20:57:21Z $11.5831; after_eval_final 2026-10-10T20:59:36Z $11.6459; before_fleet_v2_qwen 2026-10-10T22:29:38Z $11.6459; after_fleet_v2_qwen 2026-10-10T23:07:37Z $11.9645.
 

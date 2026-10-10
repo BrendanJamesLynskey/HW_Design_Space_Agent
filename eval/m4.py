@@ -820,22 +820,27 @@ def report_m4(L: list[str]) -> None:
         def _f(x: Any, fmt: str) -> str:
             return "n/a" if x is None else format(x, fmt)
 
+        def _p(x: Any) -> str:
+            return "n/a" if x is None else ("<0.001" if x < 0.001 else format(x, ".3f"))
+
         for row in paired_tests(arms):
             h, g = row["hv_frac"], row["select_regret"]
             L.append(f"| `{row['model']}` | {ARM_LABEL[row['arm']]} | {h['t']['n']} | {h['sign']['positive']} / {h['sign']['negative']} | "
-                     f"{h['sign']['p']:.3f} | {_f(h['t']['mean'], '+.3f')} | {_f(h['t']['t'], '.2f')} | {_f(h['t']['p'], '.3f')} | "
-                     f"{g['sign']['negative']} / {g['sign']['positive']} | {g['sign']['p']:.3f} | "
+                     f"{_p(h['sign']['p'])} | {_f(h['t']['mean'], '+.3f')} | {_f(h['t']['t'], '.2f')} | {_p(h['t']['p'])} | "
+                     f"{g['sign']['negative']} / {g['sign']['positive']} | {_p(g['sign']['p'])} | "
                      f"{_f(None if g['t']['mean'] is None else g['t']['mean'] * 100, '+.1f')} | {_f(g['t']['t'], '.2f')} | "
-                     f"{_f(g['t']['p'], '.3f')} |")
+                     f"{_p(g['t']['p'])} |")
         L.append("")
         L.append("Per spec (HV fraction / regret, single → fleet):\n")
-        L.append("| spec | " + " | ".join(f"`{m}`" for m in arms) + " |")
-        L.append("|---|" + "---|" * len(arms))
+        cols = [(m, fa) for m, a in arms.items() for fa in FLEET_ARMS if a.get(fa)]
+        L.append("| spec | " + " | ".join(f"`{m}`, {ARM_LABEL[fa]}" for m, fa in cols) + " |")
+        L.append("|---|" + "---|" * len(cols))
         for name in ASIC_SPECS + FPGA_AB_SPECS:
             cells = []
-            for m, a in arms.items():
+            for m, fa in cols:
+                a = arms[m]
                 sx = [r for r in a["single"] if r["spec"] == name]
-                fx = [r for r in a["fleet"] if r["spec"] == name]
+                fx = [r for r in a[fa] if r["spec"] == name]
                 cells.append(f"{_ms([r['hv_frac'] for r in sx])} → {_ms([r['hv_frac'] for r in fx])}; "
                              f"{_pct([r['select_regret'] for r in sx])} → {_pct([r['select_regret'] for r in fx])}")
             L.append(f"| {name} | " + " | ".join(cells) + " |")
