@@ -420,7 +420,9 @@ def facts() -> dict[str, Any]:  # noqa: PLR0915 - one flat registry, by write-up
     f["hp.m"] = max(int(a.params()["m"]) for a in vivado_m4.POINTS_20NS)
     f["infeasible.rate_msps"] = next(c.value for c in load_spec(ROOT / "specs" / "infeasible_dds_400msps.yaml").constraints
                                      if c.metric == "throughput_msps")
-    return f
+    # 10 significant digits: float sums differ in the last bit between Python versions
+    # (3.12 made sum() compensated), and no printed number needs more.
+    return {k: (float(f"{v:.10g}") if isinstance(v, float) else v) for k, v in f.items()}
 
 
 def bind() -> int:
