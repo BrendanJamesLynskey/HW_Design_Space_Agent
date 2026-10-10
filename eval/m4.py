@@ -343,6 +343,8 @@ def cmd_agent_m4(args: argparse.Namespace) -> None:
             if path.exists() and not args.force:
                 print(f"skip (exists): {path.name}")
                 continue
+            # The ledger's ``arm`` is the kind of run whose cost predicts the next one
+            # (an A/B single-arm run is a structured-graph run); the A/B arm is the note.
             if not cap_ok(args.model, "structured", args.expected_cost, args.max_spend):
                 return
             s = any_spec(name)
@@ -366,7 +368,11 @@ def cmd_fleet_m4(args: argparse.Namespace) -> None:
     from hw_dse.fleet.coordinator import run_fleet
 
     accuracy_table.preload()
-    outdir = (M4_DIRS["pilot"] / "fleet" if args.pilot else M4_DIRS["fleet_ab"] / "fleet") / _model_dir(args.model, args.reasoning)
+    # v1: the first A/B (phase-2 members started cold; member minimum 10). v2, after
+    # review: phase-2 studies warm-started from the Store, spendable member minimum.
+    v2 = args.fleet_version == "v2"
+    arm_dir = "fleet_v2" if v2 else "fleet"
+    outdir = (M4_DIRS["pilot"] / "fleet" if args.pilot else M4_DIRS["fleet_ab"] / arm_dir) / _model_dir(args.model, args.reasoning)
     outdir.mkdir(parents=True, exist_ok=True)
     names = args.specs.split(",") if args.specs else list(ASIC_SPECS + FPGA_AB_SPECS)
     for seed in SEEDS["m2"][: args.seeds]:
@@ -378,23 +384,25 @@ def cmd_fleet_m4(args: argparse.Namespace) -> None:
             if not cap_ok(args.model, "fleet", args.expected_cost, args.max_spend):
                 return
             s = any_spec(name)
-            root = ROOT / "runs" / ("fleet_m4_pilot" if args.pilot else "fleet_m4") / name / f"seed{seed}-{time.strftime('%Y%m%d-%H%M%S')}"
+            root = (ROOT / "runs" / ("fleet_m4_pilot" if args.pilot else ("fleet_m4_v2" if v2 else "fleet_m4")) / name
+                    / f"seed{seed}-{time.strftime('%Y%m%d-%H%M%S')}")
 
             def factory(member: str, phase: int) -> Any:
                 return make_llm("openrouter", args.model, tracer=Tracer(), reasoning=args.reasoning)
 
             t0 = time.time()
-            res = run_fleet(s, factory, seed=seed, run_root=root)
+            res = run_fleet(s, factory, seed=seed, run_root=root, warm_start=v2)
             wall = time.time() - t0
             members = [{**mm, "run_dir": str(Path(mm["run_dir"]).relative_to(ROOT))} for mm in res["members"]]
-            row = {**_row_common(res, name, seed, args, "fleet", wall), "members": members,
+            row = {**_row_common(res, name, seed, args, arm_dir, wall), "members": members, "fleet_version": args.fleet_version,
+                   "warm_start": res["warm_start"],
                    "phase2_budgets": res["phase2_budgets"], "lessons": res["lessons"],
                    "store_evaluations_by_member": res["store_evaluations_by_member"],
                    "store_distinct_designs": res["store_distinct_designs"],
                    "run_dir": str(root.relative_to(ROOT))}
-            ledger_add(args.model, name, seed, row["cost_usd"], "fleet", "pilot" if args.pilot else "")
+            ledger_add(args.model, name, seed, row["cost_usd"], "fleet", "pilot" if args.pilot else ("v2" if v2 else ""))
             path.write_text(json.dumps(row, indent=1, default=str))
-            print(f"[fleet] {name} seed {seed}: {res['status']}, HV {row['hv_frac']}, regret {row['select_regret']}, "
+            print(f"[{arm_dir}] {name} seed {seed}: {res['status']}, HV {row['hv_frac']}, regret {row['select_regret']}, "
                   f"evals {row['n_evals']}, ${row['cost_usd']:.4f}, {row['wall_s']}s", flush=True)
 
 
@@ -466,7 +474,7 @@ def cmd_l2_feedback_m4(_: argparse.Namespace) -> None:
             for seed in SEEDS["m2"]:
                 recorded.append({"run": f"baseline {sampler} {name} s{seed}", **check(run_baseline(s, sampler, seed), s)})
     live = []
-    for d in (M4_DIRS["agent"], M4_DIRS["fleet_ab"] / "single", M4_DIRS["fleet_ab"] / "fleet"):
+    for d in (M4_DIRS["agent"], M4_DIRS["fleet_ab"] / "single", *(M4_DIRS["fleet_ab"] / a for a in FLEET_ARMS)):
         for rows in _rows(d).values():
             for r in rows:
                 if any_spec(r["spec"]).system is not None:
@@ -513,7 +521,7 @@ def cmd_l2_feedback_m4(_: argparse.Namespace) -> None:
           f"baselines on every system spec, and the live M4 runs on the system specs): the feedback **fires in "
           f"{n_rec} of {len(recorded)} recorded searches and {sum(r['fires'] for r in live)} of {len(live)} live M4 runs**: "
           "L2 always found a passing design among the L1-feasible ones, so on the committed specs it never fires.\n\n"
-          f"The constructed spec `l2_feedback_bursty` (bursts of 32 at 130 MS/s, p99 <= 0.4 us, "
+          f"The constructed spec `l2_feedback_bursty` (bursts of 32 at 130 MS/s, throughput >= 130 MS/s, p99 <= 0.4 us, "
           f"{gtrow['n_feasible_l1_bound']:,} designs pass the L1 bound, {gtrow['n_feasible_simulated']:,} the simulation; "
           f"true winner `{gtrow['winner_key']}`): it fires in **{len(fired)} of {len(constructed)}** searches "
           f"(5 NSGA-II, 5 random, 5 rule-based-architect runs of 400 evaluations). With the correction it recovers a "
@@ -555,6 +563,9 @@ def register(sub: Any) -> None:
         p4.add_argument("--force", action="store_true")
         p4.add_argument("--max-spend", type=float, default=M4_CAP, help="M4 spend cap (USD) from the ledger")
         p4.add_argument("--expected-cost", type=float, default=0.10)
+        if nm == "fleet-m4":
+            p4.add_argument("--fleet-version", choices=("v1", "v2"), default="v2",
+                            help="v1: the first A/B's fleet (cold phase 2); v2: phase 2 warm-started from the Store")
         p4.set_defaults(fn=fn)
 
 
@@ -583,17 +594,59 @@ def _fails(rows: list[dict[str, Any]]) -> str:
     return f"{bad}/{len(rows)}"
 
 
+FLEET_ARMS = ("fleet", "fleet_v2")
+
+
 def ab_arms() -> dict[str, dict[str, list[dict[str, Any]]]]:
-    """model -> {"single": rows, "fleet": rows}; the single arm on the ASIC specs is the ASIC structured eval."""
+    """model -> {"single": rows, "fleet": rows, "fleet_v2": rows}; the single arm on the ASIC specs
+    is the ASIC structured eval. A model's single arm counts only the (spec, seed) pairs one of its
+    fleet arms ran; :func:`paired` pairs them run by run."""
     single = _rows(M4_DIRS["agent"])
     for k, v in _rows(M4_DIRS["fleet_ab"] / "single").items():
         single.setdefault(k, []).extend(v)
-    fleet = _rows(M4_DIRS["fleet_ab"] / "fleet")
+    fleets = {a: _rows(M4_DIRS["fleet_ab"] / a) for a in FLEET_ARMS}
     out = {}
-    for m, fx in fleet.items():  # a model's single arm counts only the specs (and seeds) its fleet arm ran
-        pairs = {(r["spec"], r["seed"]) for r in fx}
-        out[m] = {"single": [r for r in single.get(m, []) if (r["spec"], r["seed"]) in pairs], "fleet": fx}
+    for m in fleets["fleet"]:
+        fx = {a: fleets[a].get(m, []) for a in FLEET_ARMS}
+        pairs = {(r["spec"], r["seed"]) for rs in fx.values() for r in rs}
+        out[m] = {"single": [r for r in single.get(m, []) if (r["spec"], r["seed"]) in pairs], **fx}
     return out
+
+
+def paired(single: list[dict[str, Any]], fleet: list[dict[str, Any]], metric: str) -> list[float]:
+    """fleet - single on ``metric``, one difference per (spec, seed) both arms ran (sorted by spec, seed)."""
+    s = {(r["spec"], r["seed"]): r for r in single}
+    out = []
+    for r in sorted(fleet, key=lambda r: (r["spec"], r["seed"])):
+        x = s.get((r["spec"], r["seed"]))
+        if x is not None and r.get(metric) is not None and x.get(metric) is not None:
+            out.append(float(r[metric]) - float(x[metric]))
+    return out
+
+
+def paired_tests(arms: dict[str, dict[str, list[dict[str, Any]]]]) -> list[dict[str, Any]]:
+    """Per model and fleet arm (and pooled over models for each fleet arm): sign test and paired t
+    on fleet - single, for HV fraction and selection regret."""
+    from hw_dse.stats import paired_t, sign_test
+
+    rows = []
+    for arm in FLEET_ARMS:
+        pool: dict[str, list[float]] = {"hv_frac": [], "select_regret": []}
+        n_models = 0
+        for m, a in arms.items():
+            if not a.get(arm):
+                continue
+            n_models += 1
+            row: dict[str, Any] = {"model": m, "arm": arm}
+            for met in pool:
+                d = paired(a["single"], a[arm], met)
+                pool[met] += d
+                row[met] = {"sign": sign_test(d), "t": paired_t(d)}
+            rows.append(row)
+        if n_models > 1:
+            rows.append({"model": "pooled", "arm": arm,
+                         **{met: {"sign": sign_test(d), "t": paired_t(d)} for met, d in pool.items()}})
+    return rows
 
 
 def report_m4(L: list[str]) -> None:
@@ -728,7 +781,7 @@ def report_m4(L: list[str]) -> None:
                  "cost / run (USD) | failures | failed LLM calls | wall / run (s) |")
         L.append("|---|---|---|---|---|---|---|---|---|---|---|---|")
         for m, a in arms.items():
-            for arm in ("single", "fleet"):
+            for arm in ("single",) + FLEET_ARMS:
                 rs = a[arm]
                 if not rs:
                     continue
@@ -737,6 +790,27 @@ def report_m4(L: list[str]) -> None:
                          f"{_ms([r['input_tokens'] for r in rs], digits=0)} | {_ms([r['output_tokens'] for r in rs], digits=0)} | "
                          f"{_ms([r['cost_usd'] for r in rs], digits=4)} | {_fails(rs)} | "
                          f"{sum(int(r['llm_failures']) for r in rs)} | {_ms([r['wall_s'] for r in rs], digits=0)} |")
+        L.append("")
+        L.append("`fleet_v2` (run after review, Qwen only): the same fleet with each phase-2 study warm-started from "
+                 "the Store (the fleet's stored front designs of its family, as NSGA-II seeds) and a member minimum "
+                 "budget of 20 that the 40% coverage reserve can always spend. `fleet` is the first A/B's fleet "
+                 "(phase-2 members started cold, minimum 10).\n")
+        L.append("**Paired tests** (fleet − single on the same spec and seed; sign test exact, two-sided, ties "
+                 "dropped; paired t two-sided). HV: + = fleet higher. Regret: + = fleet worse.\n")
+        L.append("| model | fleet arm | pairs | HV: fleet higher / lower | HV sign p | HV mean diff | HV t | HV t p | "
+                 "regret: fleet lower / higher | regret sign p | regret mean diff (pts) | regret t | regret t p |")
+        L.append("|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+
+        def _f(x: Any, fmt: str) -> str:
+            return "n/a" if x is None else format(x, fmt)
+
+        for row in paired_tests(arms):
+            h, g = row["hv_frac"], row["select_regret"]
+            L.append(f"| `{row['model']}` | {row['arm']} | {h['t']['n']} | {h['sign']['positive']} / {h['sign']['negative']} | "
+                     f"{h['sign']['p']:.3f} | {_f(h['t']['mean'], '+.3f')} | {_f(h['t']['t'], '.2f')} | {_f(h['t']['p'], '.3f')} | "
+                     f"{g['sign']['negative']} / {g['sign']['positive']} | {g['sign']['p']:.3f} | "
+                     f"{_f(None if g['t']['mean'] is None else g['t']['mean'] * 100, '+.1f')} | {_f(g['t']['t'], '.2f')} | "
+                     f"{_f(g['t']['p'], '.3f')} |")
         L.append("")
         L.append("Per spec (HV fraction / regret, single → fleet):\n")
         L.append("| spec | " + " | ".join(f"`{m}`" for m in arms) + " |")
@@ -755,7 +829,7 @@ def report_m4(L: list[str]) -> None:
         L.append("| model | arm | designs evaluated / hour | cost per spec (USD) | *projection*: designs / 24 h | *projection*: specs / 24 h | *projection*: cost / 24 h (USD) |")
         L.append("|---|---|---|---|---|---|---|")
         for m, a in arms.items():
-            for arm in ("single", "fleet"):
+            for arm in ("single",) + FLEET_ARMS:
                 rs = a[arm]
                 if not rs:
                     continue
@@ -768,13 +842,16 @@ def report_m4(L: list[str]) -> None:
                  "spec mix) and were not run.\n")
         L.append("Fleet behaviour (from the run records):\n")
         for m, a in arms.items():
-            fx = a["fleet"]
-            p2 = [r["phase2_budgets"] for r in fx]
-            to_pipe = sum(1 for b in p2 if b.get("fsm", 0) == 0)
-            fsm_infeas = sum(1 for r in fx for mm in r["members"] if mm["member"] == "fsm" and mm["llm_declared_infeasible"])
-            L.append(f"- `{m}`: phase 2 went entirely to the pipelined member in {to_pipe} of {len(fx)} runs; the fsm "
-                     f"member's architect declared its families infeasible {fsm_infeas} times; distinct designs in the "
-                     f"store per run {_ms([float(r['store_distinct_designs']) for r in fx], digits=0)}.")
+            for farm in FLEET_ARMS:
+                fx = a[farm]
+                if not fx:
+                    continue
+                p2 = [r["phase2_budgets"] for r in fx]
+                to_pipe = sum(1 for b in p2 if b.get("fsm", 0) == 0)
+                fsm_infeas = sum(1 for r in fx for mm in r["members"] if mm["member"] == "fsm" and mm["llm_declared_infeasible"])
+                L.append(f"- `{m}`, {farm}: phase 2 went entirely to the pipelined member in {to_pipe} of {len(fx)} runs; the fsm "
+                         f"member's architect declared its families infeasible {fsm_infeas} times; distinct designs in the "
+                         f"store per run {_ms([float(r['store_distinct_designs']) for r in fx], digits=0)}.")
         L.append("")
 
     # ---- L2 -> L1 feedback ---------------------------------------------
