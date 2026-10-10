@@ -7,7 +7,8 @@ Sources (summary JSONs written by ``eval/run_eval.py``):
 
 * ``eval/data/agent_m4/``        structured graph on the ASIC specs (also the A/B's single arm there)
 * ``eval/data/fleet_m4/single/`` structured graph on the A/B's FPGA specs
-* ``eval/data/fleet_m4/fleet/``  the code-orchestrated fleet
+* ``eval/data/fleet_m4/fleet/``  the code-orchestrated fleet (the first A/B, "before_fix")
+* ``eval/data/fleet_m4/fleet_v2/`` the fleet after review fixes S3/S4 (Qwen re-run)
 * ``eval/data/m4_pilot/``        the pilots
 
 A structured run keeps ``llm_trace.jsonl``, ``report.md`` and
@@ -33,6 +34,7 @@ from archive_traces import scan  # noqa: E402
 DEST = ROOT / "eval" / "data" / "traces" / "m4"
 DATA = ROOT / "eval" / "data"
 SOURCES = {"structured": DATA / "agent_m4", "single": DATA / "fleet_m4" / "single", "fleet": DATA / "fleet_m4" / "fleet",
+           "fleet_v2": DATA / "fleet_m4" / "fleet_v2",
            "pilot-structured": DATA / "m4_pilot" / "structured", "pilot-fleet": DATA / "m4_pilot" / "fleet"}
 
 

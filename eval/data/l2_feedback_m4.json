@@ -803,6 +803,56 @@
    "run": "M4 fleet qwen3.8-27b multiaxis_control s4",
    "fires": false,
    "outcome": null
+  },
+  {
+   "run": "M4 fleet_v2 qwen3.8-27b asic_multiaxis_control s0",
+   "fires": false,
+   "outcome": null
+  },
+  {
+   "run": "M4 fleet_v2 qwen3.8-27b asic_multiaxis_control s1",
+   "fires": false,
+   "outcome": null
+  },
+  {
+   "run": "M4 fleet_v2 qwen3.8-27b asic_multiaxis_control s2",
+   "fires": false,
+   "outcome": null
+  },
+  {
+   "run": "M4 fleet_v2 qwen3.8-27b asic_multiaxis_control s3",
+   "fires": false,
+   "outcome": null
+  },
+  {
+   "run": "M4 fleet_v2 qwen3.8-27b asic_multiaxis_control s4",
+   "fires": false,
+   "outcome": null
+  },
+  {
+   "run": "M4 fleet_v2 qwen3.8-27b multiaxis_control s0",
+   "fires": false,
+   "outcome": null
+  },
+  {
+   "run": "M4 fleet_v2 qwen3.8-27b multiaxis_control s1",
+   "fires": false,
+   "outcome": null
+  },
+  {
+   "run": "M4 fleet_v2 qwen3.8-27b multiaxis_control s2",
+   "fires": false,
+   "outcome": null
+  },
+  {
+   "run": "M4 fleet_v2 qwen3.8-27b multiaxis_control s3",
+   "fires": false,
+   "outcome": null
+  },
+  {
+   "run": "M4 fleet_v2 qwen3.8-27b multiaxis_control s4",
+   "fires": false,
+   "outcome": null
   }
  ],
  "constructed_gt": {
@@ -1028,5 +1078,5 @@
    "n_l2_pass": 27
   }
  ],
- "summary_md": "Recorded data (M3 structured runs rebuilt from their archived evaluations, M3 campaign pools, NSGA-II/random baselines on every system spec, and the live M4 runs on the system specs): the feedback **fires in 0 of 92 recorded searches and 0 of 50 live M4 runs**: L2 always found a passing design among the L1-feasible ones, so on the committed specs it never fires.\n\nThe constructed spec `l2_feedback_bursty` (bursts of 32 at 130 MS/s, p99 <= 0.4 us, 37,882 designs pass the L1 bound, 447 the simulation; true winner `pipelined:data_width=15,n_iter=12,angle_guard=1,frac_guard=0,rounding=round`): it fires in **3 of 15** searches (5 NSGA-II, 5 random, 5 rule-based-architect runs of 400 evaluations). With the correction it recovers a passing design in **3 of 3** (regret +17.3% \u00b1 11.0); the ablation, the same re-exploration budget screened with the uncorrected bound, recovers in **1 of 3**.\n\n| search | L1-feasible | pass L2 | fires | corrected: outcome, evals, regret | uncorrected: outcome, evals |\n|---|---|---|---|---|---|\n| nsga2 s0 | 188 | 4 | no | \u2014 | \u2014 |\n| nsga2 s1 | 205 | 1 | no | \u2014 | \u2014 |\n| nsga2 s2 | 206 | 16 | no | \u2014 | \u2014 |\n| nsga2 s3 | 173 | 5 | no | \u2014 | \u2014 |\n| nsga2 s4 | 164 | 1 | no | \u2014 | \u2014 |\n| random s0 | 48 | 2 | no | \u2014 | \u2014 |\n| random s1 | 48 | 0 | yes | recovered, 60, +17.3% | recovered, 60 |\n| random s2 | 62 | 1 | no | \u2014 | \u2014 |\n| random s3 | 57 | 0 | yes | recovered, 60, +3.8% | no_feasible, 180 |\n| random s4 | 48 | 0 | yes | recovered, 120, +30.7% | no_feasible, 180 |\n| rule-based architect s0 | 212 | 20 | no | \u2014 | \u2014 |\n| rule-based architect s1 | 180 | 18 | no | \u2014 | \u2014 |\n| rule-based architect s2 | 140 | 15 | no | \u2014 | \u2014 |\n| rule-based architect s3 | 159 | 14 | no | \u2014 | \u2014 |\n| rule-based architect s4 | 163 | 27 | no | \u2014 | \u2014 |\n"
+ "summary_md": "Recorded data (M3 structured runs rebuilt from their archived evaluations, M3 campaign pools, NSGA-II/random baselines on every system spec, and the live M4 runs on the system specs): the feedback **fires in 0 of 92 recorded searches and 0 of 60 live M4 runs**: L2 always found a passing design among the L1-feasible ones, so on the committed specs it never fires.\n\nThe constructed spec `l2_feedback_bursty` (bursts of 32 at 130 MS/s, throughput >= 130 MS/s, p99 <= 0.4 us, 37,882 designs pass the L1 bound, 447 the simulation; true winner `pipelined:data_width=15,n_iter=12,angle_guard=1,frac_guard=0,rounding=round`): it fires in **3 of 15** searches (5 NSGA-II, 5 random, 5 rule-based-architect runs of 400 evaluations). With the correction it recovers a passing design in **3 of 3** (regret +17.3% \u00b1 11.0); the ablation, the same re-exploration budget screened with the uncorrected bound, recovers in **1 of 3**.\n\n| search | L1-feasible | pass L2 | fires | corrected: outcome, evals, regret | uncorrected: outcome, evals |\n|---|---|---|---|---|---|\n| nsga2 s0 | 188 | 4 | no | \u2014 | \u2014 |\n| nsga2 s1 | 205 | 1 | no | \u2014 | \u2014 |\n| nsga2 s2 | 206 | 16 | no | \u2014 | \u2014 |\n| nsga2 s3 | 173 | 5 | no | \u2014 | \u2014 |\n| nsga2 s4 | 164 | 1 | no | \u2014 | \u2014 |\n| random s0 | 48 | 2 | no | \u2014 | \u2014 |\n| random s1 | 48 | 0 | yes | recovered, 60, +17.3% | recovered, 60 |\n| random s2 | 62 | 1 | no | \u2014 | \u2014 |\n| random s3 | 57 | 0 | yes | recovered, 60, +3.8% | no_feasible, 180 |\n| random s4 | 48 | 0 | yes | recovered, 120, +30.7% | no_feasible, 180 |\n| rule-based architect s0 | 212 | 20 | no | \u2014 | \u2014 |\n| rule-based architect s1 | 180 | 18 | no | \u2014 | \u2014 |\n| rule-based architect s2 | 140 | 15 | no | \u2014 | \u2014 |\n| rule-based architect s3 | 159 | 14 | no | \u2014 | \u2014 |\n| rule-based architect s4 | 163 | 27 | no | \u2014 | \u2014 |\n"
 }

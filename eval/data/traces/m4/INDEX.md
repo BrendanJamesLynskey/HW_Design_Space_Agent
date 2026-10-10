@@ -1,6 +1,6 @@
 # M4 live run index
 
-Each structured run directory holds `llm_trace.jsonl` (every LLM call; key-redacted in code and scanned again by `scripts/archive_traces_m4.py`), `report.md` and `evaluations.csv.gz`; a fleet run holds the same per member run, under `<member>-p<phase>/`. Summary JSONs: `eval/data/agent_m4/`, `fleet_m4/`, `m4_pilot/`. Provider-reported cost of these runs: $3.5094.
+Each structured run directory holds `llm_trace.jsonl` (every LLM call; key-redacted in code and scanned again by `scripts/archive_traces_m4.py`), `report.md` and `evaluations.csv.gz`; a fleet run holds the same per member run, under `<member>-p<phase>/`. Summary JSONs: `eval/data/agent_m4/`, `fleet_m4/`, `m4_pilot/`. Provider-reported cost of these runs: $3.8366.
 
 | run dir | model | arm | spec | seed | status | decisions | cost (USD) |
 |---|---|---|---|---|---|---|---|
@@ -59,6 +59,31 @@ Each structured run directory holds `llm_trace.jsonl` (every LLM call; key-redac
 | `fleet/multiaxis_control/seed2-20261010-172302` | `qwen/qwen3.8-27b, reasoning off` | fleet | multiaxis_control | 2 | stopped | add_family → infeasible → stop → refine → stop | 0.0137 |
 | `fleet/multiaxis_control/seed3-20261010-173620` | `qwen/qwen3.8-27b, reasoning off` | fleet | multiaxis_control | 3 | stopped | add_family → infeasible → stop → map_front → refine → stop | 0.0145 |
 | `fleet/multiaxis_control/seed4-20261010-175431` | `qwen/qwen3.8-27b, reasoning off` | fleet | multiaxis_control | 4 | stopped | add_family → infeasible → stop → refine → stop | 0.0120 |
+| `fleet_v2/asic_low_area/seed0-20261010-222943` | `qwen/qwen3.8-27b, reasoning off` | fleet_v2 | asic_low_area | 0 | stopped | stop → stop → add_family → stop | 0.0120 |
+| `fleet_v2/asic_low_area/seed1-20261010-223749` | `qwen/qwen3.8-27b, reasoning off` | fleet_v2 | asic_low_area | 1 | stopped | stop → stop → add_family → stop | 0.0088 |
+| `fleet_v2/asic_low_area/seed2-20261010-224936` | `qwen/qwen3.8-27b, reasoning off` | fleet_v2 | asic_low_area | 2 | stopped | stop → stop → add_family → stop | 0.0100 |
+| `fleet_v2/asic_low_area/seed3-20261010-225548` | `qwen/qwen3.8-27b, reasoning off` | fleet_v2 | asic_low_area | 3 | stopped | stop → stop → refine → stop | 0.0116 |
+| `fleet_v2/asic_low_area/seed4-20261010-230216` | `qwen/qwen3.8-27b, reasoning off` | fleet_v2 | asic_low_area | 4 | stopped | stop → stop → add_family → stop | 0.0109 |
+| `fleet_v2/asic_multiaxis_control/seed0-20261010-223245` | `qwen/qwen3.8-27b, reasoning off` | fleet_v2 | asic_multiaxis_control | 0 | stopped | add_family → infeasible → stop → refine → stop | 0.0113 |
+| `fleet_v2/asic_multiaxis_control/seed1-20261010-224200` | `qwen/qwen3.8-27b, reasoning off` | fleet_v2 | asic_multiaxis_control | 1 | stopped | add_family → infeasible → stop → refine → stop | 0.0137 |
+| `fleet_v2/asic_multiaxis_control/seed2-20261010-225150` | `qwen/qwen3.8-27b, reasoning off` | fleet_v2 | asic_multiaxis_control | 2 | stopped | add_family → infeasible → stop → refine → stop | 0.0160 |
+| `fleet_v2/asic_multiaxis_control/seed3-20261010-225837` | `qwen/qwen3.8-27b, reasoning off` | fleet_v2 | asic_multiaxis_control | 3 | stopped | add_family → infeasible → stop → refine → stop | 0.0178 |
+| `fleet_v2/asic_multiaxis_control/seed4-20261010-230442` | `qwen/qwen3.8-27b, reasoning off` | fleet_v2 | asic_multiaxis_control | 4 | stopped | add_family → infeasible → stop → refine → stop | 0.0205 |
+| `fleet_v2/asic_power_50msps/seed0-20261010-223058` | `qwen/qwen3.8-27b, reasoning off` | fleet_v2 | asic_power_50msps | 0 | stopped | add_family → infeasible → stop → add_family → stop | 0.0100 |
+| `fleet_v2/asic_power_50msps/seed1-20261010-223924` | `qwen/qwen3.8-27b, reasoning off` | fleet_v2 | asic_power_50msps | 1 | stopped | add_family → infeasible → stop → refine → stop | 0.0100 |
+| `fleet_v2/asic_power_50msps/seed2-20261010-225040` | `qwen/qwen3.8-27b, reasoning off` | fleet_v2 | asic_power_50msps | 2 | stopped | add_family → infeasible → stop → refine → stop | 0.0112 |
+| `fleet_v2/asic_power_50msps/seed3-20261010-225652` | `qwen/qwen3.8-27b, reasoning off` | fleet_v2 | asic_power_50msps | 3 | stopped | add_family → infeasible → stop → refine → stop | 0.0113 |
+| `fleet_v2/asic_power_50msps/seed4-20261010-230248` | `qwen/qwen3.8-27b, reasoning off` | fleet_v2 | asic_power_50msps | 4 | stopped | add_family → infeasible → stop → refine → stop | 0.0124 |
+| `fleet_v2/low_area_control/seed0-20261010-223440` | `qwen/qwen3.8-27b, reasoning off` | fleet_v2 | low_area_control | 0 | stopped | stop → stop → refine → stop | 0.0086 |
+| `fleet_v2/low_area_control/seed1-20261010-224512` | `qwen/qwen3.8-27b, reasoning off` | fleet_v2 | low_area_control | 1 | stopped | stop → stop → add_family → stop | 0.0122 |
+| `fleet_v2/low_area_control/seed2-20261010-225342` | `qwen/qwen3.8-27b, reasoning off` | fleet_v2 | low_area_control | 2 | stopped | stop → stop → add_family → stop | 0.0102 |
+| `fleet_v2/low_area_control/seed3-20261010-230027` | `qwen/qwen3.8-27b, reasoning off` | fleet_v2 | low_area_control | 3 | stopped | stop → stop → add_family → stop | 0.0143 |
+| `fleet_v2/low_area_control/seed4-20261010-230604` | `qwen/qwen3.8-27b, reasoning off` | fleet_v2 | low_area_control | 4 | stopped | stop → stop → add_family → stop | 0.0132 |
+| `fleet_v2/multiaxis_control/seed0-20261010-223637` | `qwen/qwen3.8-27b, reasoning off` | fleet_v2 | multiaxis_control | 0 | stopped | add_family → infeasible → stop → refine → stop | 0.0157 |
+| `fleet_v2/multiaxis_control/seed1-20261010-224721` | `qwen/qwen3.8-27b, reasoning off` | fleet_v2 | multiaxis_control | 1 | stopped | add_family → infeasible → stop → refine → stop | 0.0177 |
+| `fleet_v2/multiaxis_control/seed2-20261010-225426` | `qwen/qwen3.8-27b, reasoning off` | fleet_v2 | multiaxis_control | 2 | stopped | add_family → infeasible → stop → refine → stop | 0.0187 |
+| `fleet_v2/multiaxis_control/seed3-20261010-230103` | `qwen/qwen3.8-27b, reasoning off` | fleet_v2 | multiaxis_control | 3 | stopped | add_family → infeasible → stop → add_family → stop | 0.0149 |
+| `fleet_v2/multiaxis_control/seed4-20261010-230634` | `qwen/qwen3.8-27b, reasoning off` | fleet_v2 | multiaxis_control | 4 | stopped | add_family → infeasible → stop → refine → stop | 0.0143 |
 | `pilot-fleet/asic_multiaxis_control/seed0-20261010-162544` | `qwen/qwen3.8-27b, reasoning off` | pilot-fleet | asic_multiaxis_control | 0 | stopped | add_family → infeasible → stop → refine → stop | 0.0158 |
 | `single/low_area_control/20261010-183304-e012` | `deepseek/deepseek-v4.1-flash` | single | low_area_control | 0 | stopped | map_front → refine → map_front → stop | 0.0145 |
 | `single/low_area_control/20261010-185017-2433` | `deepseek/deepseek-v4.1-flash` | single | low_area_control | 1 | stopped | map_front → map_front → map_front → stop | 0.0148 |
