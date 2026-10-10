@@ -118,9 +118,11 @@ python -m hw_dse.synth.recalibrate --measured eval/data/l4_synthesis.csv --measu
 | `ground_truth_m4.json` | the three ASIC specs over all 635,040 designs (system metrics simulated; the L1-bound view for the system spec), per-family bests, the family ranking, and each spec's FPGA twin on the FPGA ground truth | `python eval/run_eval.py ground-truth-m4` |
 | `baselines_m4.json` | NSGA-II and random on the ASIC specs, 5 seeds, scored on the ASIC ground truth (the system spec through the L2 shortlist) | `python eval/run_eval.py baselines-m4` |
 | `agent_m4/<model>/` | the structured graph on the ASIC specs (live, 5 seeds); also the A/B's single arm on those specs | `python eval/run_eval.py agent-m4 ...` |
-| `fleet_m4/single/`, `fleet_m4/fleet/` | the A/B: the single arm on the two FPGA specs, and the fleet on all five | `agent-m4 --arm single`, `fleet-m4` |
+| `fleet_m4/single/`, `fleet_m4/fleet/` | the A/B: the single arm on the two FPGA specs, and the first fleet (*before_fix*: phase-2 members cold, member minimum 10) on all five | `agent-m4 --arm single`, `fleet-m4 --fleet-version v1` |
+| `fleet_m4/fleet_v2/` | the fleet after review fixes S3/S4 (phase 2 warm-started from the Store, member minimum 20), Qwen only, same specs and seeds | `fleet-m4` (v2 is the default) |
 | `m4_pilot/` | the pilots (not in the tables) | `--pilot` |
 | `l2_feedback_m4.json` | where the L2 -> L1 feedback fires on recorded searches, and its results on the constructed spec with an ablation | `python eval/run_eval.py l2-feedback-m4` |
+| `l2_feedback_m4_v1_floor1.json` | the same study on the first version of the constructed spec (throughput floor 1 MS/s, replaced after review S6), kept for the record | (the first `l2-feedback-m4` run) |
 | `models_check_m4.json` | `GET /api/v1/models` before the eval: each model listed with `tools` and `structured_outputs` | `python eval/run_eval.py models-m4` |
 | `key_usage_m4.json`, `spend_plan_m4.md` | the key's usage snapshots (free endpoint) and the plan made before any M4 call; ledger rows carry `milestone: m4` in `spend_ledger.jsonl` | `key-usage-m4 --tag ...` |
 | `traces/m4/` | every M4 live run's LLM trace, report and evaluations (fleet: per member run), key-scanned | `python scripts/archive_traces_m4.py` |

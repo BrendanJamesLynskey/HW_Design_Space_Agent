@@ -137,7 +137,7 @@ def test_committed_fpga_ground_truth_reevaluates_identically(gt_file: str) -> No
             assert hv == pytest.approx(gt["hv_true"], rel=1e-12)
 
 
-@pytest.mark.skipif(os.environ.get("HW_DSE_GT_FULL") != "1", reason="full FPGA grid rebuild (~7 min): HW_DSE_GT_FULL=1")
+@pytest.mark.skipif(os.environ.get("HW_DSE_GT_FULL") != "1", reason="full FPGA grid rebuild (15-30 s): HW_DSE_GT_FULL=1")
 def test_full_fpga_ground_truth_is_unchanged() -> None:
     """Rebuild the 635,040-design FPGA grid and recompute the M1/M2 ground truth from scratch."""
     from hw_dse import accuracy_table

@@ -147,7 +147,7 @@ jobs:
   # built from a pinned commit (cached) + the pinned sky130_fd_sc_hd TT liberty
   # (SHA-256 checked). HW_DSE_REQUIRE_ASIC makes the ASIC tests mandatory; the
   # sweep is light enough to re-measure every committed row here and require
-  # identical numbers. The same job rebuilds the whole FPGA grid (~7 min) and
+  # identical numbers. The same job rebuilds the whole FPGA grid (15-30 s) and
   # checks the M1/M2 ground truth has not moved.
   asic:
     name: ASIC (Yosys + OpenSTA on sky130hd) and the full FPGA ground truth

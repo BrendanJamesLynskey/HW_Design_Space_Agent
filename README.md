@@ -786,8 +786,9 @@ consequences, both reported by the eval rather than hidden:
 
 * `asic_power_50msps`: the measured m=3 winner holds (54.0 MHz, model 54.3); the FPGA twin's
   m=7 runs at 26.7 MHz on sky130, infeasible on the ASIC.
-* `asic_multiaxis_control`: the model's winner measures **72.2 MHz** (estimate 82.5) and then
-  misses the 0.5 µs deadline; of the nine held-out designs only plain `pipelined` W=17 N=14
+* `asic_multiaxis_control`: the model's winner measures **72.2 MHz** (estimate 82.5), and at
+  that clock its simulated p99 batch latency is **0.567 µs against the 0.5 µs deadline**: it
+  misses; of the nine held-out designs only plain `pipelined` W=17 N=14
   (119.1 MHz measured) meets the spec with measured numbers. A run that selects the model's
   winner is flagged by `back_annotate` (a winner change), exactly the case L5 exists for; as
   on the FPGA, feasibility margins thinner than the model's Fmax error (10.6% leave-one-out)
@@ -809,7 +810,9 @@ simulations as the measurements:
    never exceeds the simulation at any design L2 has seen; for unseen designs it assumes the
    error does not shrink as utilisation grows, so it is labelled *empirical*;
 3. re-exploration with a **separate budget** (3 rounds × 60 evaluations, not L1's), over the
-   families that had L1-feasible designs plus any the run never explored, screened by the
+   families that had L1-feasible designs, those with a design that met every system constraint
+   at the analytic bound (kept out by something else, such as a too-narrow first box), and any
+   the run never explored, screened by the
    corrected bound; every new corrected-feasible design is simulated and the spec's rule picks
    among those that pass.
 
@@ -832,6 +835,8 @@ flowchart LR
     S -->|"merged front → code-written lessons"| C
     C -->|"phase 2: remaining 200 by share of the merged front"| F
     C -->|"phase 2"| P
+    S -.->|"phase 2: stored front designs seed each study"| F
+    S -.->|"phase 2"| P
     C --> M["merge · select · L2 · L2→L1 feedback"]
 ```
 
@@ -848,8 +853,13 @@ flowchart LR
 * **Shared Store**: a LangGraph `InMemoryStore`. Each member's `explore_family` node writes
   every evaluation to `("fleet", spec, "evaluated")` as it finishes; between phases code writes
   per-family facts (evaluations, feasible designs, best selection metric, designs on the merged
-  front) to `("fleet", spec, "lessons")`, and phase-2 members see them as a templated block in
-  their prompt. There is no free-text channel: nothing an LLM wrote reaches the store or another
+  front) to `("fleet", spec, "lessons")`, and reads them back to template a block in the
+  phase-2 members' prompts. In phase 2 every study a member runs is warm-started from the
+  Store: the fleet's stored front designs of that family become NSGA-II seeds (seeds are not
+  new evaluations). *Before the review fix* (the first A/B, kept as `before_fix`) the Store was
+  written but not read back by members, phase-2 members started cold, and the member minimum
+  budget was 10, which the 40% coverage reserve could not always spend (one run used 396 of
+  400); it is now 20, and `split()` never drops budget. There is no free-text channel: nothing an LLM wrote reaches the store or another
   member (M3's notes into the inner architect were one of its two failure modes).
 * **Merge**: one front over the union, the spec's rule, then L2 once (every L1-feasible design
   of the fleet simulated) and, if L2 rejects them all, the L2 → L1 feedback. Members skip their
@@ -976,7 +986,8 @@ python eval/run_eval.py models-m4                # free: models listed with tool
 python eval/run_eval.py key-usage-m4 --tag before_eval
 python eval/run_eval.py agent-m4 --model qwen/qwen3.8-27b --reasoning off                # ASIC specs, structured
 python eval/run_eval.py agent-m4 --model qwen/qwen3.8-27b --reasoning off --arm single --specs low_area_control,multiaxis_control
-python eval/run_eval.py fleet-m4 --model qwen/qwen3.8-27b --reasoning off                # the fleet arm, 5 specs
+python eval/run_eval.py fleet-m4 --model qwen/qwen3.8-27b --reasoning off --fleet-version v1  # the first fleet arm (before_fix)
+python eval/run_eval.py fleet-m4 --model qwen/qwen3.8-27b --reasoning off                # the fixed fleet (v2, default)
 python eval/run_eval.py l2-feedback-m4           # offline: where the L2 -> L1 feedback fires
 python scripts/archive_traces_m4.py              # traces -> eval/data/traces/m4/
 ```
@@ -1233,37 +1244,59 @@ are mean ± population std over 5 seeds; 400 L1 evaluations per spec for every m
 | asic_power_50msps | +54.0 ± 36.1% | +60.0 ± 44.5% | **+3.5 ± 2.0%** | +15.6 ± 19.5% | +10.1 ± 6.4% |
 | asic_multiaxis_control | +23.4 ± 5.0% | +37.6 ± 5.5% | **+17.9 ± 3.2%** | +25.1 ± 3.0% | +21.6 ± 2.5% |
 
-Every selected design met its spec (45/45). HV is at NSGA-II's level, not above it (e.g.
-`asic_power_50msps` 0.754-0.794 vs 0.812). On `asic_multiaxis_control` every method is ~18-25%
-off the true winner, whose trick (two more iterations for a narrower angle path and a faster
-clock) the L1 bound hides; L2 changed the L1 pick in 2 Sonnet runs.
+Every selected design met its spec (45/45). HV is below NSGA-II's on `asic_power_50msps`
+(0.754-0.794 vs 0.812), level with it on `asic_low_area` for Sonnet and DeepSeek, and 0.820-0.864
+vs 0.837 on `asic_multiaxis_control`. On `asic_multiaxis_control` every method is ~18-25% off the
+true winner, whose trick (two more iterations for a narrower angle path and a faster clock) the
+L1 bound hides; L2 changed the L1 pick in 2 Sonnet runs.
 
 **A/B: single structured graph vs the code-orchestrated fleet** (5 specs: the three ASIC ones,
 `low_area_control`, `multiaxis_control`; seeds 0-4; the same 400 L1 evaluations; **every run
 started only after the previous one finished, nothing else running**; Sonnet's fleet arm on
-`asic_multiaxis_control` only, for the spend cap):
+`asic_multiaxis_control` only, for the spend cap). *Fleet, before_fix* is the first A/B (phase-2
+members cold, member minimum 10); *fleet, after fix* is the re-run after review (phase 2
+warm-started from the Store, minimum 20), Qwen only, same specs and seeds:
 
 | model | arm | runs | HV fraction | regret | cost / run | input tokens / run | failures | failed LLM calls | wall / run |
 |---|---|---|---|---|---|---|---|---|---|
 | Qwen3.8-27B, reasoning off | single | 25 | **0.829 ± 0.071** | +14.8 ± 11.4% | **$0.0090** | 10,594 | 0/25 | 1 | **57 ± 48 s** |
-| | fleet | 25 | 0.796 ± 0.099 | **+11.7 ± 19.9%** | $0.0127 | 20,029 | 0/25 | 7 | 171 ± 188 s |
+| | fleet, before_fix | 25 | 0.796 ± 0.099 | +11.7 ± 19.9% | $0.0127 | 20,029 | 0/25 | 7 | 171 ± 188 s |
+| | fleet, after fix | 25 | 0.788 ± 0.117 | **+6.3 ± 6.0%** | $0.0131 | 19,513 | 0/25 | 0 | 89 ± 38 s |
 | DeepSeek V4.1 Flash | single | 25 | **0.870 ± 0.061** | **+12.1 ± 11.9%** | **$0.0167** | 14,535 | 0/25 | 2 | **153 ± 148 s** |
-| | fleet | 25 | 0.834 ± 0.080 | +15.8 ± 21.5% | $0.0257 | 22,233 | 0/25 | 10 | 229 ± 260 s |
+| | fleet, before_fix | 25 | 0.834 ± 0.080 | +15.8 ± 21.5% | $0.0257 | 22,233 | 0/25 | 10 | 229 ± 260 s |
 | Sonnet 5.5 (one spec) | single | 5 | **0.820 ± 0.069** | **+17.9 ± 3.2%** | **$0.0931** | 22,318 | 0/5 | 0 | **41 ± 2 s** |
-| | fleet | 5 | 0.794 ± 0.051 | +19.9 ± 3.6% | $0.1488 | 41,738 | 0/5 | 0 | 49 ± 1 s |
+| | fleet, before_fix | 5 | 0.794 ± 0.051 | +19.9 ± 3.6% | $0.1488 | 41,738 | 0/5 | 0 | 49 ± 1 s |
 
-**The single graph wins.** Higher HV for every model, 1.4-1.6× cheaper, and faster even though
-the fleet's members run in parallel (two phases, each as slow as its slowest member). Regret is
-mixed (the fleet is better for Qwen, worse for DeepSeek and Sonnet; the spreads overlap). The
-fleet spends more on the FSM families (180 of 400 evaluations on average for Qwen and DeepSeek,
-against 128 and 166 in their single graphs; 100 against 18 for Sonnet on a spec no FSM design can
-meet); phase 2 went wholly to the pipelined member in 14 (Qwen) and 15 (DeepSeek) of 25 runs.
-The HV loss is largest on the system specs (`multiaxis_control`, Qwen: 0.840 → 0.734). A fixed
-split by contract class allocates worse than the architect's own early choice of families plus
-one front-mapping round over all of them.
+**Paired results** (same spec and seed; exact sign test and paired t, two-sided; the full table
+is in `results.md`):
+
+* **HV, single vs first fleet: the single graph is higher, significantly for DeepSeek and
+  pooled, not for Qwen or Sonnet.** Pooled, the fleet had the higher HV in 18 of 55 pairs (sign
+  p = 0.014; paired t p = 0.006). DeepSeek 6 of 25 (sign p = 0.015, t = −3.03, p = 0.006). Qwen
+  10 of 25 (p = 0.42). Sonnet 2 of 5 (no test power).
+* **Regret: a gain for the fleet with Qwen.** The first fleet selected the better design in
+  18 of 24 untied pairs (sign p = 0.023); the fixed fleet in 22 of 25 (p = 0.0002, mean −8.6
+  points). DeepSeek 12 of 24 untied pairs either way; Sonnet 2 of 5.
+* **Did the cold restart explain the HV loss? No.** The fixed fleet against the single graph:
+  higher HV in 8 of 25 (p = 0.11); against the first fleet 12 higher, 13 lower (p = 1.0). Its
+  regret is 5.4 points lower than the first fleet's on average, not significant (t p = 0.21).
+* **Cost**: the fleet costs 1.41 (Qwen), 1.54 (DeepSeek), 1.60 (Sonnet) times as much per spec.
+  Wall-clock is dominated by provider latency and the arms ran at different times; take it as
+  measured, not as a property of the design.
+
+What the records show (readings, not tested causes): the fleet spends more on the FSM families
+(180 of 400 evaluations on average for Qwen and DeepSeek, against 128 and 166 in their single
+graphs; 100 against 18 for Sonnet on a spec no FSM design can meet); phase 2 went wholly to the
+pipelined member in 14 (Qwen) and 15 (DeepSeek) of 25 runs, and 15 for the fixed fleet. The HV
+loss is largest on the system specs (`multiaxis_control`, Qwen: 0.840 single, 0.734 first
+fleet, 0.745 fixed fleet). One plausible reading is that a fixed split by contract class
+allocates worse than the architect's own early choice of families plus one front-mapping round
+over all of them, and that smaller per-member studies cost front coverage; the regret gain
+would fit a pipelined member that searches only the families the selection rule picks from.
 
 **Throughput, measured** (L1 evaluations per hour of wall-clock, one run at a time): single
-graph 25,212 (Qwen), 9,410 (DeepSeek), 35,002 (Sonnet, one spec); fleet 8,400, 6,292, 29,256.
+graph 25,212 (Qwen), 9,410 (DeepSeek), 35,002 (Sonnet, one spec); first fleet 8,400, 6,292,
+29,256; fixed Qwen fleet 16,094.
 Cost per spec: $0.0090 / $0.0167 / $0.0931 single, $0.0127 / $0.0257 / $0.1488 fleet.
 *Projection, not run:* one machine like this one running Qwen single-graph runs back to back
 would evaluate about 605,000 designs and close about 1,500 specs a day for about $14, if
@@ -1271,12 +1304,15 @@ provider latency, rate limits and the spec mix stayed as measured.
 
 **L2 → L1 feedback** (`python eval/run_eval.py l2-feedback-m4` → `eval/data/l2_feedback_m4.json`):
 it fires in **0 of 92** recorded searches (the M3 structured runs rebuilt from their archived
-evaluations, the M3 campaign pools, NSGA-II and random on every system spec) and **0 of 50** live
+evaluations, the M3 campaign pools, NSGA-II and random on every system spec) and **0 of 60** live
 M4 runs on system specs: on the committed specs L2 always found a passing design. On the
-constructed spec `specs/m4/l2_feedback_bursty.yaml` (bursts of 32 at 130 MS/s, p99 ≤ 0.4 µs;
-61,461 designs pass the bound, 447 the simulation) it fires in **6 of 15** searches (NSGA-II,
-random, the rule-based architect) and recovers a passing design in **6 of 6** (regret +19.5 ±
-12.1%); the ablation with the same extra budget and the *uncorrected* bound recovers **2 of 6**.
+constructed spec `specs/m4/l2_feedback_bursty.yaml` (bursts of 32 at 130 MS/s, a sustained
+throughput floor of 130 MS/s, p99 ≤ 0.4 µs; 37,882 designs pass the bound, 447 the simulation)
+it fires in **3 of 15** searches (5 each of NSGA-II, random and the rule-based architect; all
+three are random search) and recovers a passing design in **3 of 3** (regret +17.3 ± 11.0%);
+the ablation with the same extra budget and the *uncorrected* bound recovers **1 of 3**. The
+first version of the spec had a 1 MS/s throughput floor, a strawman against a 130 MS/s stream;
+with it the feedback fired in 6 of 15 (`eval/data/l2_feedback_m4_v1_floor1.json`).
 
 **Provider drift.** Qwen on `low_area_control`, through a graph that replays its M2 runs
 identically, had +3.7% mean regret in M2 and +22.8% in this session's single arm. Arms are
@@ -1284,10 +1320,12 @@ compared only within one session.
 
 **Spend** (`eval/data/key_usage_m4.json`, `spend_ledger.jsonl`, plan in
 `eval/data/spend_plan_m4.md`): the key's usage went from **$7.8163** (2026-10-10T16:23:17Z, before
-any M4 call) to **$11.6459** (2026-10-10T20:59:36Z): **$3.83 for M4**, under the $5 cap.
-Provider-reported ledger: $3.5165 over 122 runs; the gap is calls that fail inside the client and
-report no usage. Pilots (Qwen, `asic_multiaxis_control` seed 0): structured $0.0071, fleet
-$0.0158.
+any M4 call) to **$11.6459** (2026-10-10T20:59:36Z) for the first eval, and to **$11.9645**
+(2026-10-10T23:07:37Z) after the post-review Qwen fleet re-run ($0.3186 by the key):
+**$4.15 for M4**, under the $5 cap. Provider-reported ledger: $3.8438 over 147 runs; the key and
+the ledger differ by calls that fail inside the client and report no usage, and by when the
+key's counter catches up. Pilots (Qwen, `asic_multiaxis_control` seed 0): structured $0.0071,
+fleet $0.0158.
 
 ## Limitations
 
@@ -1352,8 +1390,9 @@ $0.0158.
   spec and offline searches. Its corrected bound is empirical (optimistic at every design L2
   simulated, an assumption elsewhere).
 - **The fleet is one design** (two members split by contract class, a 50/50 phase split,
-  reallocation by front share), A/B-tested on five specs with two models; Sonnet 5.5 was cut
-  from the fleet arm for the spend cap.
+  reallocation by front share), A/B-tested on five specs with Qwen and DeepSeek and on one
+  spec (`asic_multiaxis_control`) with Sonnet 5.5, for the spend cap; the fixed fleet was
+  re-run for Qwen only.
 - **Verification scope.** RTL and gate-level simulation compare every output code on the
   documented angle sets (exhaustive for W ≤ 16, up to 131,072 deduplicated angles above, so a lower bound on
   the worst case there). Gate-level simulation is zero-delay on the Yosys netlist, not the
