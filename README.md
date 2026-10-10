@@ -77,7 +77,7 @@ report.
 | **M3** | **L2** cycle-accurate interface model per family (validated against the RTL cycle for cycle) + SimPy system models (DDS + mixer, control loop, bursty stream) · system-level constraints in specs, L1 bounds, L2 shortlist and re-selection · **L5 loop**: re-explore under the refit when a measured winner changes · `map_front` blind-spot fix (gated lever) · M2 replay proof · **campaign agent** on Deep Agents with cross-run memory · A/B and memory on/off eval | **done** (see the A/B for what the campaign agent did and did not achieve) |
 | | live L4 inside campaigns · any campaign-agent rework (only if the M4 fleet design needs it) | planned |
 | **M4** | **ASIC target**: Yosys + OpenSTA on sky130_fd_sc_hd (57-point sweep, 9 held-out designs), fitted `AsicCostModel` with leave-one-out residuals, `target` in specs, three ASIC specs with exhaustive ground truth, ASIC back-annotation · **fleet** of structured graphs, code-orchestrated, shared LangGraph Store, A/B vs a single graph · **L2 → L1 feedback** · FPGA replay proof extended to M3 · Vivado exports for the local run · [`docs/WRITEUP.md`](docs/WRITEUP.md) | **done** (see the A/B for what the fleet did and did not achieve) |
-| | place and route on the ASIC target (OpenROAD) · the local Vivado runs (`high_precision` at 20 ns, `report_power`) and the refit/compare they feed · per-family-class path factor (waits for the 20 ns data) · an LLM coordinator for the fleet · more functions and a richer family registry | planned |
+| | place and route on the ASIC target (OpenROAD) · ASIC refit with the held-out points and an `unrolled_k` chain term, and an ASIC L5 loop that re-explores under it · the local Vivado runs (`high_precision` at 20 ns, `report_power`) and the refit/compare they feed · per-family-class path factor (waits for the 20 ns data) · an LLM coordinator for the fleet · more functions and a richer family registry | planned |
 
 ## The fidelity ladder
 
@@ -85,7 +85,7 @@ report.
 |---|---|---|---|
 | L0 | spec intake: YAML or natural language → validated `Spec`, human confirmation | `spec.py`, `intake` node | done (M1) |
 | L1 | analytical exploration: golden-model accuracy (*exact*) + cost model (*estimate*), NSGA-II inside LLM-chosen boxes | `models/`, `explore.py`, agent | done (M1); front-mapping levers (M2) |
-| L2 | cycle-accurate interface model per family; SimPy system models; L1 analytic bounds; shortlist + re-selection | `l2/`, `l2_simulate` node | **done (M3)**: 48/48 bursty traces identical to the RTL (Verilator + Icarus); 2 system specs change the winner |
+| L2 | cycle-accurate interface model per family; SimPy system models; L1 analytic bounds; shortlist + re-selection | `l2/`, `l2_simulate` node | **done (M3)**: 48/48 bursty traces identical to the RTL (Verilator + Icarus); the winner changes on 3 system specs (`multiaxis_control` and `bursty_offload` in M3, `asic_multiaxis_control` in M4) |
 | L3 | parametrised SystemVerilog per family; Verilator + Icarus vs golden model; SymbiYosys | `rtl/`, `rtl_golden/`, `formal/` | **done (M2)**: 47 configurations × 2 simulators, 0 mismatches; 7 proofs |
 | L4 | synthesis + place-and-route; gate-level simulation of the netlist | `synth/flow.py`, `synth/gatesim.py` | **done (M2)** with Yosys 0.68 + nextpnr-xilinx: 39 measured points; 22 gate-level runs, 0 mismatches. Vivado 2025.2: 14 generated designs |
 | L4, ASIC target | synthesis + static timing + vectorless power on sky130_fd_sc_hd (no place-and-route) | `synth/asic.py`, `synth/asic_sweep.py`, `models/cost_asic.py` | **live (M4)**: Yosys 0.33 + OpenSTA 3.1.0, 57 calibration points + 9 held-out; cost model leave-one-out RMS area 8.7%, Fmax 10.6% |
@@ -379,7 +379,7 @@ What the data says:
   (`iterative` +3% LUT / +1% FF; `pipelined` −3% / −4%), Fmax does not, and in opposite
   directions: generated `iterative` is **13% slower** (172.8 vs 198.3 MHz), generated
   `pipelined` **20% faster** (327.4 vs 272.9). The M1 model, fitted on the reference
-  anchors, therefore overestimates generated `iterative` Fmax (+14 to +15% at W=12–24) and
+  anchors, therefore overestimates generated `iterative` Fmax (+14 to +16% at W=12–24) and
   underestimates generated `pipelined` Fmax (−15 to −17%); `pipelined_m` is within 4–8%.
 * **Yosys vs Vivado on the same generated RTL:** LUTs agree within 7% for the pipelined
   families; Yosys maps **29% more** LUTs for `iterative` and 5–9% more for `unrolled_k` k=2/3,
@@ -685,7 +685,7 @@ every net toggling at 0.125 per clock) on **`sky130_fd_sc_hd`** at the **typical
 `tt_025C_1v80`**. Why this library: it is the default sky130 library of the open flows
 (OpenROAD-flow-scripts, OpenLane), its liberty is public, and Yosys and OpenSTA read it
 directly. The liberty is pinned to an OpenROAD-flow-scripts commit and checked by SHA-256
-(the Google sky130 repositories ship per-corner JSON, not merged `.lib` files). Yosys 0.33 has
+(the upstream sky130 PDK repositories ship per-corner JSON, not merged `.lib` files). Yosys 0.33 has
 no `abc -dont_use`, and ABC otherwise maps logic onto `lpflow_*` power-gating cells, so those
 and the `probe_*` cells (35 in all) are removed from the copy both tools read, as the
 OpenROAD sky130hd platform's do-not-use list does. Area is Yosys's `stat -liberty` cell area;
@@ -697,7 +697,9 @@ post-synthesis Fmax, not of nextpnr's post-route figure.
 `litex-hub` channel (2.0-12381, 2024) does install, but only through Anaconda's commercial
 `defaults` channel, and it needs tech/cell LEFs, a floorplan and a PDN script per design. That
 was more than "reasonable effort" for this milestone, so it stays planned; nothing here claims
-post-route ASIC numbers.
+post-route ASIC numbers. The route to try next avoids the commercial channel: OpenROAD's
+prebuilt release `.deb` packages pinned by URL and SHA-256, or its container image pinned by
+digest.
 
 **Measured** (`eval/data/asic_synthesis.csv`, 57 generated designs: every generated point of
 the FPGA sweep plus an ASIC spread; logs in `eval/data/asic_logs/`;
@@ -749,8 +751,8 @@ is a ranking aid, never watts.
 `area_um2` / `gate_eq` (FPGA-only metrics such as `luts` are refused on an ASIC spec and vice
 versa); the architect gets an ASIC system prompt (the FPGA prompt is byte-identical to M1-M3,
 which the replays check); `back_annotate` compares an ASIC run with the sky130 measurements,
-never with FPGA ones, and does not re-explore (the default ASIC model *is* the fit to those
-measurements).
+never with FPGA ones. It flags a winner change but does not re-explore: there is no ASIC L5
+loop yet, and the nine held-out designs are kept out of the fit so that they stay a test.
 
 **Three ASIC specs** (`specs/asic/`), exhaustive ground truth over the same 635,040 designs
 (`python eval/run_eval.py ground-truth-m4` → `eval/data/ground_truth_m4.json`), each with an
@@ -1296,7 +1298,7 @@ $0.0158.
   `vivado-2025.2` refit predicts unseen Vivado points no better (15.4 / 3.7 / 12.5%
   leave-one-out). It also gets the one decision the measurements test right
   (`high_precision`: m=6 feasible, m=8 not). Its known biases: generated `pipelined` Fmax
-  −15 to −17%, `iterative` Fmax +14 to +15%, `unrolled_k` LUTs −37 to −40% at k=3–4.
+  −15 to −17%, `iterative` Fmax +14 to +16%, `unrolled_k` LUTs −37 to −40% at k=3–4.
 - **Yosys/nextpnr are not Vivado.** On the reference RTL Yosys maps 1.5–1.7× Vivado's
   LUTs; on generated RTL the two agree within 7% for the pipelined families but not for
   the FSM ones (`iterative` +29%, `unrolled_k` −11 to +9%). nextpnr's post-route Fmax is
