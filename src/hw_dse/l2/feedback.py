@@ -38,11 +38,12 @@ re-explore under the refit), with L2 simulations as the measurements:
    utilisation grows. It is an **empirical** bound, not a proven one, and it
    is labelled ``estimate (L1 bound, corrected by L2 feedback)``. A class
    with no observation keeps the analytic bound.
-3. **Re-explore.** A separate, code-driven budget (default 2 rounds of 60
+3. **Re-explore.** A separate, code-driven budget (default 3 rounds of 60
    evaluations, kept apart from the L1 evaluations, as the L5 loop's are;
-   3 rounds: two were too few on the constructed spec):
-   one NSGA-II study per family over its full box (the families that had an
-   L1-feasible design, plus any the run never explored), with the system
+   two rounds were too few on the constructed spec): one NSGA-II study per
+   family over its full box (the families that had an L1-feasible design,
+   those with a design that met every system constraint at the analytic
+   bound, and any the run never explored), with the system
    constraints screened by the corrected bound. Every new
    corrected-feasible design is simulated; the spec's rule picks the best
    design that passes, from the L1 and the feedback designs together. If
@@ -170,12 +171,19 @@ def feedback(spec: Spec, records: list[dict[str, Any]], seed: int = 0, rounds: i
         corr = corrections(pairs, spec) if correct else {
             c.metric: {cls: {"envelope": [], "n": 0, "note": "ablation: analytic bound"} for cls in ("fsm", "pipelined")}
             for c in spec.system_constraints}
-        # Where to look: families with an L1-feasible design in the run, plus
-        # families the run never explored. A family whose designs all failed
-        # the *analytic* bound cannot pass the corrected one (kappa >= 1 for a
-        # <= metric), so its share would be wasted.
+        # Where to look: families with an L1-feasible design in the run,
+        # families with a design that met every system constraint at the
+        # analytic bound (kept out of the L1-feasible set by something else,
+        # e.g. a first box too narrow for the accuracy target: the M2 blind
+        # spot), and families the run never explored. Left out: a family
+        # every explored design of which failed a system constraint's
+        # *analytic* bound; the corrected bound is tighter (kappa >= 1 for a
+        # <= metric), so only designs outside the run's boxes could pass it.
         explored = {r["family"] for r in records}
-        fams = [f for f in REGISTRY if f in {r["family"] for r in uniq.values()} or f not in explored] or list(REGISTRY)
+        sys_ok = {r["family"] for r in records
+                  if all(r.get("violations", {}).get(str(c), 1.0) <= 0 for c in spec.system_constraints)}
+        fams = [f for f in REGISTRY
+                if f in {r["family"] for r in uniq.values()} or f in sys_ok or f not in explored] or list(REGISTRY)
         per = [evals_per_round // len(fams)] * len(fams)
         for i in range(evals_per_round - sum(per)):
             per[i % len(fams)] += 1
