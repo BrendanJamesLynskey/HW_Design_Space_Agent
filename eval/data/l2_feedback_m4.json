@@ -807,7 +807,7 @@
  ],
  "constructed_gt": {
   "n_feasible_simulated": 447,
-  "n_feasible_l1_bound": 61461,
+  "n_feasible_l1_bound": 37882,
   "best_luts_plus_ffs": 1249.6901679999999,
   "winner_key": "pipelined:data_width=15,n_iter=12,angle_guard=1,frac_guard=0,rounding=round"
  },
@@ -815,94 +815,43 @@
   {
    "search": "nsga2 s0",
    "fires": false,
-   "n_l1_feasible": 193,
-   "n_l2_pass": 2
+   "n_l1_feasible": 188,
+   "n_l2_pass": 4
   },
   {
    "search": "nsga2 s1",
    "fires": false,
-   "n_l1_feasible": 215,
+   "n_l1_feasible": 205,
    "n_l2_pass": 1
   },
   {
    "search": "nsga2 s2",
    "fires": false,
-   "n_l1_feasible": 214,
-   "n_l2_pass": 2
+   "n_l1_feasible": 206,
+   "n_l2_pass": 16
   },
   {
    "search": "nsga2 s3",
    "fires": false,
-   "n_l1_feasible": 169,
-   "n_l2_pass": 2
+   "n_l1_feasible": 173,
+   "n_l2_pass": 5
   },
   {
    "search": "nsga2 s4",
-   "fires": true,
-   "n_l1_feasible": 166,
-   "n_l2_pass": 0,
-   "corrected": {
-    "status": "recovered",
-    "n_evals": 120,
-    "selected_key": "pipelined:data_width=18,n_iter=14,angle_guard=-2,frac_guard=0,rounding=trunc",
-    "regret": 0.3068586725089766,
-    "rounds": [
-     {
-      "round": 1,
-      "n_evals": 60,
-      "n_corrected_feasible": 7,
-      "n_passing": 0,
-      "selected_key": null
-     },
-     {
-      "round": 2,
-      "n_evals": 60,
-      "n_corrected_feasible": 10,
-      "n_passing": 1,
-      "selected_key": "pipelined:data_width=18,n_iter=14,angle_guard=-2,frac_guard=0,rounding=trunc"
-     }
-    ]
-   },
-   "ablation_uncorrected": {
-    "status": "no_feasible",
-    "n_evals": 180,
-    "selected_key": null,
-    "regret": null,
-    "rounds": [
-     {
-      "round": 1,
-      "n_evals": 60,
-      "n_corrected_feasible": 23,
-      "n_passing": 0,
-      "selected_key": null
-     },
-     {
-      "round": 2,
-      "n_evals": 60,
-      "n_corrected_feasible": 34,
-      "n_passing": 0,
-      "selected_key": null
-     },
-     {
-      "round": 3,
-      "n_evals": 60,
-      "n_corrected_feasible": 19,
-      "n_passing": 0,
-      "selected_key": null
-     }
-    ]
-   }
+   "fires": false,
+   "n_l1_feasible": 164,
+   "n_l2_pass": 1
   },
   {
    "search": "random s0",
    "fires": false,
-   "n_l1_feasible": 60,
+   "n_l1_feasible": 48,
    "n_l2_pass": 2
   },
   {
    "search": "random s1",
    "fires": true,
-   "n_l1_feasible": 64,
+   "n_l1_feasible": 48,
    "n_l2_pass": 0,
    "corrected": {
     "status": "recovered",
@@ -928,7 +877,7 @@
      {
       "round": 1,
       "n_evals": 60,
-      "n_corrected_feasible": 13,
+      "n_corrected_feasible": 11,
       "n_passing": 2,
       "selected_key": "pipelined:data_width=14,n_iter=14,angle_guard=1,frac_guard=1,rounding=round"
      }
@@ -938,13 +887,13 @@
   {
    "search": "random s2",
    "fires": false,
-   "n_l1_feasible": 71,
+   "n_l1_feasible": 62,
    "n_l2_pass": 1
   },
   {
    "search": "random s3",
    "fires": true,
-   "n_l1_feasible": 63,
+   "n_l1_feasible": 57,
    "n_l2_pass": 0,
    "corrected": {
     "status": "recovered",
@@ -970,21 +919,21 @@
      {
       "round": 1,
       "n_evals": 60,
-      "n_corrected_feasible": 30,
+      "n_corrected_feasible": 27,
       "n_passing": 0,
       "selected_key": null
      },
      {
       "round": 2,
       "n_evals": 60,
-      "n_corrected_feasible": 22,
+      "n_corrected_feasible": 17,
       "n_passing": 0,
       "selected_key": null
      },
      {
       "round": 3,
       "n_evals": 60,
-      "n_corrected_feasible": 24,
+      "n_corrected_feasible": 17,
       "n_passing": 0,
       "selected_key": null
      }
@@ -994,7 +943,7 @@
   {
    "search": "random s4",
    "fires": true,
-   "n_l1_feasible": 56,
+   "n_l1_feasible": 48,
    "n_l2_pass": 0,
    "corrected": {
     "status": "recovered",
@@ -1027,14 +976,14 @@
      {
       "round": 1,
       "n_evals": 60,
-      "n_corrected_feasible": 23,
+      "n_corrected_feasible": 19,
       "n_passing": 0,
       "selected_key": null
      },
      {
       "round": 2,
       "n_evals": 60,
-      "n_corrected_feasible": 34,
+      "n_corrected_feasible": 22,
       "n_passing": 0,
       "selected_key": null
      },
@@ -1050,108 +999,34 @@
   },
   {
    "search": "rule-based architect s0",
-   "fires": true,
-   "n_l1_feasible": 182,
-   "n_l2_pass": 0,
-   "corrected": {
-    "status": "recovered",
-    "n_evals": 60,
-    "selected_key": "pipelined:data_width=18,n_iter=14,angle_guard=-2,frac_guard=0,rounding=trunc",
-    "regret": 0.3068586725089766,
-    "rounds": [
-     {
-      "round": 1,
-      "n_evals": 60,
-      "n_corrected_feasible": 7,
-      "n_passing": 1,
-      "selected_key": "pipelined:data_width=18,n_iter=14,angle_guard=-2,frac_guard=0,rounding=trunc"
-     }
-    ]
-   },
-   "ablation_uncorrected": {
-    "status": "recovered",
-    "n_evals": 60,
-    "selected_key": "pipelined:data_width=18,n_iter=14,angle_guard=-2,frac_guard=0,rounding=trunc",
-    "regret": 0.3068586725089766,
-    "rounds": [
-     {
-      "round": 1,
-      "n_evals": 60,
-      "n_corrected_feasible": 14,
-      "n_passing": 1,
-      "selected_key": "pipelined:data_width=18,n_iter=14,angle_guard=-2,frac_guard=0,rounding=trunc"
-     }
-    ]
-   }
+   "fires": false,
+   "n_l1_feasible": 212,
+   "n_l2_pass": 20
   },
   {
    "search": "rule-based architect s1",
    "fires": false,
-   "n_l1_feasible": 159,
-   "n_l2_pass": 2
+   "n_l1_feasible": 180,
+   "n_l2_pass": 18
   },
   {
    "search": "rule-based architect s2",
    "fires": false,
-   "n_l1_feasible": 170,
-   "n_l2_pass": 4
+   "n_l1_feasible": 140,
+   "n_l2_pass": 15
   },
   {
    "search": "rule-based architect s3",
-   "fires": true,
-   "n_l1_feasible": 155,
-   "n_l2_pass": 0,
-   "corrected": {
-    "status": "recovered",
-    "n_evals": 60,
-    "selected_key": "pipelined:data_width=16,n_iter=12,angle_guard=0,frac_guard=0,rounding=trunc",
-    "regret": 0.037926763940100076,
-    "rounds": [
-     {
-      "round": 1,
-      "n_evals": 60,
-      "n_corrected_feasible": 15,
-      "n_passing": 3,
-      "selected_key": "pipelined:data_width=16,n_iter=12,angle_guard=0,frac_guard=0,rounding=trunc"
-     }
-    ]
-   },
-   "ablation_uncorrected": {
-    "status": "no_feasible",
-    "n_evals": 180,
-    "selected_key": null,
-    "regret": null,
-    "rounds": [
-     {
-      "round": 1,
-      "n_evals": 60,
-      "n_corrected_feasible": 30,
-      "n_passing": 0,
-      "selected_key": null
-     },
-     {
-      "round": 2,
-      "n_evals": 60,
-      "n_corrected_feasible": 22,
-      "n_passing": 0,
-      "selected_key": null
-     },
-     {
-      "round": 3,
-      "n_evals": 60,
-      "n_corrected_feasible": 24,
-      "n_passing": 0,
-      "selected_key": null
-     }
-    ]
-   }
+   "fires": false,
+   "n_l1_feasible": 159,
+   "n_l2_pass": 14
   },
   {
    "search": "rule-based architect s4",
    "fires": false,
-   "n_l1_feasible": 181,
-   "n_l2_pass": 4
+   "n_l1_feasible": 163,
+   "n_l2_pass": 27
   }
  ],
- "summary_md": "Recorded data (M3 structured runs rebuilt from their archived evaluations, M3 campaign pools, NSGA-II/random baselines on every system spec, and the live M4 runs on the system specs): the feedback **fires in 0 of 92 recorded searches and 0 of 50 live M4 runs**: L2 always found a passing design among the L1-feasible ones, so on the committed specs it never fires.\n\nThe constructed spec `l2_feedback_bursty` (bursts of 32 at 130 MS/s, p99 <= 0.4 us, 61,461 designs pass the L1 bound, 447 the simulation; true winner `pipelined:data_width=15,n_iter=12,angle_guard=1,frac_guard=0,rounding=round`): it fires in **6 of 15** searches (5 NSGA-II, 5 random, 5 rule-based-architect runs of 400 evaluations). With the correction it recovers a passing design in **6 of 6** (regret +19.5% \u00b1 12.1); the ablation, the same re-exploration budget screened with the uncorrected bound, recovers in **2 of 6**.\n\n| search | L1-feasible | pass L2 | fires | corrected: outcome, evals, regret | uncorrected: outcome, evals |\n|---|---|---|---|---|---|\n| nsga2 s0 | 193 | 2 | no | \u2014 | \u2014 |\n| nsga2 s1 | 215 | 1 | no | \u2014 | \u2014 |\n| nsga2 s2 | 214 | 2 | no | \u2014 | \u2014 |\n| nsga2 s3 | 169 | 2 | no | \u2014 | \u2014 |\n| nsga2 s4 | 166 | 0 | yes | recovered, 120, +30.7% | no_feasible, 180 |\n| random s0 | 60 | 2 | no | \u2014 | \u2014 |\n| random s1 | 64 | 0 | yes | recovered, 60, +17.3% | recovered, 60 |\n| random s2 | 71 | 1 | no | \u2014 | \u2014 |\n| random s3 | 63 | 0 | yes | recovered, 60, +3.8% | no_feasible, 180 |\n| random s4 | 56 | 0 | yes | recovered, 120, +30.7% | no_feasible, 180 |\n| rule-based architect s0 | 182 | 0 | yes | recovered, 60, +30.7% | recovered, 60 |\n| rule-based architect s1 | 159 | 2 | no | \u2014 | \u2014 |\n| rule-based architect s2 | 170 | 4 | no | \u2014 | \u2014 |\n| rule-based architect s3 | 155 | 0 | yes | recovered, 60, +3.8% | no_feasible, 180 |\n| rule-based architect s4 | 181 | 4 | no | \u2014 | \u2014 |\n"
+ "summary_md": "Recorded data (M3 structured runs rebuilt from their archived evaluations, M3 campaign pools, NSGA-II/random baselines on every system spec, and the live M4 runs on the system specs): the feedback **fires in 0 of 92 recorded searches and 0 of 50 live M4 runs**: L2 always found a passing design among the L1-feasible ones, so on the committed specs it never fires.\n\nThe constructed spec `l2_feedback_bursty` (bursts of 32 at 130 MS/s, p99 <= 0.4 us, 37,882 designs pass the L1 bound, 447 the simulation; true winner `pipelined:data_width=15,n_iter=12,angle_guard=1,frac_guard=0,rounding=round`): it fires in **3 of 15** searches (5 NSGA-II, 5 random, 5 rule-based-architect runs of 400 evaluations). With the correction it recovers a passing design in **3 of 3** (regret +17.3% \u00b1 11.0); the ablation, the same re-exploration budget screened with the uncorrected bound, recovers in **1 of 3**.\n\n| search | L1-feasible | pass L2 | fires | corrected: outcome, evals, regret | uncorrected: outcome, evals |\n|---|---|---|---|---|---|\n| nsga2 s0 | 188 | 4 | no | \u2014 | \u2014 |\n| nsga2 s1 | 205 | 1 | no | \u2014 | \u2014 |\n| nsga2 s2 | 206 | 16 | no | \u2014 | \u2014 |\n| nsga2 s3 | 173 | 5 | no | \u2014 | \u2014 |\n| nsga2 s4 | 164 | 1 | no | \u2014 | \u2014 |\n| random s0 | 48 | 2 | no | \u2014 | \u2014 |\n| random s1 | 48 | 0 | yes | recovered, 60, +17.3% | recovered, 60 |\n| random s2 | 62 | 1 | no | \u2014 | \u2014 |\n| random s3 | 57 | 0 | yes | recovered, 60, +3.8% | no_feasible, 180 |\n| random s4 | 48 | 0 | yes | recovered, 120, +30.7% | no_feasible, 180 |\n| rule-based architect s0 | 212 | 20 | no | \u2014 | \u2014 |\n| rule-based architect s1 | 180 | 18 | no | \u2014 | \u2014 |\n| rule-based architect s2 | 140 | 15 | no | \u2014 | \u2014 |\n| rule-based architect s3 | 159 | 14 | no | \u2014 | \u2014 |\n| rule-based architect s4 | 163 | 27 | no | \u2014 | \u2014 |\n"
 }
