@@ -1,13 +1,19 @@
 #!/usr/bin/env python3
 """Named facts for docs/WRITEUP.md, read or computed from committed data.
 
-    python scripts/writeup_facts.py        # -> docs/writeup_facts.json
+    python scripts/writeup_facts.py          # -> docs/writeup_facts.json
+    python scripts/writeup_facts.py --bind   # authoring aid: rewrite each section's declaration
+                                             # as the ordered list of the facts its numbers print
 
-Every number the write-up prints is bound to one named fact here, and each
-section of the write-up declares the facts it uses (``<!-- facts: ... -->``);
-``tests/test_writeup.py`` requires every printed number to equal, at its
-printed precision, one of its section's declared facts, every declared fact
-to be used, and almost every one-digit mutation of the text to fail.
+Every number the write-up prints is bound to one named fact here: each
+section of the write-up lists, in an HTML comment under its heading
+(``<!-- facts: ... -->``), one fact name per number, in reading order, and
+``tests/test_writeup.py`` requires the i-th number to equal the i-th fact at
+the precision it is printed with (so a changed digit always fails).
+``--bind`` helps write those lists: given a section whose comment names a
+pool of facts (``*`` globs allowed), it replaces the comment with the
+ordered list, picking for each number a matching fact from the pool, and
+fails on a number no fact in the pool matches.
 
 A fact is either
 
@@ -152,7 +158,7 @@ def facts() -> dict[str, Any]:  # noqa: PLR0915 - one flat registry, by write-up
     f["m1.infeasible_evals_min"], f["m1.infeasible_evals_max"] = min(agent_evals), max(agent_evals)
     f["m1.calibration_anchors"] = 2
     f["m1.cost_model_constants"] = 5
-    f["m1.hv_gain_rule_pct"] = 1  # the M1 hv_epsilon, 0.01
+    f["m1.hv_gain_rule_pct"] = round(load_spec(ROOT / "specs" / "low_area_control.yaml").budget.hv_epsilon * 100)
     f["m1.regret_cells_better"] = sum(
         nums(cell(R, reg, s, j))[0] < nums(cell(R, reg, s, 1))[0]
         for s in ("dds_250msps", "high_precision", "low_area_control") for j in (3, 4, 5))
@@ -191,8 +197,8 @@ def facts() -> dict[str, Any]:  # noqa: PLR0915 - one flat registry, by write-up
     sysv = "## System specs: exhaustive ground truth, three views"
     mx = nums(cell(R, sysv, "multiaxis_control", 2))
     f["m3.multiaxis.l1_bound_feasible"], f["m3.multiaxis.sim_feasible"] = mx[1], mx[0]
-    f["m3.structured_runs"] = 30
-    f["m3.l2_reselect_structured"] = 0
+    st = re.search(r"Structured arm: (\d+)/(\d+)", R.read_text())
+    f["m3.l2_reselect_structured"], f["m3.structured_runs"] = int(st.group(1)), int(st.group(2))  # type: ignore[union-attr]
     resel = re.search(r"Campaign arm: (\d+)/(\d+)", R.read_text())
     f["m3.l2_reselect_campaign"], f["m3.campaigns"] = int(resel.group(1)), int(resel.group(2))  # type: ignore[union-attr]
     camp = _rows(DATA / "campaign_m3")
@@ -208,7 +214,8 @@ def facts() -> dict[str, Any]:  # noqa: PLR0915 - one flat registry, by write-up
                                                       / statistics.mean(r["cost_usd"] for r in base), 2)
     fail = nums(cell(R, "**Cost, tokens, time and failures per run**", f"`{MODELS['qwen']}`", 6))
     f["m3.qwen_campaign_failed"], f["m3.qwen_campaigns"] = fail[2], fail[3]
-    f["m3.memory_seeds"] = 3
+    ms = re.search(r"## Memory on vs off .*seeds (\d)–(\d)\)", R.read_text())
+    f["m3.memory_seeds"] = int(ms.group(2)) - int(ms.group(1)) + 1  # type: ignore[union-attr]
 
     # ---- M4: ASIC target --------------------------------------------------
     f["asic.yosys_version"] = re.search(r"yosys (\d+\.\d+)", asic[0]["tool_version"]).group(1)  # type: ignore[union-attr]
@@ -264,6 +271,7 @@ def facts() -> dict[str, Any]:  # noqa: PLR0915 - one flat registry, by write-up
     f["asic.ho.multiaxis_winner_fmax_est"] = num(R, ho, "`pipelined_m:data_width=17,n_iter=16,angle_guard=0,frac_guard=0,rounding=round,m=2`", 2, 1)
     f["asic.ho.pipelined_fmax"] = num(R, ho, "`pipelined:data_width=17,n_iter=14,angle_guard=1,frac_guard=0,rounding=round`", 2, 0)
     f["asic.ho.pipelined_w"], f["asic.ho.pipelined_n"] = 17, 14
+    f["asic.ho.multiaxis_winner_p99_us"] = num(R, ho, "`pipelined_m:data_width=17,n_iter=16,angle_guard=0,frac_guard=0,rounding=round,m=2`", 5)
 
     # ---- M4: ASIC eval ----------------------------------------------------
     hv, rg = "**HV fraction**\n", "**Selection regret**\n"
@@ -314,6 +322,8 @@ def facts() -> dict[str, Any]:  # noqa: PLR0915 - one flat registry, by write-up
                 f[f"{k}.fsm_declared_infeasible"] = sum(1 for r in rs for mm in r["members"]
                                                         if mm["member"] == "fsm" and mm["llm_declared_infeasible"])
                 f[f"{k}.evals_mean"] = statistics.mean(r["n_evals"] for r in rs)
+                f[f"{k}.evals_min"] = min(r["n_evals"] for r in rs)
+                f[f"{k}.min_member_budget"] = 10 if arm == "fleet" else 20  # MIN_MEMBER_BUDGET before / after the fix
     for row in m4.paired_tests(arms):
         m = short.get(row["model"], row["model"])
         for met, nm in (("hv_frac", "hv"), ("select_regret", "regret")):
@@ -322,6 +332,7 @@ def facts() -> dict[str, Any]:  # noqa: PLR0915 - one flat registry, by write-up
             f[f"{k}.pairs"] = t["n"]
             f[f"{k}.fleet_higher"], f[f"{k}.fleet_lower"] = s["positive"], s["negative"]
             f[f"{k}.sign_p"] = s["p"]
+            f[f"{k}.untied"] = s["n"]
             f[f"{k}.t"], f[f"{k}.t_p"] = t["t"], t["p"]
             f[f"{k}.mean_diff"] = None if t["mean"] is None else t["mean"] * (100 if nm == "regret" else 1)
     # evaluations spent on the FSM families, per arm (single from its archived evaluations)
@@ -351,11 +362,12 @@ def facts() -> dict[str, Any]:  # noqa: PLR0915 - one flat registry, by write-up
     f["ab.qwen.fleet.failed_calls_qd"] = f["ab.qwen.fleet.failed_calls"] + f["ab.deepseek.fleet.failed_calls"]
     f["ab.qwen.single.failed_calls_qd"] = f["ab.qwen.single.failed_calls"] + f["ab.deepseek.single.failed_calls"]
     f["ab.n_specs"], f["ab.n_asic_specs"], f["ab.n_fpga_specs"] = 5, 3, 2
-    f["ab.seed_first"], f["ab.seed_last"] = 0, 4
+    seeds = sorted({r["seed"] for a in arms.values() for rs in a.values() for r in rs})
+    f["ab.seed_first"], f["ab.seed_last"] = seeds[0], seeds[-1]
     f["ab.members"] = 2
-    per_spec = "Per spec (HV fraction / regret, single → fleet):"
-    mxq = nums(cell(R, per_spec, "multiaxis_control", list(arms).index(MODELS["qwen"]) + 1))
-    f["ab.qwen.multiaxis.hv_single"], f["ab.qwen.multiaxis.hv_fleet"] = mxq[0], mxq[2]
+    for arm in ("single", *m4.FLEET_ARMS):
+        rs = [r for r in arms[MODELS["qwen"]].get(arm) or [] if r["spec"] == "multiaxis_control"]
+        f[f"ab.qwen.multiaxis.hv_{arm}"] = statistics.mean(r["hv_frac"] for r in rs)
     q = [r for r in (arms[MODELS["qwen"]]["single"]) if r["spec"] == "low_area_control"]
     f["drift.qwen.low_area.m2_regret"] = num(R, reg, "low_area_control", 5, 2)
     f["drift.qwen.low_area.m4_regret"] = statistics.mean(r["select_regret"] for r in q) * 100
@@ -401,13 +413,60 @@ def facts() -> dict[str, Any]:  # noqa: PLR0915 - one flat registry, by write-up
 
     # ---- limitations / next ------------------------------------------------
     f["fpga.fmax_err_vs_vivado_max"] = f["m2.viv_pipelined_fmax_low_max"]
-    f["hp.vivado_constraint_ns"] = 20
-    f["hp.m"] = 8
-    f["infeasible.rate_msps"] = 400
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import vivado_m4  # type: ignore[import-not-found]
+
+    f["hp.vivado_constraint_ns"] = float(re.search(r"POINTS_20NS, ([\d.]+), power=False", (ROOT / "scripts" / "vivado_m4.py").read_text()).group(1))  # type: ignore[union-attr]
+    f["hp.m"] = max(int(a.params()["m"]) for a in vivado_m4.POINTS_20NS)
+    f["infeasible.rate_msps"] = next(c.value for c in load_spec(ROOT / "specs" / "infeasible_dds_400msps.yaml").constraints
+                                     if c.metric == "throughput_msps")
     return f
 
 
+def bind() -> int:
+    """Rewrite each section's fact pool as the ordered per-number binding (authoring aid)."""
+    sys.path.insert(0, str(ROOT / "tests"))
+    import test_writeup as tw  # type: ignore[import-not-found]
+
+    fx = tw.load_facts()
+    parts = re.split(r"^(#{1,4} .*)$", tw.WRITEUP.read_text(), flags=re.M)
+    bad = []
+    head = "(preamble)"
+    for i, chunk in enumerate(parts):
+        if re.match(r"^#{1,4} ", chunk):
+            head = chunk.strip()
+            continue
+        m = re.search(r"<!--\s*facts:\s*(.*?)-->", chunk, re.S)
+        if not m:
+            continue
+        pool = tw.expand(m.group(1).split(), fx)
+        order: list[str] = []
+        for tok in tw.tokens(re.sub(r"<!--.*?-->", " ", chunk, flags=re.S)):
+            hit = [k for k in pool if tw.matches(tok, pool[k])]
+            if not hit:
+                bad.append(f"{head}: {tok}")
+                continue
+            fresh = [k for k in hit if k not in order]
+            order.append((fresh or hit)[0])
+        lines, cur = [], "<!-- facts:"
+        for k in order:
+            if len(cur) + len(k) + 1 > 95:
+                lines.append(cur)
+                cur = "    "
+            cur += " " + k
+        lines.append(cur + " -->")
+        parts[i] = chunk.replace(m.group(0), "\n".join(lines), 1)
+    if bad:
+        print("no fact in the pool matches:\n" + "\n".join(bad))
+        return 1
+    tw.WRITEUP.write_text("".join(parts))
+    print(f"bound every number of {tw.WRITEUP.name}")
+    return 0
+
+
 def main() -> int:
+    if "--bind" in sys.argv:
+        return bind()
     OUT.write_text(json.dumps(facts(), indent=1, sort_keys=True) + "\n")
     print(f"wrote {OUT}")
     return 0

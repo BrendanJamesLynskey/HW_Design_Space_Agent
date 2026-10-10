@@ -2,26 +2,29 @@
 
 ``scripts/writeup_facts.py`` builds ``docs/writeup_facts.json``: named facts,
 each computed from the committed CSVs/JSONs or read from one named cell of a
-code-generated report. Every section of the write-up declares the facts it
-uses in an HTML comment right under its heading::
+code-generated report. Every section of the write-up binds its numbers to
+facts in an HTML comment right under its heading, **one fact name per number,
+in reading order**::
 
-    <!-- facts: asic.loo_rms.area asic.loo_rms.fmax ab.qwen.single.* -->
+    <!-- facts: asic.loo_rms.area asic.loo_rms.ffs asic.loo_rms.fmax -->
 
-(``*`` expands over fact names, for one table's cells.) The test requires:
+The test requires:
 
-1. every number in the section's text (outside code spans, code blocks and
-   mermaid diagrams; parameter values such as ``m=3`` and versions such as
-   ``3.1.0`` included, small integers included) to equal one of the section's
-   declared facts at the precision it is printed with: "8.7" matches 8.66,
-   "57" matches 57, "+14.8" matches 14.83; a version is compared as text;
-2. every declared fact to be used at least once in its section, so a section
-   cannot declare a wide pool;
-3. the **negative test**: change the last digit of any one number and the
-   check must fail for (almost) every such mutant; the few that survive are
-   numbers whose neighbour value is also a declared fact of their section.
+1. the section to print exactly as many numbers as it names facts, and the
+   i-th number (outside code spans, code blocks and mermaid diagrams;
+   parameter values such as ``m=3``, versions such as ``3.1.0`` and small
+   integers included) to equal the i-th fact at the precision it is printed
+   with: "8.7" matches 8.66, "57" matches 57, "+14.8" matches 14.83; a version
+   is compared as text;
+2. the **negative test**: change the last digit of any number and the check
+   fails, for every number in the write-up (a changed digit is a different
+   value at the same precision, so it cannot match the same fact).
+
+``python scripts/writeup_facts.py --bind`` writes the ordered lists from a
+pool of facts while editing.
 
 Not numbers, and so not checked: list markers ("1."), the milestone and level
-labels (M1-M4, L0-L5) and model names ("Sonnet 5.5", "V4.1", "Qwen3.8-27B").
+labels (M1-M4, L0-L5, "phase 2") and model names ("Sonnet 5.5", "V4.1", "Qwen3.8-27B").
 """
 
 from __future__ import annotations
@@ -36,8 +39,7 @@ ROOT = Path(__file__).resolve().parents[1]
 WRITEUP = ROOT / "docs" / "WRITEUP.md"
 FACTS = ROOT / "docs" / "writeup_facts.json"
 NUM = re.compile(r"(?<![\w.^/\-−+])[-+−]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)*(?!\w)")
-NOT_NUMBERS = (re.compile(r"Sonnet \d+\.\d+"), re.compile(r"^\s*\d+\.\s", re.M))
-MAX_SURVIVING_MUTANTS = 0.03
+NOT_NUMBERS = (re.compile(r"Sonnet \d+\.\d+"), re.compile(r"^\s*\d+\.\s", re.M), re.compile(r"\b[Pp]hase \d\b"))
 
 
 def strip_code(text: str) -> str:
@@ -67,6 +69,7 @@ def load_facts() -> dict[str, Any]:
 
 
 def expand(patterns: list[str], facts: dict[str, Any]) -> dict[str, Any]:
+    """A pool of facts from names and ``*`` globs (for ``--bind``)."""
     out = {}
     for p in patterns:
         hit = {k: v for k, v in facts.items() if fnmatch.fnmatchcase(k, p)}
@@ -103,19 +106,21 @@ def mutate(token: str) -> str:
     return token[:i] + str(d - 1 if d == 9 else d + 1) + token[i + 1:]
 
 
-def check(text: str, facts: dict[str, Any]) -> tuple[list[str], list[str]]:
-    """(numbers with no matching fact, declared facts never used)."""
-    missing, unused = [], []
-    for head, pats, body in sections(text):
-        decl = expand(pats, facts)
-        used: set[str] = set()
-        for tok in tokens(body):
-            hit = [k for k, v in decl.items() if matches(tok, v)]
-            if not hit:
-                missing.append(f"{head}: {tok}" + ("" if pats else " (section declares no facts)"))
-            used.update(hit)
-        unused += [f"{head}: {k}" for k in decl if k not in used]
-    return missing, unused
+def check(text: str, facts: dict[str, Any]) -> list[str]:
+    """Every problem: a number that does not equal its bound fact, a count mismatch, an unknown fact."""
+    errors = []
+    for head, keys, body in sections(text):
+        toks = tokens(body)
+        for k in keys:
+            if k not in facts:
+                errors.append(f"{head}: unknown fact {k!r}")
+        if len(toks) != len(keys):
+            errors.append(f"{head}: {len(toks)} numbers but {len(keys)} facts"
+                          + ("" if keys else " (section binds no facts)"))
+        for tok, k in zip(toks, keys):
+            if k in facts and not matches(tok, facts[k]):
+                errors.append(f"{head}: {tok} is not {k} = {facts[k]!r}")
+    return errors
 
 
 def test_writeup_exists_and_is_report_sized() -> None:
@@ -123,39 +128,35 @@ def test_writeup_exists_and_is_report_sized() -> None:
     assert 3000 <= words <= 5500, words
 
 
-def test_every_number_is_a_declared_fact() -> None:
-    missing, unused = check(WRITEUP.read_text(), load_facts())
-    assert not missing, "numbers without a matching declared fact:\n" + "\n".join(missing)
-    assert not unused, "declared facts the section never prints:\n" + "\n".join(unused)
+def test_every_number_is_its_bound_fact() -> None:
+    errors = check(WRITEUP.read_text(), load_facts())
+    assert not errors, "\n".join(errors)
 
 
 def test_last_digit_mutants_are_caught() -> None:
-    """The negative test: one changed digit anywhere must (almost always) fail the check."""
+    """The negative test: change one digit of any number in the write-up and its check fails."""
     facts = load_facts()
     total, survivors = 0, []
-    for head, pats, body in sections(WRITEUP.read_text()):
-        decl = expand(pats, facts)
-        for tok in set(tokens(body)):
+    for head, keys, body in sections(WRITEUP.read_text()):
+        for tok, k in zip(tokens(body), keys):
             total += 1
-            mut = mutate(tok)
-            if any(matches(mut, v) for v in decl.values()):
-                survivors.append(f"{head}: {tok} -> {mut}")
-    assert total > 200
-    assert len(survivors) <= MAX_SURVIVING_MUTANTS * total, (
-        f"{len(survivors)} of {total} mutants survive:\n" + "\n".join(survivors))
+            if matches(mutate(tok), facts[k]):
+                survivors.append(f"{head}: {tok} -> {mutate(tok)} still matches {k}")
+    assert total > 250, total
+    assert not survivors, f"{len(survivors)} of {total} mutants survive:\n" + "\n".join(survivors)
 
 
-def test_the_checker_rejects_wrong_and_unsourced_numbers() -> None:
-    facts = {"a": 8.66, "b": 57, "v": "3.1.0", "r": -14.93}
+def test_the_checker_rejects_wrong_swapped_and_unbound_numbers() -> None:
+    facts = {"a": 8.66, "b": 57, "v": "3.1.0", "r": -14.93, "c": 58}
     text = "## S\n\n<!-- facts: a b v r -->\n\nRMS 8.7%, 57 points, OpenSTA 3.1.0, error −14.9%.\n"
-    assert check(text, facts) == ([], [])
-    for bad, tok in (("8.8%", "8.8"), ("58 points", "58"), ("3.1.1", "3.1.1"), ("−14.8%", "−14.8"), ("W=12", "12")):
-        wrong = text.replace({"8.8%": "8.7%", "58 points": "57 points", "3.1.1": "3.1.0", "−14.8%": "−14.9%"}.get(bad, "57 points"),
-                             bad if bad != "W=12" else "57 points, W=12")
-        assert f"## S: {tok}" in check(wrong, facts)[0], bad
-    assert check(text.replace("<!-- facts: a b v r -->", "<!-- facts: a b v r a -->").replace("8.7%", "8.7"), facts) == ([], [])
-    assert check("## S\n\n<!-- facts: a b -->\n\n57 points.\n", facts)[1] == ["## S: a"]  # declared, never used
-    assert check("## S\n\nno facts declared, 12 numbers.\n", facts)[0] == ["## S: 12 (section declares no facts)"]
+    assert check(text, facts) == []
+    for old, new in (("8.7%", "8.8%"), ("57 points", "58 points"), ("3.1.0", "3.1.1"), ("−14.9%", "−14.8%")):
+        assert check(text.replace(old, new), facts), new
+    assert check(text.replace("57 points", "57 points, W=12"), facts)  # an extra, unbound number
+    assert check(text.replace("<!-- facts: a b v r -->", "<!-- facts: b a v r -->"), facts)  # swapped binding
+    assert check(text.replace("57 points", "58 points").replace("a b v r", "a c v r"), facts) == []
+    assert check("## S\n\nno facts bound, 12 numbers.\n", facts) == ["## S: 1 numbers but 0 facts (section binds no facts)"]
+    assert check(text.replace(" b ", " zz "), facts)[0] == "## S: unknown fact 'zz'"
     assert mutate("+14.8") == "+14.9" and mutate("635,040") == "635,041" and mutate("3.1.0") == "3.1.1"
 
 
