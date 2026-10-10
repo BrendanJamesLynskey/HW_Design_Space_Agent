@@ -374,7 +374,8 @@ def cmd_fleet_m4(args: argparse.Namespace) -> None:
             t0 = time.time()
             res = run_fleet(s, factory, seed=seed, run_root=root)
             wall = time.time() - t0
-            row = {**_row_common(res, name, seed, args, "fleet", wall), "members": res["members"],
+            members = [{**mm, "run_dir": str(Path(mm["run_dir"]).relative_to(ROOT))} for mm in res["members"]]
+            row = {**_row_common(res, name, seed, args, "fleet", wall), "members": members,
                    "phase2_budgets": res["phase2_budgets"], "lessons": res["lessons"],
                    "store_evaluations_by_member": res["store_evaluations_by_member"],
                    "store_distinct_designs": res["store_distinct_designs"],
@@ -386,6 +387,140 @@ def cmd_fleet_m4(args: argparse.Namespace) -> None:
 
 
 # ---------------------------------------------------------------------------
+# L2 -> L1 feedback, offline on recorded data
+# ---------------------------------------------------------------------------
+
+def _recorded_m3_structured() -> list[tuple[str, list[dict[str, Any]]]]:
+    """Each committed M3 structured run's L1 evaluations, rebuilt from its archived evaluation keys."""
+    from hw_dse.agent.replay import m3_runs, recorded_keys
+    from hw_dse.evaluate import evaluate
+    from hw_dse.families import ArchConfig
+
+    out = []
+    for row in m3_runs():
+        s = any_spec(row["spec"])
+        out.append((f"M3 structured {row['model_requested'].split('/')[-1]} {row['spec']} s{row['seed']}",
+                    [evaluate(ArchConfig.from_key(k), s) for k in recorded_keys(row["_trace_dir"])]))
+    return out
+
+
+def _recorded_m3_campaign_pools() -> list[tuple[str, list[dict[str, Any]]]]:
+    import gzip
+
+    from hw_dse.evaluate import evaluate
+    from hw_dse.families import ArchConfig
+
+    out = []
+    for p in sorted((DATA / "traces" / "m3").glob("*/*/*/pool_keys.json.gz")):
+        spec_name = p.parent.parent.name
+        s = any_spec(spec_name)
+        if s.system is None:
+            continue
+        keys = json.loads(gzip.decompress(p.read_bytes()))
+        keys = keys["keys"] if isinstance(keys, dict) else keys
+        out.append((f"M3 campaign pool {p.parent.relative_to(DATA / 'traces' / 'm3')}",
+                    [evaluate(ArchConfig.from_key(k), s) for k in keys]))
+    return out
+
+
+def cmd_l2_feedback_m4(_: argparse.Namespace) -> None:
+    """Where does the L2 -> L1 feedback fire? Recorded runs, baselines, and the constructed spec,
+    with an ablation (same re-exploration budget, uncorrected bound)."""
+    import numpy as np
+
+    from hw_dse.agent.llm import HeuristicArchitect
+    from hw_dse.agent.runner import run_agent
+    from hw_dse.agent.summary import merged_front
+    from hw_dse.benchmark import _feasible_mask, select_design
+    from hw_dse.evaluate import default_cost_model
+    from hw_dse.l2.feedback import feedback, fires
+    from hw_dse.l2.node import l2_select
+
+    accuracy_table.preload()
+    t0 = time.time()
+
+    def check(recs: list[dict[str, Any]], s: Spec) -> dict[str, Any]:
+        sel = select_design(merged_front(recs, s), s)
+        l2 = l2_select(recs, sel, s) if sel else {"status": "no L1 selection"}
+        return {"fires": fires(l2), "n_l1_feasible": l2.get("n_l1_feasible"), "n_l2_pass": l2.get("n_simulated_feasible")}
+
+    recorded: list[dict[str, Any]] = []
+    for label, recs in _recorded_m3_structured() + _recorded_m3_campaign_pools():
+        name = label.split()[-2] if label.startswith("M3 structured") else label.split()[3].split("/")[1]
+        recorded.append({"run": label, **check(recs, any_spec(name))})
+    for name in ("bursty_offload", "multiaxis_control", "asic_multiaxis_control"):
+        s = any_spec(name)
+        for sampler in ("nsga2", "random"):
+            for seed in SEEDS["m2"]:
+                recorded.append({"run": f"baseline {sampler} {name} s{seed}", **check(run_baseline(s, sampler, seed), s)})
+    live = []
+    for d in (M4_DIRS["agent"], M4_DIRS["fleet_ab"] / "single", M4_DIRS["fleet_ab"] / "fleet"):
+        for rows in _rows(d).values():
+            for r in rows:
+                if any_spec(r["spec"]).system is not None:
+                    live.append({"run": f"M4 {r['arm']} {r['model_requested'].split('/')[-1]} {r['spec']} s{r['seed']}",
+                                 "fires": r.get("l2_feedback") is not None, "outcome": r.get("l2_feedback")})
+    # The constructed spec: ground truth, then searches that can and cannot see the passing region.
+    s = any_spec("l2_feedback_bursty")
+    grid = cached_grid(default_cost_model())
+    m = grid.metrics(s, "simulated")
+    fs = _feasible_mask(m, s)
+    fb_ = _feasible_mask(grid.metrics(s, "bound"), s)
+    idx = np.flatnonzero(fs)
+    best = float(m[s.select_by][idx].min())
+    gtrow = {"n_feasible_simulated": int(fs.sum()), "n_feasible_l1_bound": int(fb_.sum()),
+             "best_" + s.select_by: best, "winner_key": grid.arch(int(idx[np.argmin(m[s.select_by][idx])])).key()}
+    constructed = []
+    searches: list[tuple[str, list[dict[str, Any]], int]] = []
+    for sampler in ("nsga2", "random"):
+        for seed in SEEDS["m2"]:
+            searches.append((f"{sampler} s{seed}", run_baseline(s, sampler, seed), seed))
+    import tempfile
+    for seed in SEEDS["m2"]:
+        with tempfile.TemporaryDirectory() as tmp:
+            res = run_agent(s, llm=HeuristicArchitect(), seed=seed, run_root=Path(tmp),
+                            options={"l2_feedback": {"enabled": False}})
+        searches.append((f"rule-based architect s{seed}", res["evaluations_ordered"], seed))
+    for label, recs, seed in searches:
+        c = check(recs, s)
+        row: dict[str, Any] = {"search": label, **c}
+        if c["fires"]:
+            for tag, corr in (("corrected", True), ("ablation_uncorrected", False)):
+                out = feedback(s, recs, seed=seed, correct=corr)
+                sel = out["selected"]
+                row[tag] = {"status": out["status"], "n_evals": out["n_evals"], "selected_key": out["selected_key"],
+                            "regret": (float(sel[s.select_by]) - best) / best if sel else None,
+                            "rounds": [{k: v for k, v in r.items() if k != "corrections"} for r in out["rounds"]]}
+        constructed.append(row)
+    n_rec = sum(r["fires"] for r in recorded)
+    fired = [r for r in constructed if r["fires"]]
+    rec_ok = sum(1 for r in fired if r["corrected"]["status"] == "recovered")
+    abl_ok = sum(1 for r in fired if r["ablation_uncorrected"]["status"] == "recovered")
+    reg = [r["corrected"]["regret"] for r in fired if r["corrected"]["regret"] is not None]
+    md = (f"Recorded data (M3 structured runs rebuilt from their archived evaluations, M3 campaign pools, NSGA-II/random "
+          f"baselines on every system spec, and the live M4 runs on the system specs): the feedback **fires in "
+          f"{n_rec} of {len(recorded)} recorded searches and {sum(r['fires'] for r in live)} of {len(live)} live M4 runs**: "
+          "L2 always found a passing design among the L1-feasible ones, so on the committed specs it never fires.\n\n"
+          f"The constructed spec `l2_feedback_bursty` (bursts of 32 at 130 MS/s, p99 <= 0.4 us, "
+          f"{gtrow['n_feasible_l1_bound']:,} designs pass the L1 bound, {gtrow['n_feasible_simulated']:,} the simulation; "
+          f"true winner `{gtrow['winner_key']}`): it fires in **{len(fired)} of {len(constructed)}** searches "
+          f"(5 NSGA-II, 5 random, 5 rule-based-architect runs of 400 evaluations). With the correction it recovers a "
+          f"passing design in **{rec_ok} of {len(fired)}** (regret {_pct(reg)}); the ablation, the same re-exploration "
+          f"budget screened with the uncorrected bound, recovers in **{abl_ok} of {len(fired)}**.\n\n"
+          "| search | L1-feasible | pass L2 | fires | corrected: outcome, evals, regret | uncorrected: outcome, evals |\n"
+          "|---|---|---|---|---|---|\n" + "".join(
+              f"| {r['search']} | {r['n_l1_feasible']} | {r['n_l2_pass']} | {'yes' if r['fires'] else 'no'} | "
+              + (f"{r['corrected']['status']}, {r['corrected']['n_evals']}, "
+                 f"{'n/a' if r['corrected']['regret'] is None else format(r['corrected']['regret'] * 100, '+.1f') + '%'} | "
+                 f"{r['ablation_uncorrected']['status']}, {r['ablation_uncorrected']['n_evals']} |" if r["fires"] else "— | — |")
+              + "\n" for r in constructed))
+    L2F_FILE.write_text(json.dumps({"recorded": recorded, "live_m4": live, "constructed_gt": gtrow,
+                                    "constructed": constructed, "summary_md": md}, indent=1, default=str))
+    print(md)
+    print(f"wrote {L2F_FILE} in {time.time() - t0:.0f}s")
+
+
+# ---------------------------------------------------------------------------
 # Registration into run_eval.py
 # ---------------------------------------------------------------------------
 
@@ -393,6 +528,7 @@ def register(sub: Any) -> None:
     sub.add_parser("ground-truth-m4").set_defaults(fn=cmd_ground_truth_m4)
     sub.add_parser("baselines-m4").set_defaults(fn=cmd_baselines_m4)
     sub.add_parser("models-m4").set_defaults(fn=cmd_models_m4)
+    sub.add_parser("l2-feedback-m4").set_defaults(fn=cmd_l2_feedback_m4)
     ku = sub.add_parser("key-usage-m4")
     ku.add_argument("--tag", required=True)
     ku.set_defaults(fn=cmd_key_usage_m4)
@@ -410,9 +546,252 @@ def register(sub: Any) -> None:
         p4.set_defaults(fn=fn)
 
 
-def report_m4(L: list[str]) -> None:  # filled in below as the M4 data lands
+# ---------------------------------------------------------------------------
+# results.md, milestone 4 section
+# ---------------------------------------------------------------------------
+
+L2F_FILE = DATA / "l2_feedback_m4.json"
+
+
+def _rows(d: Path) -> dict[str, list[dict[str, Any]]]:
+    out: dict[str, list[dict[str, Any]]] = {}
+    for p in sorted(d.glob("*/*.json")) if d.exists() else []:
+        r = json.loads(p.read_text())
+        out.setdefault(r["model_requested"] + ("" if r["reasoning"] == "provider default" else f", reasoning {r['reasoning']}"),
+                       []).append(r)
+    return out
+
+
+def _pct(xs: list[float | None]) -> str:
+    return _ms(xs, pct=True, signed=True)
+
+
+def _fails(rows: list[dict[str, Any]]) -> str:
+    bad = sum(1 for r in rows if not r["selected_meets_spec"] and not r.get("declared_infeasible"))
+    return f"{bad}/{len(rows)}"
+
+
+def ab_arms() -> dict[str, dict[str, list[dict[str, Any]]]]:
+    """model -> {"single": rows, "fleet": rows}; the single arm on the ASIC specs is the ASIC structured eval."""
+    single = _rows(M4_DIRS["agent"])
+    for k, v in _rows(M4_DIRS["fleet_ab"] / "single").items():
+        single.setdefault(k, []).extend(v)
+    fleet = _rows(M4_DIRS["fleet_ab"] / "fleet")
+    return {m: {"single": [r for r in single.get(m, []) if r["spec"] in ASIC_SPECS + FPGA_AB_SPECS], "fleet": fleet[m]}
+            for m in fleet}
+
+
+def report_m4(L: list[str]) -> None:
+    """Milestone 4 section of results.md (appended; M1-M3 sections untouched)."""
     if not GT_M4_FILE.exists():
         return
+    import csv as _csv
+
+    from hw_dse.evaluate import evaluate
+    from hw_dse.families import ArchConfig
+
+    gt = load_gt_m4()
+    L.append("# Milestone 4: an ASIC target, a fleet of agents, L2 -> L1 feedback\n")
+    L.append("Generated from committed data like everything above. *measured (yosys 0.33 + OpenSTA 3.1.0, "
+             "sky130_fd_sc_hd, tt_025C_1v80)* = this repository's ASIC flow; *estimate* on the ASIC target = "
+             f"`{gt['cost_model']}`. FPGA numbers are unchanged from M1-M3 (the M1 two-anchor model).\n")
+
+    cal = json.loads((DATA / "asic_calibration.json").read_text())
+    L.append("## ASIC cost model: fit and leave-one-out\n")
+    L.append(f"{cal['calibration']['n_points']} synthesised designs over all four families "
+             "(`eval/data/asic_synthesis.csv`; report `eval/data/asic_calibration.md`). RMS error, %:\n")
+    L.append("| family | n | area in / LOO | FFs in / LOO | Fmax in / LOO | power (vs OpenSTA) in / LOO |")
+    L.append("|---|---|---|---|---|---|")
+    ins, loo = cal["summary"]["in_sample"], cal["summary"]["leave_one_out"]
+    for fam in ("all", "iterative", "unrolled_k", "pipelined", "pipelined_m"):
+        n = loo[fam].get("n", cal["calibration"]["n_points"])
+        L.append(f"| {fam} | {n} | " + " | ".join(f"{ins[fam][m]:.1f} / {loo[fam][m]:.1f}"
+                                                for m in ("area_um2", "ffs", "fmax_mhz", "power_mw")) + " |")
+    L.append("")
+
+    # ---- ground truth + ranking ----------------------------------------
+    L.append("## ASIC specs: exhaustive ground truth and the family ranking on both targets\n")
+    L.append("Per spec, the best design of each family by the spec's selection rule (system metrics simulated). The "
+             "FPGA twin is the same spec with the area metric replaced by LUTs + FFs, scored on the FPGA ground "
+             "truth (M1 cost model).\n")
+    L.append("| spec | feasible | true winner | ASIC family ranking | FPGA twin ranking | ranking differs | FPGA twin winner |")
+    L.append("|---|---|---|---|---|---|---|")
+    for name in ASIC_SPECS:
+        g = gt[name]
+        s = asic_spec(name)
+        L.append(f"| {name} | {g['n_feasible']:,} | `{g['selected']['key']}` ({s.select_by} {g['selected'][s.select_by]:.4g}) | "
+                 f"{' < '.join(g['family_ranking'])} | {' < '.join(g['fpga_twin']['family_ranking'])} | "
+                 f"{'yes' if g['ranking_differs'] else 'no'} | `{g['fpga_twin']['selected']['key']}` |")
+    L.append("")
+    L.append("| spec | family | ASIC best (selection metric) | ratio to the ASIC winner | FPGA twin best | ratio to the FPGA winner |")
+    L.append("|---|---|---|---|---|---|")
+    for name in ASIC_SPECS:
+        g, s = gt[name], asic_spec(name)
+        tw = fpga_twin(s)
+        wa = g["selected"][s.select_by]
+        wf = g["fpga_twin"]["selected"][tw.select_by]
+        for fam, b in g["family_bests"].items():
+            bf = g["fpga_twin"]["family_bests"][fam]
+            if not b and not bf:
+                continue
+            ca = f"`{b['key']}` {b[s.select_by]:.4g}" if b else "none"
+            ra = f"{b[s.select_by] / wa:.2f}" if b else "—"
+            cf = f"`{bf['key']}` {bf[tw.select_by]:.4g}" if bf else "none"
+            rf = f"{bf[tw.select_by] / wf:.2f}" if bf else "—"
+            L.append(f"| {name} | {fam} | {ca} | {ra} | {cf} | {rf} |")
+    L.append("")
+    sys_name = [n for n in ASIC_SPECS if asic_spec(n).system is not None][0]
+    gs = gt[sys_name]
+    L.append(f"`{sys_name}`: {gs['n_feasible_l1_bound']:,} designs pass the L1 bound and {gs['n_feasible']:,} the "
+             f"simulation; the bound's winner `{gs['l1_bound_selected']['key']}` "
+             f"({gs['l1_bound_selected']['area_um2']:.0f} um2) misses the deadline in simulation, so L2 changes the "
+             f"winner to `{gs['selected']['key']}` ({gs['selected']['area_um2']:.0f} um2): "
+             f"{'yes' if gs['l2_changes_winner'] else 'no'}.\n")
+
+    # ---- held-out validation -------------------------------------------
+    vcsv = DATA / "asic_validation.csv"
+    if vcsv.exists():
+        from hw_dse.synth.asic import load_csv
+
+        L.append("## Held-out sky130 check of the ground-truth designs\n")
+        L.append("Each spec's per-family optima, the FPGA twin's optima and the L1-bound pick, synthesised and timed "
+                 "(`eval/data/asic_validation.csv`, never fitted), against the model's estimates; *meets* = the "
+                 "spec's constraints with the measured numbers (system metrics simulated at the measured clock).\n")
+        L.append("| design | area um2 meas / est (err) | Fmax MHz meas / est (err) | power mW (100 MHz) meas | meets: asic_low_area / asic_power_50msps / asic_multiaxis_control |")
+        L.append("|---|---|---|---|---|")
+        from hw_dse.agent.backannotate import _MeasuredAsicCost
+        from hw_dse.l2.node import simulate_record
+
+        for p in load_csv(vcsv):
+            e = evaluate(p.arch, asic_spec(ASIC_SPECS[0]))
+            meets = []
+            for name in ASIC_SPECS:
+                sp = asic_spec(name)
+                r = evaluate(p.arch, sp, cost_model=_MeasuredAsicCost(p))  # type: ignore[arg-type]
+                if sp.system is not None:
+                    r = simulate_record(r, sp)
+                meets.append("yes" if r["feasible"] else "no")
+            L.append(f"| `{p.arch.key()}` | {p.area_um2:.0f} / {e['area_um2']:.0f} ({(e['area_um2'] / p.area_um2 - 1) * 100:+.1f}%) | "
+                     f"{p.fmax_mhz:.1f} / {e['fmax_mhz']:.1f} ({(e['fmax_mhz'] / p.fmax_mhz - 1) * 100:+.1f}%) | "
+                     f"{p.power_mw:.3f} | {' / '.join(meets)} |")
+        L.append("")
+
+    # ---- ASIC eval ---------------------------------------------------------
+    base = list(json.loads(BASELINES_M4.read_text()).values()) if BASELINES_M4.exists() else []
+    agents = _rows(M4_DIRS["agent"])
+    L.append("## ASIC specs: structured graph vs baselines (5 seeds, 400 evaluations)\n")
+    L.append("Scored on the ASIC ground truth; for the system spec on *simulated* feasibility. Mean ± population std.\n")
+    for metric, title in (("hv_frac", "HV fraction"), ("select_regret", "Selection regret")):
+        L.append(f"**{title}**\n")
+        L.append("| spec | NSGA-II | random | " + " | ".join(f"`{m}`" for m in agents) + " |")
+        L.append("|---|---|---|" + "---|" * len(agents))
+        for name in ASIC_SPECS:
+            f = (lambda xs: _pct(xs)) if metric == "select_regret" else (lambda xs: _ms(xs))
+            cells = [f([r[metric] for r in base if r["spec"] == name and r["method"] == k]) for k in ("nsga2", "random")]
+            cells += [f([r[metric] for r in agents[m] if r["spec"] == name]) for m in agents]
+            L.append(f"| {name} | " + " | ".join(cells) + " |")
+        L.append("")
+    L.append("| model | runs | selected meets spec | L2 changed the L1 pick | back-annotation flags a winner change | cost / run | wall / run (s) |")
+    L.append("|---|---|---|---|---|---|---|")
+    for m, rs in agents.items():
+        L.append(f"| `{m}` | {len(rs)} | {sum(r['selected_meets_spec'] for r in rs)}/{len(rs)} | "
+                 f"{sum(r['l2_winner_changed'] for r in rs)} | {sum(r['back_annotation_winner_changed'] for r in rs)} | "
+                 f"${statistics.mean(r['cost_usd'] for r in rs):.4f} | {_ms([r['wall_s'] for r in rs], digits=0)} |")
+    L.append("")
+
+    # ---- fleet A/B ---------------------------------------------------------
+    arms = ab_arms()
+    if arms:
+        L.append("## A/B: single structured graph vs the code-orchestrated fleet\n")
+        L.append(f"Same specs ({', '.join(ASIC_SPECS + FPGA_AB_SPECS)}), seeds 0-4 and total L1 budget (400 "
+                 "evaluations). Fleet = two members (fsm, pipelined), half the budget split equally, the rest by "
+                 "share of the merged front. Wall-clock: every run was started after the previous one finished, "
+                 "with nothing else running (the fleet's two members run in parallel threads inside its run). "
+                 "Failure = the selected design does not meet the spec (excluding a correct infeasible call); "
+                 "failed LLM calls are counted separately. Mean ± population std over all runs of the arm.\n")
+        L.append("| model | arm | runs | HV fraction | selection regret | L1 evals | input tokens | output tokens | "
+                 "cost / run (USD) | failures | failed LLM calls | wall / run (s) |")
+        L.append("|---|---|---|---|---|---|---|---|---|---|---|---|")
+        for m, a in arms.items():
+            for arm in ("single", "fleet"):
+                rs = a[arm]
+                if not rs:
+                    continue
+                L.append(f"| `{m}` | {arm} | {len(rs)} | {_ms([r['hv_frac'] for r in rs])} | "
+                         f"{_pct([r['select_regret'] for r in rs])} | {_ms([float(r['n_evals']) for r in rs], digits=0)} | "
+                         f"{_ms([r['input_tokens'] for r in rs], digits=0)} | {_ms([r['output_tokens'] for r in rs], digits=0)} | "
+                         f"{_ms([r['cost_usd'] for r in rs], digits=4)} | {_fails(rs)} | "
+                         f"{sum(int(r['llm_failures']) for r in rs)} | {_ms([r['wall_s'] for r in rs], digits=0)} |")
+        L.append("")
+        L.append("Per spec (HV fraction / regret, single → fleet):\n")
+        L.append("| spec | " + " | ".join(f"`{m}`" for m in arms) + " |")
+        L.append("|---|" + "---|" * len(arms))
+        for name in ASIC_SPECS + FPGA_AB_SPECS:
+            cells = []
+            for m, a in arms.items():
+                sx = [r for r in a["single"] if r["spec"] == name]
+                fx = [r for r in a["fleet"] if r["spec"] == name]
+                cells.append(f"{_ms([r['hv_frac'] for r in sx])} → {_ms([r['hv_frac'] for r in fx])}; "
+                             f"{_pct([r['select_regret'] for r in sx])} → {_pct([r['select_regret'] for r in fx])}")
+            L.append(f"| {name} | " + " | ".join(cells) + " |")
+        L.append("")
+        L.append("**Throughput, measured** (L1 evaluations per hour of wall-clock, one run at a time; cost per spec = "
+                 "mean provider-reported cost of one 400-evaluation run):\n")
+        L.append("| model | arm | designs evaluated / hour | cost per spec (USD) | *projection*: designs / 24 h | *projection*: specs / 24 h | *projection*: cost / 24 h (USD) |")
+        L.append("|---|---|---|---|---|---|---|")
+        for m, a in arms.items():
+            for arm in ("single", "fleet"):
+                rs = a[arm]
+                if not rs:
+                    continue
+                dph = sum(r["n_evals"] for r in rs) / sum(r["wall_s"] for r in rs) * 3600
+                cps = statistics.mean(r["cost_usd"] for r in rs)
+                sph = 3600 / statistics.mean(r["wall_s"] for r in rs)
+                L.append(f"| `{m}` | {arm} | {dph:,.0f} | {cps:.4f} | {dph * 24:,.0f} | {sph * 24:.0f} | {cps * sph * 24:.2f} |")
+        L.append("\nThe three *projection* columns multiply the measured rates by 24 hours of back-to-back runs on "
+                 "one machine like this one; they assume nothing else changes (provider latency, rate limits, the "
+                 "spec mix) and were not run.\n")
+        L.append("Fleet behaviour (from the run records):\n")
+        for m, a in arms.items():
+            fx = a["fleet"]
+            p2 = [r["phase2_budgets"] for r in fx]
+            to_pipe = sum(1 for b in p2 if b.get("fsm", 0) == 0)
+            fsm_infeas = sum(1 for r in fx for mm in r["members"] if mm["member"] == "fsm" and mm["llm_declared_infeasible"])
+            L.append(f"- `{m}`: phase 2 went entirely to the pipelined member in {to_pipe} of {len(fx)} runs; the fsm "
+                     f"member's architect declared its families infeasible {fsm_infeas} times; distinct designs in the "
+                     f"store per run {_ms([float(r['store_distinct_designs']) for r in fx], digits=0)}.")
+        L.append("")
+
+    # ---- L2 -> L1 feedback ---------------------------------------------
+    if L2F_FILE.exists():
+        fb = json.loads(L2F_FILE.read_text())
+        L.append("## L2 -> L1 feedback\n")
+        L.append(fb["summary_md"] + "\n")
+
+    # ---- models, spend -----------------------------------------------------
+    if MODELS_CHECK_M4.exists():
+        mc = json.loads(MODELS_CHECK_M4.read_text())
+        L.append(f"## Models and spend\n\nModel check (`eval/data/models_check_m4.json`, {mc['ts']}, "
+                 f"{mc['n_models_listed']} models listed): " + "; ".join(
+                     f"`{k}` listed {v['listed']}, tools {v['tools']}, structured_outputs {v['structured_outputs']}"
+                     for k, v in mc["models"].items()) + ". No substitution.\n")
+    rows = ledger("m4")
+    if rows:
+        by: dict[str, float] = {}
+        n: dict[str, int] = {}
+        for r in rows:
+            k = f"{r['model']} / {r.get('arm')}" + (f" ({r['note']})" if r.get("note") else "")
+            by[k] = by.get(k, 0.0) + float(r.get("cost_usd") or 0)
+            n[k] = n.get(k, 0) + 1
+        L.append("| ledger entry (model / arm) | runs | provider-reported USD |")
+        L.append("|---|---|---|")
+        for k in sorted(by):
+            L.append(f"| {k} | {n[k]} | {by[k]:.4f} |")
+        L.append(f"| **total** | {len(rows)} | **{sum(by.values()):.4f}** |\n")
+    if KEY_USAGE_M4.exists():
+        ku = json.loads(KEY_USAGE_M4.read_text())["snapshots"]
+        L.append("Key usage snapshots (authoritative; `eval/data/key_usage_m4.json`): " + "; ".join(
+            f"{k} {v['ts']} ${v['usage_usd']:.4f}" for k, v in ku.items()) + ".\n")
 
 
 __all__ = ["register", "report_m4", "ASIC_SPECS", "LEDGER", "_ms", "_slim", "_slug", "ledger", "statistics", "Path"]

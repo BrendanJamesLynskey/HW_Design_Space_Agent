@@ -145,8 +145,12 @@ def fires(l2: dict[str, Any] | None) -> bool:
 
 
 def feedback(spec: Spec, records: list[dict[str, Any]], seed: int = 0, rounds: int = DEFAULT_ROUNDS,
-             evals_per_round: int = DEFAULT_EVALS_PER_ROUND) -> dict[str, Any]:
-    """The ``l2_feedback`` node's logic as a pure function of the run's L1 evaluations."""
+             evals_per_round: int = DEFAULT_EVALS_PER_ROUND, correct: bool = True) -> dict[str, Any]:
+    """The ``l2_feedback`` node's logic as a pure function of the run's L1 evaluations.
+
+    ``correct=False`` is the ablation: the same re-exploration budget and families,
+    screened with the *uncorrected* analytic bound (is it the correction, or just
+    more evaluations?)."""
     from hw_dse.explore import run_family_study
     from hw_dse.families import REGISTRY, full_box
     from hw_dse.l2.node import simulate_record
@@ -163,7 +167,9 @@ def feedback(spec: Spec, records: list[dict[str, Any]], seed: int = 0, rounds: i
     for rnd in range(1, rounds + 1):
         if sel is not None:
             break
-        corr = corrections(pairs, spec)
+        corr = corrections(pairs, spec) if correct else {
+            c.metric: {cls: {"envelope": [], "n": 0, "note": "ablation: analytic bound"} for cls in ("fsm", "pipelined")}
+            for c in spec.system_constraints}
         # Where to look: families with an L1-feasible design in the run, plus
         # families the run never explored. A family whose designs all failed
         # the *analytic* bound cannot pass the corrected one (kappa >= 1 for a
