@@ -9,7 +9,11 @@ spec:
     provenance, feasibility) as code computed it, plus which members evaluated
     it and how often. Written by the graph's ``explore_family`` node as each
     study finishes, so a member's evaluations are visible to the coordinator
-    (and to members started later) without passing state around.
+    without passing state around. Read back (:func:`front_designs`) by the
+    same node in phase 2: each study is warm-started with the fleet's stored
+    front designs of its family, as seeds that NSGA-II breeds from (seeds are
+    not new evaluations). Within one phase the members run concurrently and
+    do not read each other's records.
 ``("fleet", <spec>, "lessons")``
     Code-written facts the coordinator derives between phases: per family,
     how many designs were evaluated, how many were feasible, the best value
@@ -18,6 +22,8 @@ spec:
     free-text field and nothing an LLM wrote ever reaches this namespace.
     (The M3 campaign agent's free-text notes into the inner architect were
     one of its two failure modes; here there is no channel for them.)
+    The coordinator reads them back (:func:`lessons`) to template the phase-2
+    members' prompts.
 
 LangGraph's ``InMemoryStore`` is used (no persistence is needed: a fleet run
 is one process). Puts from parallel members are serialised by a lock, since
@@ -77,3 +83,26 @@ def put_lessons(store: Any, spec_name: str, lessons: dict[str, dict[str, Any]]) 
 
 def lessons(store: Any, spec_name: str) -> dict[str, dict[str, Any]]:
     return {it.key: it.value for it in store.search(ns(spec_name, "lessons"), limit=1000)}
+
+
+WARM_START_MAX = 16  # stored front designs seeded into one phase-2 study
+
+
+def front_designs(store: Any, spec: Any, family: str, cap: int = WARM_START_MAX) -> list[dict[str, Any]]:
+    """Parameter dicts of the Pareto front of ``family``'s stored designs (feasible
+    only), an even spread of at most ``cap`` of them.
+
+    The front is the family's own, not the merged one: a family belongs to
+    one member, so this read depends only on that member's writes and a
+    parallel fleet stays deterministic."""
+    from hw_dse.agent.summary import merged_front
+    from hw_dse.families import REGISTRY
+
+    rows = merged_front([r for r in evaluated(store, spec.name) if r["family"] == family], spec)
+    rows.sort(key=lambda r: r["key"])
+    names = [p.name for p in REGISTRY[family].params]
+    seeds = [{n: r[n] for n in names} for r in rows]
+    if len(seeds) > cap:
+        pick = sorted({round(i * (len(seeds) - 1) / (cap - 1)) for i in range(cap)})
+        seeds = [seeds[i] for i in pick]
+    return seeds

@@ -434,8 +434,9 @@ def build_graph(llm: StructuredLLM, checkpointer: Any = None, store: Any = None)
     ``store`` (milestone 4): a LangGraph ``BaseStore`` shared by the members of
     a fleet (:mod:`hw_dse.fleet`). When the run is a fleet member
     (``configurable.fleet``), every evaluation it makes is also written there,
-    so the coordinator and the other members see it. A single run passes none
-    and behaves exactly as before."""
+    so the coordinator sees it; with ``fleet.warm_start`` (phase 2) each of the
+    member's studies is seeded from the fleet's stored front designs of its
+    family. A single run passes none and behaves exactly as before."""
 
     def _allowed(config: RunnableConfig | None) -> list[str] | None:
         fl = _cfg(config, "fleet") or {}
@@ -504,17 +505,26 @@ def build_graph(llm: StructuredLLM, checkpointer: Any = None, store: Any = None)
         spec = Spec.model_validate(payload["spec"])
         job = payload["job"]
         box = {k: tuple(v) for k, v in job["box"].items()}
-        recs = run_family_study(job["family"], box, spec, job["n_trials"], payload["seed"], tag={"round": payload["round"]},
-                                seed_designs=job.get("seeds") or None)
         fleet = _cfg(config, "fleet") or {}
-        if fleet:  # milestone 4: share every evaluation with the fleet through the graph's Store
+        store = None
+        seeds = list(job.get("seeds") or [])
+        if fleet:  # milestone 4: the fleet's shared LangGraph Store
             from langgraph.config import get_store
 
+            store = get_store()
+            if store is not None and fleet.get("warm_start"):
+                # Phase 2: warm-start the study from what the fleet already found
+                # for this family (its stored front designs, read back from the
+                # Store). Seeds are not new evaluations (see _seed_study).
+                from hw_dse.fleet.store import front_designs
+
+                seeds += front_designs(store, spec, job["family"])
+        recs = run_family_study(job["family"], box, spec, job["n_trials"], payload["seed"], tag={"round": payload["round"]},
+                                seed_designs=seeds or None)
+        if store is not None:  # share every evaluation with the fleet
             from hw_dse.fleet.store import put_evaluations
 
-            store = get_store()
-            if store is not None:
-                put_evaluations(store, spec.name, fleet.get("member", "?"), recs)
+            put_evaluations(store, spec.name, fleet.get("member", "?"), recs)
         return {"evaluations": recs}
 
     def analyse(state: DSEState, config: RunnableConfig) -> dict[str, Any]:

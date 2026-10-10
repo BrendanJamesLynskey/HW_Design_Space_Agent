@@ -23,14 +23,18 @@ What the coordinator does (all code)
    LangGraph Store (:mod:`hw_dse.fleet.store`).
 3. **Lessons.** From the store, code computes per-family facts (evaluations,
    feasible designs, the best selection metric, designs on the merged front)
-   and writes them back to the store's ``lessons`` namespace. No free text,
-   nothing an LLM wrote.
+   and writes them to the store's ``lessons`` namespace, from which the
+   phase-2 prompts are templated. No free text, nothing an LLM wrote.
 4. **Phase 2: reallocate.** The rest of the budget goes to the members in
    proportion to their share of the *merged* Pareto front (a member whose
    families contribute nothing to it gets nothing). If nothing is feasible
    anywhere, the members share it equally, so infeasibility is still
    established with the whole budget. Each funded member runs again, with
-   the lessons in its prompt (code-written facts, like the summaries).
+   the lessons in its prompt (code-written facts, like the summaries), and
+   every study it runs is warm-started from the Store: the fleet's stored
+   front designs of that family are seeded into NSGA-II (seeds are not new
+   evaluations). Before this warm start (the first M4 A/B), phase-2 members
+   started cold and the Store was only read by the coordinator.
 5. **Merge and select.** The fleet's result is the union of every member's
    evaluations: one merged front, the spec's selection rule, then the same
    L2 step as a single graph (every L1-feasible design simulated for a system
@@ -38,9 +42,9 @@ What the coordinator does (all code)
    never spends more than the spec's ``total_evals`` on L1, so it can be
    compared with a single graph at equal budget.
 
-Member runs skip their own L2, L2-feedback and back-annotation steps (the
-coordinator does them once, on the merged result), and each member keeps its
-own run directory, trace and report.
+Member runs skip their own L2, L2-feedback and back-annotation steps. The
+coordinator runs L2 and the L2 feedback once, on the merged result; it does
+not back-annotate. Each member keeps its own run directory, trace and report.
 
 Accounting: every Optuna trial is one evaluation (repeats included), exactly
 as for a single graph and the baselines. The fleet's evaluations are ordered
@@ -67,7 +71,10 @@ from hw_dse.spec import Budget, Spec
 SPLIT_BY_CLASS: list[tuple[str, list[str]]] = [("fsm", ["iterative", "unrolled_k"]),
                                                ("pipelined", ["pipelined", "pipelined_m"])]
 SPLIT_BY_FAMILY: list[tuple[str, list[str]]] = [(f, [f]) for f in REGISTRY]
-MIN_MEMBER_BUDGET = 10  # the smallest Budget a member run accepts
+# The smallest member budget: a member's LLM rounds hold back the 40% coverage
+# reserve, and both parts must fit at least one MIN_TRIALS_PER_FAMILY study, or
+# evaluations are left unspent (a budget of 10 left 4 < 5: the 396-of-400 run).
+MIN_MEMBER_BUDGET = 20
 MEMBER_OPTIONS = {"l2": {"enabled": False}, "l2_feedback": {"enabled": False}, "back_annotate": {"enabled": False}}
 
 LLMFactory = Callable[[str, int], Any]
@@ -81,23 +88,24 @@ def member_spec(spec: Spec, budget: int) -> Spec:
 
 
 def split(total: int, weights: list[float]) -> list[int]:
-    """Integer split of ``total`` in proportion to ``weights`` (largest remainders);
-    shares below MIN_MEMBER_BUDGET are given to the others."""
-    if not weights or sum(weights) <= 0:
+    """Integer split of ``total`` in proportion to ``weights`` (largest remainders).
+
+    No budget is lost: a share below MIN_MEMBER_BUDGET is taken from the
+    smallest funded member and given to the others, one member at a time; if
+    only one is left, it gets everything. Only a ``total`` below the minimum
+    (which no member could spend) returns all zeros."""
+    if not weights or sum(weights) <= 0 or total < MIN_MEMBER_BUDGET:
         return [0] * len(weights)
-    raw = [total * w / sum(weights) for w in weights]
-    out = [int(x) for x in raw]
-    for i in sorted(range(len(raw)), key=lambda i: raw[i] - out[i], reverse=True)[: total - sum(out)]:
-        out[i] += 1
-    small = [i for i, n in enumerate(out) if 0 < n < MIN_MEMBER_BUDGET]
-    if small and len(small) < sum(1 for n in out if n > 0):
-        freed = sum(out[i] for i in small)
-        for i in small:
-            out[i] = 0
-        big = [i for i, n in enumerate(out) if n > 0]
-        for j in range(freed):
-            out[big[j % len(big)]] += 1
-    return out
+    w = list(weights)
+    while True:
+        raw = [total * x / sum(w) for x in w]
+        out = [int(x) for x in raw]
+        for i in sorted(range(len(raw)), key=lambda i: (raw[i] - out[i], w[i]), reverse=True)[: total - sum(out)]:
+            out[i] += 1
+        small = [i for i, n in enumerate(out) if 0 < n < MIN_MEMBER_BUDGET]
+        if not small:
+            return out
+        w[min(small, key=lambda i: (w[i], -i))] = 0.0  # drop the weakest small share and re-split
 
 
 def interleave(lists: list[list[dict[str, Any]]]) -> list[dict[str, Any]]:
@@ -131,7 +139,7 @@ def lessons_text(lessons: dict[str, Any], spec: Spec) -> str:
     from hw_dse.evaluate import fmt_metric
 
     lines = []
-    for fam, v in lessons.items():
+    for fam, v in sorted(lessons.items(), key=lambda kv: list(REGISTRY).index(kv[0])):
         best = v["best_" + spec.select_by]
         lines.append(f"- {fam} (member {v['member']}): {v['evaluations']} evaluations, {v['feasible']} feasible; "
                      f"best feasible {spec.select_by} "
@@ -142,8 +150,11 @@ def lessons_text(lessons: dict[str, Any], spec: Spec) -> str:
 
 def run_fleet(spec: Spec, llm_factory: LLMFactory, seed: int = 0, members: list[tuple[str, list[str]]] | None = None,
               phase1_frac: float = 0.5, run_root: Path | None = None, parallel: bool = True,
-              options: dict[str, Any] | None = None) -> dict[str, Any]:
-    """Run the fleet on ``spec``; returns the merged result in the shape of ``run_agent``'s."""
+              options: dict[str, Any] | None = None, warm_start: bool = True) -> dict[str, Any]:
+    """Run the fleet on ``spec``; returns the merged result in the shape of ``run_agent``'s.
+
+    ``warm_start=False`` reproduces the first M4 A/B's fleet (phase-2 members
+    started cold)."""
     from hw_dse.agent.runner import run_agent
 
     members = members or SPLIT_BY_CLASS
@@ -153,7 +164,8 @@ def run_fleet(spec: Spec, llm_factory: LLMFactory, seed: int = 0, members: list[
     runs: list[dict[str, Any]] = []
 
     def one(i: int, name: str, fams: list[str], budget: int, phase: int, lessons: str | None) -> dict[str, Any]:
-        opts = {**MEMBER_OPTIONS, **(options or {}), "fleet": {"member": name, "families": fams, "lessons": lessons}}
+        opts = {**MEMBER_OPTIONS, **(options or {}),
+                "fleet": {"member": name, "families": fams, "lessons": lessons, "warm_start": phase > 1 and warm_start}}
         t = time.time()
         res = run_agent(member_spec(spec, budget), llm=llm_factory(name, phase), seed=seed * 1009 + 97 * phase + i,
                         run_root=(run_root / f"{name}-p{phase}") if run_root else None, options=opts, store=store)
@@ -179,8 +191,8 @@ def run_fleet(spec: Spec, llm_factory: LLMFactory, seed: int = 0, members: list[
     weights = [float(sum(r["family"] in fams for r in front)) for _, fams in members]
     if sum(weights) == 0:  # nothing feasible yet: keep searching everywhere
         weights = [1.0] * len(members)
-    p2_budgets = split(remaining, weights) if remaining >= MIN_MEMBER_BUDGET else [0] * len(members)
-    p2 = phase(2, p2_budgets, lessons_text(les, spec)) if any(p2_budgets) else []
+    p2_budgets = split(remaining, weights)
+    p2 = phase(2, p2_budgets, lessons_text(fstore.lessons(store, spec.name), spec)) if any(p2_budgets) else []
     runs += p2
     recs = recs1 + interleave([r["evaluations_ordered"] for r in p2])
     assert len(recs) <= total, (len(recs), total)
@@ -218,7 +230,7 @@ def run_fleet(spec: Spec, llm_factory: LLMFactory, seed: int = 0, members: list[
                                "coverage_rounds", "wall_s", "run_dir", "llm_declared_infeasible")}
             | {"n_evals": len(r["evaluations_ordered"]), "cost_usd": r["llm"]["cost_usd"]} for r in runs],
         "phase2_budgets": dict(zip([m for m, _ in members], p2_budgets)),
-        "lessons": les, "store_evaluations_by_member": counts,
+        "lessons": les, "warm_start": warm_start, "store_evaluations_by_member": counts,
         "store_distinct_designs": len(fstore.evaluated(store, spec.name)),
         "decisions": [d for r in runs for d in r["decisions"]],
     })

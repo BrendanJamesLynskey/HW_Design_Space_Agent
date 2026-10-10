@@ -39,6 +39,55 @@ def test_split_is_exact_and_drops_tiny_shares() -> None:
     assert fc.split(200, [0, 5]) == [0, 200]
     assert fc.split(100, [97, 3]) == [100, 0]  # 3 evaluations is below a member's minimum budget
     assert fc.split(50, [0, 0]) == [0, 0]
+    # Review S4: no budget is lost when every positive share is below the minimum
+    assert fc.split(30, [1, 1, 1]) == [30, 0, 0]
+    assert fc.split(45, [1, 1, 1]) == [23, 22, 0]
+    for total in range(fc.MIN_MEMBER_BUDGET, 120):
+        for w in ([1, 1], [5, 1], [1, 1, 1, 1], [7, 0, 2]):
+            out = fc.split(total, [float(x) for x in w])
+            assert sum(out) == total and all(n == 0 or n >= fc.MIN_MEMBER_BUDGET for n in out), (total, w, out)
+    assert fc.split(fc.MIN_MEMBER_BUDGET - 1, [1, 1]) == [0, 0]  # nobody could spend it
+
+
+def test_the_minimum_member_budget_is_spent_in_full(tmp_path: Path) -> None:
+    """Review S4: a budget of 10 left 4 evaluations below the 5-trial minimum."""
+    from hw_dse.agent.runner import run_agent
+
+    spec = load_spec("specs/low_area_control.yaml")
+    for budget in range(fc.MIN_MEMBER_BUDGET, fc.MIN_MEMBER_BUDGET + 6):
+        res = run_agent(fc.member_spec(spec, budget), llm=HeuristicArchitect(), seed=budget, run_root=tmp_path / str(budget),
+                        options={**fc.MEMBER_OPTIONS, "fleet": {"member": "fsm", "families": ["iterative", "unrolled_k"]}})
+        assert len(res["evaluations_ordered"]) == budget, budget
+
+
+def test_phase2_studies_are_warm_started_from_the_store(tmp_path: Path, monkeypatch) -> None:
+    """Review S3: the Store is read back, not only written."""
+    import hw_dse.agent.graph as g
+
+    seen: list[tuple[str, int]] = []
+    real = g.run_family_study
+
+    def spy(family, box, spec, n, seed, tag=None, seed_designs=None):  # type: ignore[no-untyped-def]
+        seen.append((family, len(seed_designs or [])))
+        return real(family, box, spec, n, seed, tag=tag, seed_designs=seed_designs)
+
+    monkeypatch.setattr(g, "run_family_study", spy)
+    spec = load_spec("specs/low_area_control.yaml")
+    res = fc.run_fleet(spec, scripted, seed=1, run_root=tmp_path)
+    p1_calls = sum(m["rounds"] for m in res["members"] if m["phase"] == 1)
+    assert res["warm_start"] and len(seen) > p1_calls
+    assert any(n > 0 for _, n in seen[-4:])  # phase-2 studies got seeds from the Store
+    store = fstore.new_store()
+    from hw_dse.explore import run_family_study
+    from hw_dse.families import full_box
+
+    recs = run_family_study("iterative", full_box("iterative"), spec, 30, 0)
+    fstore.put_evaluations(store, spec.name, "fsm", recs)
+    seeds = fstore.front_designs(store, spec, "iterative")
+    assert 0 < len(seeds) <= fstore.WARM_START_MAX
+    assert fstore.front_designs(store, spec, "pipelined") == []
+    cold = fc.run_fleet(spec, scripted, seed=1, run_root=tmp_path / "cold", warm_start=False)
+    assert not cold["warm_start"]
 
 
 def test_fleet_budget_families_store_and_selection(tmp_path: Path) -> None:
