@@ -44,7 +44,9 @@ from langgraph.store.memory import InMemoryStore
 
 KINDS = ("family", "spec_class", "calibration", "note")
 
-_NUMBER = re.compile(r"(?<![A-Za-z_])[-+~≈]?\d+(?:[.,]\d+)*(?:\s*%)?")
+# Every digit run, including one glued to letters (W15, p99, M1): a sign or ~ is
+# taken only when it does not join two tokens.
+_NUMBER = re.compile(r"(?:(?<![A-Za-z0-9_])[-+~≈])?\d+(?:[.,]\d+)*(?:\s*%)?")
 
 
 def mask_numbers(text: str) -> str:

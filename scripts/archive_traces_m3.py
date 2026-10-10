@@ -17,9 +17,9 @@ its answer) and, per inner ``run_dse`` call, that run's ``report.md`` and
 ``evaluations.csv.gz``. Layout: ``traces/m3/<arm>/<spec>/<stamp>/``, plus
 ``INDEX.md``.
 
-After archiving, ``python eval/m3_rescore.py`` adds each campaign's
-``pool_keys.json.gz`` (its L1 pool, rebuilt or saved; re-run it after this
-script, which rewrites the directory).
+``python eval/m3_rescore.py`` adds each campaign's ``pool_keys.json.gz`` (its L1
+pool, rebuilt or saved); this script keeps any already archived, so the two can
+run in either order.
 
 Every file is scanned for key material first (credential-looking
 environment variable values and provider-key shapes); a hit aborts.
@@ -76,6 +76,9 @@ def main() -> int:
             what = " → ".join(r.get("ladder", []) or r.get("decisions", [])) or "—"
             index.append((str(out.relative_to(DEST)), label, arm, r["spec"], r["seed"], "FAILED" if r.get("failed") else "ok",
                           what, float(r.get("cost_usd") or 0.0)))
+    # Keep the pools m3_rescore.py wrote: they are not in the run directories.
+    keep = {out.parent for out, _ in staged}
+    staged += [(p, p.read_bytes()) for p in sorted(DEST.glob("**/pool_keys.json.gz")) if p.parent in keep]
     if DEST.exists():
         shutil.rmtree(DEST)
     for path, data in staged:

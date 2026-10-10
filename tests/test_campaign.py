@@ -176,7 +176,8 @@ def test_llm_notes_carry_no_numbers() -> None:
     mem = CampaignMemory(enabled=True)
     mem.remember("note", "low_area_control", "M1 under-predicts LUTs ~19% (216 LUT vs est 159), use m=4", ["r"], "llm")
     note = mem.lessons(("note",))[0]["lesson"]
-    assert not any(ch.isdigit() for ch in note.replace("M1", ""))
+    assert not any(ch.isdigit() for ch in note)
     assert mask_numbers("2^-12 at 32 MSPS") == "#^# at # MSPS"
+    assert mask_numbers("W15 N12 p99 x2, M1 off by ~19%; W15-N12") == "W# N# p# x#, M# off by #; W#-N#"
     mem.remember("family", "iterative", "explored in 3 spec(s) (353 evaluations)", ["r"], "code")
     assert "353" in mem.lessons(("family",))[0]["lesson"]  # code-written lessons keep their numbers
