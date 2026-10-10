@@ -1,0 +1,52 @@
+{
+ "asic_area_ratio_pipelined_over_iterative_w16": 4.77,
+ "asic_calibration_points": 57,
+ "asic_validation_points": 9,
+ "fleet_ab_fsm_evaluations": {
+  "anthropic__claude-sonnet-5.5": {
+   "fleet_mean": 100,
+   "single_mean": 18
+  },
+  "deepseek__deepseek-v4.1-flash": {
+   "fleet_mean": 180,
+   "single_mean": 166
+  },
+  "qwen__qwen3.8-27b__reasoning-off": {
+   "fleet_mean": 180,
+   "single_mean": 128
+  }
+ },
+ "formal_jobs": 7,
+ "formal_pass": 7,
+ "key_usage_m4_delta_usd": 3.8296,
+ "l2f_constructed_fired": 6,
+ "l2f_constructed_searches": 15,
+ "l2f_live_m4_fired": 0,
+ "l2f_live_m4_runs": 50,
+ "l2f_recorded_fired": 0,
+ "l2f_recorded_searches": 92,
+ "l2f_recovered_corrected": 6,
+ "l2f_recovered_uncorrected": 2,
+ "l3_gate_mismatches": 0,
+ "l3_gate_runs": 22,
+ "l3_rtl_configurations": 47,
+ "l3_rtl_mismatches": 0,
+ "l3_rtl_runs": 94,
+ "l4_generated_points": 37,
+ "l4_points": 39,
+ "ledger_entries_m4": 122,
+ "ledger_usd_by_milestone": {
+  "m1": 1.7475,
+  "m2": 1.6654,
+  "m3": 3.4901,
+  "m4": 3.5165
+ },
+ "m3_campaign_cost_ratio_vs_structured": {
+  "anthropic/claude-sonnet-5.5": 2.25,
+  "deepseek/deepseek-v4.1-flash": 1.62,
+  "qwen/qwen3.8-27b": 1.44
+ },
+ "m3_campaigns": 65,
+ "m3_campaigns_single_run_dse_400": 52,
+ "vivado_designs": 14
+}

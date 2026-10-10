@@ -268,6 +268,18 @@ def cap_ok(model: str, arm: str, default: float, cap: float) -> bool:
     prior = [float(r.get("cost_usd") or 0) for r in ledger("m4") if r["model"] == model and r.get("arm") == arm]
     exp = statistics.mean(prior) if prior else default
     spent = spend_m4()
+    # The key's own usage is authoritative (calls that fail inside the client report no
+    # usage to the ledger): measured against the first M4 snapshot, read before the run
+    # starts (outside its timed window).
+    if KEY_USAGE_M4.exists():
+        from run_eval import _key_usage  # type: ignore[import-not-found]
+
+        first = list(json.loads(KEY_USAGE_M4.read_text())["snapshots"].values())[0]
+        try:
+            spent = max(spent, float(_key_usage()["usage_usd"]) - float(first["usage_usd"]))
+        except Exception as exc:  # noqa: BLE001 - no reading: refuse rather than risk the cap
+            print(f"STOP: could not read the key's usage ({type(exc).__name__})")
+            return False
     if spent + 2 * exp > cap:
         print(f"STOP: M4 spend ${spent:.4f} + 2x expected next {arm} run ${exp:.4f} would pass ${cap}")
         return False
@@ -577,8 +589,11 @@ def ab_arms() -> dict[str, dict[str, list[dict[str, Any]]]]:
     for k, v in _rows(M4_DIRS["fleet_ab"] / "single").items():
         single.setdefault(k, []).extend(v)
     fleet = _rows(M4_DIRS["fleet_ab"] / "fleet")
-    return {m: {"single": [r for r in single.get(m, []) if r["spec"] in ASIC_SPECS + FPGA_AB_SPECS], "fleet": fleet[m]}
-            for m in fleet}
+    out = {}
+    for m, fx in fleet.items():  # a model's single arm counts only the specs (and seeds) its fleet arm ran
+        pairs = {(r["spec"], r["seed"]) for r in fx}
+        out[m] = {"single": [r for r in single.get(m, []) if (r["spec"], r["seed"]) in pairs], "fleet": fx}
+    return out
 
 
 def report_m4(L: list[str]) -> None:
