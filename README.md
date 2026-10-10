@@ -685,7 +685,7 @@ every net toggling at 0.125 per clock) on **`sky130_fd_sc_hd`** at the **typical
 `tt_025C_1v80`**. Why this library: it is the default sky130 library of the open flows
 (OpenROAD-flow-scripts, OpenLane), its liberty is public, and Yosys and OpenSTA read it
 directly. The liberty is pinned to an OpenROAD-flow-scripts commit and checked by SHA-256
-(the upstream sky130 PDK repositories ship per-corner JSON, not merged `.lib` files). Yosys 0.33 has
+(the upstream sky130 repositories ship per-corner JSON, not merged `.lib` files). Yosys 0.33 has
 no `abc -dont_use`, and ABC otherwise maps logic onto `lpflow_*` power-gating cells, so those
 and the `probe_*` cells (35 in all) are removed from the copy both tools read, as the
 OpenROAD sky130hd platform's do-not-use list does. Area is Yosys's `stat -liberty` cell area;

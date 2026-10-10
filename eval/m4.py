@@ -595,6 +595,10 @@ def _fails(rows: list[dict[str, Any]]) -> str:
 
 
 FLEET_ARMS = ("fleet", "fleet_v2")
+# How the report names the arms: the first fleet A/B is kept as ``before_fix`` (phase-2 members
+# started cold, member minimum 10); ``fleet_v2`` is the fleet after review fixes S3 and S4.
+ARM_LABEL = {"single": "single", "fleet": "fleet before_fix", "fleet_v2": "fleet after fix",
+             "fix_effect": "after fix vs before_fix"}
 
 
 def ab_arms() -> dict[str, dict[str, list[dict[str, Any]]]]:
@@ -646,6 +650,11 @@ def paired_tests(arms: dict[str, dict[str, list[dict[str, Any]]]]) -> list[dict[
         if n_models > 1:
             rows.append({"model": "pooled", "arm": arm,
                          **{met: {"sign": sign_test(d), "t": paired_t(d)} for met, d in pool.items()}})
+    for m, a in arms.items():  # did the fix change the fleet? after fix - before_fix, same pairs
+        if a.get("fleet") and a.get("fleet_v2"):
+            rows.append({"model": m, "arm": "fix_effect", **{
+                met: {"sign": sign_test(d), "t": paired_t(d)} for met in ("hv_frac", "select_regret")
+                for d in [paired(a["fleet"], a["fleet_v2"], met)]}})
     return rows
 
 
@@ -725,23 +734,28 @@ def report_m4(L: list[str]) -> None:
         L.append("Each spec's per-family optima, the FPGA twin's optima and the L1-bound pick, synthesised and timed "
                  "(`eval/data/asic_validation.csv`, never fitted), against the model's estimates; *meets* = the "
                  "spec's constraints with the measured numbers (system metrics simulated at the measured clock).\n")
-        L.append("| design | area um2 meas / est (err) | Fmax MHz meas / est (err) | power mW (100 MHz) meas | meets: asic_low_area / asic_power_50msps / asic_multiaxis_control |")
-        L.append("|---|---|---|---|---|")
+        sys_specs = [n for n in ASIC_SPECS if asic_spec(n).system is not None]
+        sys_cols = [(n, c) for n in sys_specs for c in asic_spec(n).system_constraints]
+        L.append("| design | area um2 meas / est (err) | Fmax MHz meas / est (err) | power mW (100 MHz) meas | meets: "
+                 + " / ".join(ASIC_SPECS) + " | " + " | ".join(f"{c.metric} at the measured clock ({n}, limit {c.value:g})"
+                                                         for n, c in sys_cols) + " |")
+        L.append("|---|---|---|---|---|" + "---|" * len(sys_cols))
         from hw_dse.agent.backannotate import _MeasuredAsicCost
         from hw_dse.l2.node import simulate_record
 
         for p in load_csv(vcsv):
             e = evaluate(p.arch, asic_spec(ASIC_SPECS[0]))
-            meets = []
+            meets, sysv = [], []
             for name in ASIC_SPECS:
                 sp = asic_spec(name)
                 r = evaluate(p.arch, sp, cost_model=_MeasuredAsicCost(p))  # type: ignore[arg-type]
                 if sp.system is not None:
                     r = simulate_record(r, sp)
+                    sysv += [f"{float(r[c.metric]):.3f}" for c in sp.system_constraints]
                 meets.append("yes" if r["feasible"] else "no")
             L.append(f"| `{p.arch.key()}` | {p.area_um2:.0f} / {e['area_um2']:.0f} ({(e['area_um2'] / p.area_um2 - 1) * 100:+.1f}%) | "
                      f"{p.fmax_mhz:.1f} / {e['fmax_mhz']:.1f} ({(e['fmax_mhz'] / p.fmax_mhz - 1) * 100:+.1f}%) | "
-                     f"{p.power_mw:.3f} | {' / '.join(meets)} |")
+                     f"{p.power_mw:.3f} | {' / '.join(meets)} | " + " | ".join(sysv) + " |")
         L.append("")
 
     # ---- ASIC eval ---------------------------------------------------------
@@ -785,18 +799,20 @@ def report_m4(L: list[str]) -> None:
                 rs = a[arm]
                 if not rs:
                     continue
-                L.append(f"| `{m}` | {arm} | {len(rs)} | {_ms([r['hv_frac'] for r in rs])} | "
+                L.append(f"| `{m}` | {ARM_LABEL[arm]} | {len(rs)} | {_ms([r['hv_frac'] for r in rs])} | "
                          f"{_pct([r['select_regret'] for r in rs])} | {_ms([float(r['n_evals']) for r in rs], digits=0)} | "
                          f"{_ms([r['input_tokens'] for r in rs], digits=0)} | {_ms([r['output_tokens'] for r in rs], digits=0)} | "
                          f"{_ms([r['cost_usd'] for r in rs], digits=4)} | {_fails(rs)} | "
                          f"{sum(int(r['llm_failures']) for r in rs)} | {_ms([r['wall_s'] for r in rs], digits=0)} |")
         L.append("")
-        L.append("`fleet_v2` (run after review, Qwen only): the same fleet with each phase-2 study warm-started from "
-                 "the Store (the fleet's stored front designs of its family, as NSGA-II seeds) and a member minimum "
-                 "budget of 20 that the 40% coverage reserve can always spend. `fleet` is the first A/B's fleet "
-                 "(phase-2 members started cold, minimum 10).\n")
-        L.append("**Paired tests** (fleet − single on the same spec and seed; sign test exact, two-sided, ties "
-                 "dropped; paired t two-sided). HV: + = fleet higher. Regret: + = fleet worse.\n")
+        L.append("*fleet before_fix* is the first A/B's fleet: phase-2 members started cold (the Store was written but "
+                 "not read back) and the member minimum was 10, which the 40% coverage reserve could not always spend. "
+                 "*fleet after fix* (run after review, Qwen only, same specs and seeds): each phase-2 study is "
+                 "warm-started from the Store (the fleet's stored front designs of its family, as NSGA-II seeds) and "
+                 "the member minimum is 20.\n")
+        L.append("**Paired tests** (fleet − single on the same spec and seed; for *after fix vs before_fix*, the "
+                 "fixed fleet − the first fleet; sign test exact, two-sided, ties dropped; paired t two-sided). "
+                 "HV: + = fleet (after fix) higher. Regret: + = worse.\n")
         L.append("| model | fleet arm | pairs | HV: fleet higher / lower | HV sign p | HV mean diff | HV t | HV t p | "
                  "regret: fleet lower / higher | regret sign p | regret mean diff (pts) | regret t | regret t p |")
         L.append("|---|---|---|---|---|---|---|---|---|---|---|---|---|")
@@ -806,7 +822,7 @@ def report_m4(L: list[str]) -> None:
 
         for row in paired_tests(arms):
             h, g = row["hv_frac"], row["select_regret"]
-            L.append(f"| `{row['model']}` | {row['arm']} | {h['t']['n']} | {h['sign']['positive']} / {h['sign']['negative']} | "
+            L.append(f"| `{row['model']}` | {ARM_LABEL[row['arm']]} | {h['t']['n']} | {h['sign']['positive']} / {h['sign']['negative']} | "
                      f"{h['sign']['p']:.3f} | {_f(h['t']['mean'], '+.3f')} | {_f(h['t']['t'], '.2f')} | {_f(h['t']['p'], '.3f')} | "
                      f"{g['sign']['negative']} / {g['sign']['positive']} | {g['sign']['p']:.3f} | "
                      f"{_f(None if g['t']['mean'] is None else g['t']['mean'] * 100, '+.1f')} | {_f(g['t']['t'], '.2f')} | "
@@ -836,7 +852,7 @@ def report_m4(L: list[str]) -> None:
                 dph = sum(r["n_evals"] for r in rs) / sum(r["wall_s"] for r in rs) * 3600
                 cps = statistics.mean(r["cost_usd"] for r in rs)
                 sph = 3600 / statistics.mean(r["wall_s"] for r in rs)
-                L.append(f"| `{m}` | {arm} | {dph:,.0f} | {cps:.4f} | {dph * 24:,.0f} | {sph * 24:.0f} | {cps * sph * 24:.2f} |")
+                L.append(f"| `{m}` | {ARM_LABEL[arm]} | {dph:,.0f} | {cps:.4f} | {dph * 24:,.0f} | {sph * 24:.0f} | {cps * sph * 24:.2f} |")
         L.append("\nThe three *projection* columns multiply the measured rates by 24 hours of back-to-back runs on "
                  "one machine like this one; they assume nothing else changes (provider latency, rate limits, the "
                  "spec mix) and were not run.\n")
@@ -849,7 +865,7 @@ def report_m4(L: list[str]) -> None:
                 p2 = [r["phase2_budgets"] for r in fx]
                 to_pipe = sum(1 for b in p2 if b.get("fsm", 0) == 0)
                 fsm_infeas = sum(1 for r in fx for mm in r["members"] if mm["member"] == "fsm" and mm["llm_declared_infeasible"])
-                L.append(f"- `{m}`, {farm}: phase 2 went entirely to the pipelined member in {to_pipe} of {len(fx)} runs; the fsm "
+                L.append(f"- `{m}`, {ARM_LABEL[farm]}: phase 2 went entirely to the pipelined member in {to_pipe} of {len(fx)} runs; the fsm "
                          f"member's architect declared its families infeasible {fsm_infeas} times; distinct designs in the "
                          f"store per run {_ms([float(r['store_distinct_designs']) for r in fx], digits=0)}.")
         L.append("")

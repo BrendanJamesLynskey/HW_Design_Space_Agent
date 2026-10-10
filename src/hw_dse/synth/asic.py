@@ -16,7 +16,7 @@ default for sky130, at the **typical corner tt_025C_1v80** (TT process,
 file is public and small enough to fetch in CI (12.8 MB), and Yosys and
 OpenSTA read it directly. The file is pinned to a commit of
 OpenROAD-flow-scripts and checked by SHA-256 (:data:`LIB_SHA256`); the
-upstream sky130 PDK repositories ship only per-corner JSON, not merged
+upstream sky130 repositories ship only per-corner JSON, not merged
 ``.lib`` files.
 
 Cells marked do-not-use
