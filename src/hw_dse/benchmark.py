@@ -40,7 +40,7 @@ import numpy as np
 from hw_dse.evaluate import EvalRecord, default_cost_model, evaluate, objective_vector, reference_point
 from hw_dse.explore import run_union_study
 from hw_dse.families import REGISTRY, ArchConfig, full_box
-from hw_dse.models.cordic_bitexact import accuracy
+from hw_dse.models.cordic_bitexact import CordicNumerics, accuracy
 from hw_dse.pareto import hv_progress, hypervolume, pareto_front_large
 from hw_dse.spec import Spec
 
@@ -76,11 +76,52 @@ class Grid:
         p["rounding"] = "round" if self.params["rounding"][i] else "trunc"  # type: ignore[assignment]
         return ArchConfig.from_params(fam, p)
 
-    def metrics(self, spec: Spec) -> dict[str, np.ndarray]:
-        """All spec metrics as columns (power index depends on the spec)."""
+    def metrics(self, spec: Spec, system: str = "simulated") -> dict[str, np.ndarray]:
+        """All spec metrics as columns (power index depends on the spec).
+
+        For a spec with a ``system`` scenario the ``sys_*`` columns are added:
+        ``system="simulated"`` (the ground truth) runs the L2 SimPy model once
+        per distinct (latency, ii, Fmax) tuple; ``system="bound"`` gives the L1
+        analytic bounds instead (what L1 screening sees)."""
         thr = self.fmax_mhz * self.results_per_cycle
         req = spec.min_throughput_msps
         f_op = self.fmax_mhz if req is None else np.minimum(self.fmax_mhz, req / self.results_per_cycle)
+        out = self._base_metrics(thr, f_op)
+        if spec.system is not None:
+            out.update(self.system_columns(spec, system))
+        return out
+
+    def system_columns(self, spec: Spec, mode: str = "simulated") -> dict[str, np.ndarray]:
+        from hw_dse.l2.bounds import bound_metrics
+        from hw_dse.l2.cycle import Contract
+        from hw_dse.l2.system import system_metrics
+
+        assert spec.system is not None
+        ii = np.where(self.results_per_cycle >= 1.0, 1, self.latency_cycles).astype(np.int64)
+        lat = self.latency_cycles.astype(np.int64)
+        tup = np.stack([self.fmax_mhz, lat, ii], axis=1)
+        uniq, inv = np.unique(tup, axis=0, return_inverse=True)
+        inv = inv.ravel()
+        rows = []
+        for f, l, i in uniq:
+            c = Contract("pipelined" if int(i) == 1 else "iterative", int(l), int(i))
+            rows.append(system_metrics(spec.system, c, float(f)) if mode == "simulated" else
+                        bound_metrics(spec.system, c, float(f)))
+        cols: dict[str, np.ndarray] = {}
+        for k in rows[0]:
+            cols[k] = np.array([r[k] for r in rows])[inv]
+        if any(c.metric in ("sys_sfdr_dbc", "sys_snr_db") for c in spec.constraints):
+            from hw_dse.l2.dds import dds_spectrum
+
+            num = np.stack([self.params[c] for c in ("data_width", "n_iter", "angle_guard", "frac_guard", "rounding")], 1)
+            un, ninv = np.unique(num, axis=0, return_inverse=True)
+            vals = [dds_spectrum(CordicNumerics(int(w), int(n), int(w) + int(a), int(g), "round" if r else "trunc"))
+                    for w, n, a, g, r in un]
+            cols["sys_sfdr_dbc"] = np.array([v[0] for v in vals])[ninv.ravel()]
+            cols["sys_snr_db"] = np.array([v[1] for v in vals])[ninv.ravel()]
+        return cols
+
+    def _base_metrics(self, thr: np.ndarray, f_op: np.ndarray) -> dict[str, np.ndarray]:
         return {
             "luts": self.luts,
             "ffs": self.ffs,
@@ -178,11 +219,20 @@ def ground_truth(grid: Grid, spec: Spec) -> dict[str, Any]:
     front_local = pareto_front_large(obj)
     front_idx = idx[front_local]
     out["hv_true"] = hypervolume(obj[front_local], reference_point(spec))
-    out["front"] = [evaluate(grid.arch(int(i)), spec, cost_model) for i in front_idx]
+
+    def rec(i: int) -> EvalRecord:
+        r = evaluate(grid.arch(i), spec, cost_model)
+        if spec.system is not None:  # the truth for system metrics is the L2 simulation, not the L1 bound
+            from hw_dse.l2.node import simulate_record
+
+            r = simulate_record(r, spec)
+        return r
+
+    out["front"] = [rec(int(i)) for i in front_idx]
     sel = m[spec.select_by][idx]
     best_val = sel.min() if spec.select_direction == "min" else sel.max()
     ties = idx[np.flatnonzero(sel == best_val)]
-    out["selected"] = select_design([evaluate(grid.arch(int(i)), spec, cost_model) for i in ties], spec)
+    out["selected"] = select_design([rec(int(i)) for i in ties], spec)
     return out
 
 

@@ -84,11 +84,20 @@ class SimResult:
     sin: np.ndarray
     latency: np.ndarray
     seconds: float
+    cycles: np.ndarray | None = None  # L2 per-cycle log (see tb_generated.sv), when requested
 
 
 def simulate(sources: list[Path], top: str, width: int, angles: np.ndarray, simulator: str = "verilator",
-             timeout_s: float = 1800.0, workdir: Path | None = None) -> SimResult:
-    """Drive ``top`` (from ``sources``) with ``angles`` through the uniform harness."""
+             timeout_s: float = 1800.0, workdir: Path | None = None, gaps: np.ndarray | None = None,
+             log_cycles: bool = False) -> SimResult:
+    """Drive ``top`` (from ``sources``) with ``angles`` through the uniform harness.
+
+    ``gaps`` (L2) holds the idle cycles the harness waits before offering
+    each angle, which turns the L3 back-to-back stream into a bursty one;
+    ``log_cycles`` (L2) also returns the harness's per-cycle log as an
+    ``(n_cycles, 7)`` array: cycle, valid_in, theta, ready, valid_out, cos, sin.
+    Both default to the L3 behaviour (no gaps, no log).
+    """
     ok, why = tool_status(simulator)
     if not ok:
         raise RuntimeError(why)
@@ -98,6 +107,14 @@ def simulate(sources: list[Path], top: str, width: int, angles: np.ndarray, simu
         t = Path(tmp)
         af, of = t / "angles.txt", t / "out.txt"
         af.write_text(f"{angles.size}\n" + "\n".join(str(int(a)) for a in angles) + "\n")
+        extra: list[str] = []
+        if gaps is not None:
+            gf = t / "gaps.txt"
+            gf.write_text("\n".join(str(int(g)) for g in np.asarray(gaps)) + "\n")
+            extra.append(f"+gaps={gf}")
+        cf = t / "cycles.txt"
+        if log_cycles:
+            extra.append(f"+cycles={cf}")
         defines = [f"HW_DUT={top}", f"HW_W={width}", f"HW_MAXN={maxn}"]
         t0 = time.time()
         if simulator == "icarus":
@@ -105,7 +122,7 @@ def simulate(sources: list[Path], top: str, width: int, angles: np.ndarray, simu
             cmd = ["iverilog", "-g2012", "-o", str(exe), "-s", "tb_generated"]
             cmd += [f"-D{d}" for d in defines] + [str(HARNESS), *map(str, sources)]
             _run(cmd, timeout_s)
-            _run(["vvp", "-n", str(exe), f"+angles={af}", f"+out={of}"], timeout_s)
+            _run(["vvp", "-n", str(exe), f"+angles={af}", f"+out={of}", *extra], timeout_s)
         else:
             obj = t / "obj"
             # HW_DSE_JOBS caps Verilator's build parallelism (default 0 = every core).
@@ -114,10 +131,13 @@ def simulate(sources: list[Path], top: str, width: int, angles: np.ndarray, simu
                    "-Wno-fatal", "-Wno-lint", "-Wno-style", "--Mdir", str(obj)]
             cmd += [f"+define+{d}" for d in defines] + [str(HARNESS), *map(str, sources)]
             _run(cmd, timeout_s)
-            _run([str(obj / "Vtb_generated"), f"+angles={af}", f"+out={of}"], timeout_s)
+            _run([str(obj / "Vtb_generated"), f"+angles={af}", f"+out={of}", *extra], timeout_s)
         secs = time.time() - t0
         data = np.loadtxt(of, dtype=np.int64, ndmin=2) if of.stat().st_size else np.zeros((0, 4), dtype=np.int64)
-    return SimResult(data[:, 0], data[:, 1], data[:, 2], data[:, 3], secs)
+        cyc = None
+        if log_cycles:
+            cyc = np.loadtxt(cf, dtype=np.int64, ndmin=2) if cf.exists() and cf.stat().st_size else np.zeros((0, 7), dtype=np.int64)
+    return SimResult(data[:, 0], data[:, 1], data[:, 2], data[:, 3], secs, cyc)
 
 
 def _run(cmd: list[str], timeout_s: float) -> None:

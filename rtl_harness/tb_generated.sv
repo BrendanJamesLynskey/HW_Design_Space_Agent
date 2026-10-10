@@ -27,6 +27,17 @@
     Plusargs:
         +angles=<file>  one signed decimal angle per line, first line = count
         +out=<file>     output file
+        +gaps=<file>    (optional, L2) idle cycles before offering each angle:
+                        one integer per line, same count and order as the
+                        angles. Without it every angle is offered at once,
+                        as in L3 (the default; unchanged).
+        +cycles=<file>  (optional, L2) per-cycle log, one line per rising
+                        edge after reset is released:
+                            <cyc> <valid_in> <theta> <ready> <valid_out> <cos> <sin>
+                        sampled at the edge (so valid_out/cos/sin are what
+                        the previous edge produced; cos/sin are 0 unless
+                        valid_out). hw_dse.l2.validate compares it with the
+                        cycle-accurate Python model, cycle for cycle.
 */
 `ifndef HW_MAXN
 `define HW_MAXN 262144
@@ -53,6 +64,11 @@ wire  signed [W-1:0] cos_o, sin_o;
 );
 
 int angles   [0:MAXN-1];
+int gaps     [0:MAXN-1];  // idle cycles before offering angle i (L2 traces; 0 = L3 default)
+int gap_left = 0;
+int gap_total = 0;        // sum of gaps, extends the timeout
+int fdc = 0;              // per-cycle log (L2), 0 = off
+string gaps_file, cycles_file;
 int accepted [0:MAXN-1];  // cycle number at which angle i was accepted
 int n_angles = 0, n_acc = 0, n_res = 0, cyc = 0;
 int fd, rc, v;
@@ -70,6 +86,22 @@ initial begin
         angles[i] = v;
     end
     $fclose(fd);
+    for (int i = 0; i < n_angles; i++) gaps[i] = 0;
+    if ($value$plusargs("gaps=%s", gaps_file)) begin
+        fd = $fopen(gaps_file, "r");
+        if (fd == 0) $fatal(1, "cannot open gaps file");
+        for (int i = 0; i < n_angles; i++) begin
+            rc = $fscanf(fd, "%d\n", v);
+            gaps[i] = v;
+        end
+        $fclose(fd);
+    end
+    for (int i = 0; i < n_angles; i++) gap_total += gaps[i];
+    gap_left = gaps[0];
+    if ($value$plusargs("cycles=%s", cycles_file)) begin
+        fdc = $fopen(cycles_file, "w");
+        if (fdc == 0) $fatal(1, "cannot open cycles file");
+    end
     fd = $fopen(out_file, "w");
     repeat (4) @(negedge clk);
     rst = 1'b0;
@@ -77,7 +109,10 @@ end
 
 // Drive on the falling edge, so inputs are stable at the rising edge.
 always @(negedge clk) begin
-    if (!rst && n_acc < n_angles) begin
+    if (!rst && n_acc < n_angles && gap_left > 0) begin
+        valid_in <= 1'b0;          // L2 traces: an idle cycle before this angle
+        gap_left = gap_left - 1;
+    end else if (!rst && n_acc < n_angles) begin
         valid_in <= 1'b1;
         theta    <= angles[n_acc];
     end else begin
@@ -90,6 +125,12 @@ end
 // since the previous edge.
 always @(posedge clk) begin
     cyc = cyc + 1;
+    if (!rst && fdc != 0) begin
+        if (valid_out === 1'b1)
+            $fdisplay(fdc, "%0d %0d %0d %0d 1 %0d %0d", cyc, valid_in, theta, ready === 1'b1, cos_o, sin_o);
+        else
+            $fdisplay(fdc, "%0d %0d %0d %0d 0 0 0", cyc, valid_in, theta, ready === 1'b1);
+    end
     if (!rst) begin
         if (valid_out === 1'b1) begin
             // valid_out was raised by the previous edge (cyc - 1).
@@ -97,6 +138,7 @@ always @(posedge clk) begin
             n_res = n_res + 1;
             if (n_res == n_angles) begin
                 $fclose(fd);
+                if (fdc != 0) $fclose(fdc);
                 $finish;
             end
         end else if (valid_out !== 1'b0) begin
@@ -105,8 +147,9 @@ always @(posedge clk) begin
         if (valid_in && ready === 1'b1) begin
             accepted[n_acc] = cyc;
             n_acc = n_acc + 1;
+            if (n_acc < n_angles) gap_left = gaps[n_acc];
         end
-        if (cyc > 64 * (n_angles + 16) + 1000) $fatal(1, "timeout: %0d of %0d results", n_res, n_angles);
+        if (cyc > 64 * (n_angles + 16) + 1000 + gap_total) $fatal(1, "timeout: %0d of %0d results", n_res, n_angles);
     end
 end
 

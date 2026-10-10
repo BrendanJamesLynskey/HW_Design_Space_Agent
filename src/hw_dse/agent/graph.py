@@ -40,6 +40,20 @@ The graph, node by node::
 ``select``
     ``interrupt()``: the human picks a design off the front by index, or
     ``auto_select`` applies the spec's selection rule.
+``l2_simulate`` (milestone 3)
+    L2: the front's top-k designs (by the selection rule) are simulated in
+    the spec's system scenario (SimPy); system constraints are re-checked on
+    simulated numbers and the best passing design becomes the selection.
+    For a spec without a system scenario it only attaches L2 facts to the
+    report (milestone-2 behaviour is unchanged).
+``back_annotate``
+    L5: measured data vs estimates for the selected design; flags a winner
+    change.
+``l5_reexplore`` (milestone 3)
+    Runs only when ``back_annotate`` flags a winner change: one code-driven
+    NSGA-II round around the measured front designs under the refitted
+    calibration, kept apart from the L1 evaluations and budget, and a
+    re-selection under that calibration (``l5_selected``).
 ``report``
     Writes ``runs/<spec>/<timestamp>/``: ``report.md``, ``pareto.png``,
     ``evaluations.csv`` (the LLM trace is already being written there).
@@ -118,6 +132,35 @@ MIN_TRIALS_PER_FAMILY = 5
 LEVERS_M1: dict[str, Any] = {"coverage_reserve": 0.0, "coverage_box": "full", "warm_start": False, "hv_epsilon": None}
 LEVERS_M2: dict[str, Any] = {"coverage_reserve": 0.40, "coverage_box": "front_anchored", "warm_start": False,
                              "hv_epsilon": None}
+# Milestone 3 adds one lever, the fix for M2's front-mapping blind spot:
+#
+# map_unfeasible_families
+#     A front-mapping round maps only the families *on* the front. In M2 a
+#     family whose first box was too narrow to reach the accuracy target
+#     (Qwen, high_precision seed: pipelined_m at W = 20-24) found nothing
+#     feasible, never appeared on the front, and was never revisited, though
+#     it held the true winner. With this lever, every family that was
+#     explored but has no feasible design gets a full-box share of the
+#     mapping budget (the average front family's share, over its full
+#     registry ranges). Value ``True`` maps every such family; ``"reachable"``
+#     (the M3 default) only those for which each constraint was met by at
+#     least one of their designs, i.e. the box, not the family's structure,
+#     kept them infeasible (an FSM family that never reached a 250 MSPS floor
+#     is not worth mapping). Offline, over the 60 recorded M2 decisions, the
+#     unconditional version cut high_precision regret but cost dds_250msps
+#     hypervolume; the gate keeps the first and avoids the second (README).
+#
+# LEVERS_M3 is the default for specs with a system scenario (new in M3).
+# Specs without one keep LEVERS_M2, so the inner graph behaves exactly as in
+# M2 there (tests/test_m2_replay.py replays the committed M2 traces); the
+# effect of the fix on the M2 specs is measured offline by replaying the
+# same traces with it on (eval/m3_offline.py, eval/data/m3_mapfront_fix.json).
+LEVERS_M3: dict[str, Any] = {**LEVERS_M2, "map_unfeasible_families": "reachable"}
+
+
+def default_levers(spec: Spec) -> dict[str, Any]:
+    """LEVERS_M3 for a spec with a system scenario, LEVERS_M2 otherwise."""
+    return dict(LEVERS_M3 if spec.system is not None else LEVERS_M2)
 
 
 class DSEState(TypedDict, total=False):
@@ -141,6 +184,11 @@ class DSEState(TypedDict, total=False):
     coverage_rounds: int
     pending_stop: dict[str, Any] | None
     back_annotation: dict[str, Any] | None
+    selected_l1: dict[str, Any] | None
+    l2: dict[str, Any] | None
+    l5: dict[str, Any] | None
+    l5_evaluations: list[dict[str, Any]]
+    l5_selected: dict[str, Any] | None
 
 
 def _cfg(config: RunnableConfig | None, key: str, default: Any = None) -> Any:
@@ -279,9 +327,38 @@ def coverage_plan(spec: Spec, records: list[dict[str, Any]], budget: int, levers
     if not front or budget < MIN_TRIALS_PER_FAMILY:
         return None
     fams = list(dict.fromkeys(r["family"] for r in front))
+    counts = [float(sum(r["family"] == f for r in front)) for f in fams]
+    unfeasible: list[str] = []
+    if levers.get("map_unfeasible_families"):
+        # M3 fix: families explored but with no feasible design get a full-box
+        # share (the average front family's) so a too-narrow first box is not
+        # the end of a family.
+        feas_fams = {r["family"] for r in records if r.get("feasible")}
+        unfeasible = [f for f in REGISTRY if f in {r["family"] for r in records} and f not in feas_fams]
+        if levers.get("map_unfeasible_families") == "reachable":
+            # Only families for which every constraint was met by at least one
+            # design (not necessarily the same one): the box, not the family's
+            # structure, is what kept them infeasible. Accuracy depends only on
+            # the numeric knobs every family shares, so an accuracy constraint
+            # counts as met if *any* design met it; a structural one
+            # (throughput, latency, system timing) must be met by one of the
+            # family's own designs. An FSM family that never reached a
+            # 250 MSPS floor is left alone.
+            numeric_only = {"max_abs_err", "rms_err", "accuracy_bits", "sys_sfdr_dbc", "sys_snr_db"}
+
+            def met(c: Constraint, rows: list[dict[str, Any]]) -> bool:
+                return any(r["violations"].get(str(c), 1.0) <= 0 for r in rows)
+
+            def reachable(fam: str) -> bool:
+                mine = [r for r in records if r["family"] == fam]
+                return all(met(c, records if c.metric in numeric_only else mine) for c in spec.constraints)
+
+            unfeasible = [f for f in unfeasible if reachable(f)]
+        avg = sum(counts) / len(counts)
+        fams += unfeasible
+        counts += [avg] * len(unfeasible)
     max_fams = max(1, budget // MIN_TRIALS_PER_FAMILY)
-    fams = fams[:max_fams]
-    counts = [sum(r["family"] == f for r in front) for f in fams]
+    fams, counts = fams[:max_fams], counts[:max_fams]
     trials = [max(MIN_TRIALS_PER_FAMILY, int(budget * c / sum(counts))) for c in counts]
     while sum(trials) > budget:
         trials[trials.index(max(trials))] -= 1
@@ -293,6 +370,10 @@ def coverage_plan(spec: Spec, records: list[dict[str, Any]], budget: int, levers
     for fam, n in zip(fams, trials):
         box = {k: list(v) for k, v in full_box(fam).items()}
         rows = [r for r in front if r["family"] == fam]
+        if fam in unfeasible:
+            jobs.append({"family": fam, "box": box, "n_trials": n, "seeds": [],
+                         "why": f"code: {fam} was explored but found nothing feasible; full-box share (M3 lever)"})
+            continue
         if levers.get("coverage_box") == "front_anchored":
             w_slack, n_slack = levers.get("anchor_slack") or (1, 2)
             for prm, slack in (("data_width", int(w_slack)), ("n_iter", int(n_slack))):
@@ -354,12 +435,15 @@ def build_graph(llm: StructuredLLM, checkpointer: Any = None) -> Any:
 
     def propose(state: DSEState, config: RunnableConfig) -> dict[str, Any]:
         spec = Spec.model_validate(state["spec"])
-        levers = {**LEVERS_M2, **(_cfg(config, "levers") or {})}
+        levers = {**default_levers(spec), **(_cfg(config, "levers") or {})}
         b = spec.budget
         user = prompts.PROPOSE.format(spec=spec.summary(), budget=b.total_evals, per_round=b.evals_per_round, max_rounds=b.max_rounds)
+        notes = _cfg(config, "architect_notes")
+        if notes:  # milestone 3: advisory text from the campaign agent (never numbers it produced)
+            user += prompts.CAMPAIGN_NOTES.format(notes=str(notes)[:2000])
         failure = None
         try:
-            plan = llm.structured(ExplorationPlan, prompts.SYSTEM, user, node="propose", context=spec_context(spec))
+            plan = llm.structured(ExplorationPlan, prompts.system_prompt(spec), user, node="propose", context=spec_context(spec))
         except StructuredOutputError as exc:
             failure = f"LLM produced no valid plan ({str(exc)[:200]}); used deterministic fallback: every family, full range"
             plan = fallback_plan("widen", spec, [], {})
@@ -428,7 +512,7 @@ def build_graph(llm: StructuredLLM, checkpointer: Any = None) -> Any:
         else:
             user = prompts.ANALYSE.format(spec=spec.summary(), summary=summary, final_note=prompts.FINAL_NOTE if final else "")
             try:
-                dec = llm.structured(AnalysisDecision, prompts.SYSTEM, user, node="analyse", context=ctx)
+                dec = llm.structured(AnalysisDecision, prompts.system_prompt(spec), user, node="analyse", context=ctx)
             except StructuredOutputError as exc:
                 dec = AnalysisDecision(decision="stop", rationale=f"[LLM failed to answer: {exc}]")
                 overrides.append("LLM produced no valid decision; treated as stop")
@@ -534,6 +618,23 @@ def build_graph(llm: StructuredLLM, checkpointer: Any = None) -> Any:
             return {"selected": auto, "selection_mode": f"auto (invalid human choice {choice!r})"}
         return {"selected": front[idx], "selection_mode": f"human picked front index {idx}"}
 
+    def l2_simulate(state: DSEState, config: RunnableConfig) -> dict[str, Any]:
+        from hw_dse.l2.node import DEFAULT_K, l2_select
+
+        spec = Spec.model_validate(state["spec"])
+        opts = _cfg(config, "l2") or {}
+        selected = state.get("selected")
+        if opts.get("enabled") is False:
+            return {"l2": {"status": "skipped", "reason": "disabled"}, "selected_l1": selected}
+        out = l2_select(state.get("evaluations", []), selected, spec, k=int(opts.get("k", DEFAULT_K)))
+        new_sel = out.pop("selected")
+        upd: dict[str, Any] = {"l2": out, "selected_l1": selected}
+        if spec.system is not None:
+            upd["selected"] = new_sel
+            if new_sel is None:
+                upd["status"] = "l2_no_feasible"
+        return upd
+
     def back_annotate(state: DSEState, config: RunnableConfig) -> dict[str, Any]:
         from hw_dse.agent.backannotate import back_annotate as annotate
 
@@ -545,6 +646,26 @@ def build_graph(llm: StructuredLLM, checkpointer: Any = None) -> Any:
             ba = {"status": "error", "notes": [f"back-annotation failed: {type(exc).__name__}: {exc}"],
                   "measured_sources": [], "comparisons": []}
         return {"back_annotation": ba}
+
+    def route_after_back_annotate(state: DSEState, config: RunnableConfig) -> str:
+        opts = _cfg(config, "back_annotate") or {}
+        ba = state.get("back_annotation") or {}
+        if ba.get("winner_changed") and opts.get("reexplore", True):
+            return "l5_reexplore"
+        return "report"
+
+    def l5_reexplore(state: DSEState, config: RunnableConfig) -> dict[str, Any]:
+        from hw_dse.agent.backannotate import reexplore
+
+        spec = Spec.model_validate(state["spec"])
+        front = merged_front(state.get("evaluations", []), spec)
+        try:
+            out = reexplore(spec, front, state.get("selected"), state.get("back_annotation") or {},
+                            _cfg(config, "back_annotate") or {}, seed=int(state.get("seed", 0)))
+        except Exception as exc:  # noqa: BLE001 - never lose the run to the optional L5 loop
+            return {"l5": {"status": "error", "notes": [f"L5 re-exploration failed: {type(exc).__name__}: {exc}"]}}
+        recs = out.pop("evaluations")
+        return {"l5": out, "l5_evaluations": recs, "l5_selected": out.get("selected")}
 
     def report(state: DSEState) -> dict[str, Any]:
         from hw_dse.agent.report import write_report
@@ -559,7 +680,9 @@ def build_graph(llm: StructuredLLM, checkpointer: Any = None) -> Any:
     g.add_node("explore_family", explore_family)
     g.add_node("analyse", analyse)
     g.add_node("select", select)
+    g.add_node("l2_simulate", l2_simulate)
     g.add_node("back_annotate", back_annotate)
+    g.add_node("l5_reexplore", l5_reexplore)
     g.add_node("report", report)
     g.add_edge(START, "intake")
     g.add_edge("intake", "confirm_spec")
@@ -567,7 +690,9 @@ def build_graph(llm: StructuredLLM, checkpointer: Any = None) -> Any:
     g.add_conditional_edges("propose", fan_out, ["explore_family"])
     g.add_edge("explore_family", "analyse")
     g.add_conditional_edges("analyse", route_after_analyse, ["explore_family", "select", "report"])
-    g.add_edge("select", "back_annotate")
-    g.add_edge("back_annotate", "report")
+    g.add_edge("select", "l2_simulate")
+    g.add_edge("l2_simulate", "back_annotate")
+    g.add_conditional_edges("back_annotate", route_after_back_annotate, ["l5_reexplore", "report"])
+    g.add_edge("l5_reexplore", "report")
     g.add_edge("report", END)
     return g.compile(checkpointer=checkpointer)

@@ -179,3 +179,105 @@ def back_annotate(spec: Spec, front: list[dict[str, Any]], selected: dict[str, A
         out["notes"].append("no tool factors: measured numbers compared as-is (they come from a different tool "
                             "than the Vivado-calibrated estimate)")
     return out
+
+
+# ---------------------------------------------------------------------------
+# Closing the loop (milestone 3): re-explore when the winner changes
+# ---------------------------------------------------------------------------
+
+DEFAULT_REEXPLORE_CALIBRATION = REPO_ROOT / "src" / "hw_dse" / "models" / "calibration_artix7_refit_vivado-2025.2.yaml"
+DEFAULT_REEXPLORE_EVALS = 60
+
+
+def reexplore_boxes(rows: list[dict[str, Any]], slack: int = 2) -> dict[str, dict[str, Any]]:
+    """Per family, a box around the given designs: every integer parameter
+    from (min - slack) to (max + slack), clamped to the registry; categorical
+    parameters keep their full choices."""
+    out: dict[str, dict[str, Any]] = {}
+    for fam in dict.fromkeys(r["family"] for r in rows):
+        mine = [r for r in rows if r["family"] == fam]
+        box: dict[str, Any] = {}
+        for p in REGISTRY[fam].params:
+            if p.kind == "int":
+                vals = [int(r[p.name]) for r in mine]
+                box[p.name] = (max(p.low, min(vals) - slack), min(p.high, max(vals) + slack))
+            else:
+                box[p.name] = p.choices
+        out[fam] = box
+    return out
+
+
+def reexplore(spec: Spec, front: list[dict[str, Any]], selected: dict[str, Any] | None, ba: dict[str, Any],
+              options: dict[str, Any] | None = None, seed: int = 0) -> dict[str, Any]:
+    """The ``l5_reexplore`` node's logic: search again where the measurements are.
+
+    Runs after ``back_annotate`` has flagged a winner change. The measured
+    numbers say the estimate was wrong near the selected design, so:
+
+    1. **Where:** the front designs that have measurements (and the selected
+       design), each family boxed by :func:`reexplore_boxes`.
+    2. **With what model:** the refitted calibration
+       (``calibration_artix7_refit_vivado-2025.2.yaml`` by default): the
+       cost model the measurements produced, on the Vivado scale.
+    3. **How much:** ``reexplore_evals`` (default 60) NSGA-II evaluations,
+       split over the families. This is a separate L5 budget: these
+       evaluations are kept apart from the run's L1 evaluations
+       (``l5_evaluations``) so the L1 budget comparison with the baselines is
+       untouched.
+    4. **Re-select:** the spec's rule over the new evaluations plus the old
+       front re-scored under the refit (a deterministic recomputation, not new
+       evaluations); for a spec with a system scenario the result goes through
+       the L2 shortlist again.
+
+    Every number in the result is an ``estimate`` naming the refit
+    calibration; nothing here is presented as measured.
+    """
+    from hw_dse.explore import run_family_study
+    from hw_dse.models.cost_fpga import FpgaCostModel
+
+    opts = options or {}
+    calib = Path(opts.get("reexplore_calibration") or DEFAULT_REEXPLORE_CALIBRATION)
+    cm = FpgaCostModel(str(calib))
+    budget = int(opts.get("reexplore_evals", DEFAULT_REEXPLORE_EVALS))
+    idx = load_index([Path(c) for c in (opts.get("measured_csvs") or DEFAULT_MEASURED)])
+    anchors = [r for r in front if r["key"] in idx]
+    if selected is not None and selected["key"] not in {r["key"] for r in anchors}:
+        anchors.append(selected)
+    boxes = reexplore_boxes(anchors)
+    fams = list(boxes)
+    per = [budget // len(fams)] * len(fams)
+    for i in range(budget - sum(per)):
+        per[i % len(fams)] += 1
+    recs: list[dict[str, Any]] = []
+    for i, (fam, n) in enumerate(zip(fams, per)):
+        if n <= 0:
+            continue
+        recs += run_family_study(fam, boxes[fam], spec, n, seed * 7919 + 4243 + i, tag={"round": "L5"}, cost_model=cm)
+    rescored = [evaluate(_arch_of(r), spec, cm) for r in front]
+    pool = recs + rescored
+    from hw_dse.agent.summary import merged_front
+
+    new_front = merged_front(pool, spec)
+    sel = select_design(new_front, spec)
+    l2_note = None
+    if spec.system is not None and sel is not None:
+        from hw_dse.l2.node import l2_select
+
+        l2 = l2_select(pool, sel, spec)
+        sel, l2_note = l2["selected"], l2.get("why")
+    before = selected["key"] if selected else None
+    return {
+        "status": "reexplored",
+        "trigger": ba.get("why"),
+        "calibration": cm.calibration_id,
+        "calibration_path": str(calib),
+        "anchors": [r["key"] for r in anchors],
+        "boxes": {f: {k: list(v) for k, v in b.items()} for f, b in boxes.items()},
+        "n_evals": len(recs),
+        "selected_before": before,
+        "selected": sel,
+        "selected_key": sel["key"] if sel else None,
+        "changed": bool(sel and sel["key"] != before),
+        "l2": l2_note,
+        "evaluations": recs,
+    }

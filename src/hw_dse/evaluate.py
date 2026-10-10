@@ -17,7 +17,14 @@ Each record carries a ``provenance`` dict mapping metric name to a label:
     From the cost model, tagged with its calibration id
     (LUTs, FFs, Fmax, throughput, latency in ns, power index).
 ``measured``
-    Reserved for milestone 2 (synthesis / place-and-route runs).
+    Synthesis / place-and-route results (milestone 2, back-annotation).
+``simulated``
+    Milestone 3, L2: system metrics from the SimPy models of the spec's
+    ``system`` scenario, and the DDS spectrum from the golden model. At L1
+    (here) the timing system metrics are *estimates*: analytic bounds that
+    are optimistic in the direction their constraint points
+    (:mod:`hw_dse.l2.bounds`); the L2 node replaces them with simulated
+    values for the shortlisted designs.
 
 Derived metrics
 ---------------
@@ -105,8 +112,30 @@ def evaluate(arch: ArchConfig, spec: Spec | None = None, cost_model: CostModel |
         "latency_cycles": "exact: schedule",
         **{m: exact for m in ("max_abs_err", "max_abs_err_lsb", "rms_err", "rms_err_lsb", "accuracy_bits")},
     }
+    if spec is not None and spec.system is not None:
+        add_system_bounds(rec, arch, spec)
     if spec is not None:
         add_feasibility(rec, spec)
+    return rec
+
+
+def add_system_bounds(rec: EvalRecord, arch: ArchConfig, spec: Spec) -> EvalRecord:
+    """L1 values of the system metrics (milestone 3): analytic bounds for the
+    timing metrics, the exact DDS spectrum if the spec constrains it."""
+    from hw_dse.l2.bounds import BOUND_PROVENANCE, bound_metrics
+    from hw_dse.l2.cycle import Contract
+
+    assert spec.system is not None
+    for k, v in bound_metrics(spec.system, Contract.of(arch), float(rec["fmax_mhz"])).items():
+        rec[k] = v
+        rec["provenance"][k] = BOUND_PROVENANCE
+    if any(c.metric in ("sys_sfdr_dbc", "sys_snr_db") for c in spec.constraints):
+        from hw_dse.l2.dds import PROVENANCE as DDS_PROV
+        from hw_dse.l2.dds import dds_spectrum
+
+        rec["sys_sfdr_dbc"], rec["sys_snr_db"] = dds_spectrum(arch.numerics)
+        rec["provenance"]["sys_sfdr_dbc"] = rec["provenance"]["sys_snr_db"] = DDS_PROV
+    rec["l2_fidelity"] = "L1 bound"
     return rec
 
 

@@ -10,6 +10,7 @@ failure so a broken install can never pass silently:
 ``HW_DSE_REQUIRE_SIM=1``   Verilator *and* Icarus (L3 generated RTL)
 ``HW_DSE_REQUIRE_FORMAL=1`` SymbiYosys + Yosys + a solver (formal checks)
 ``HW_DSE_REQUIRE_GATE=1``  Yosys + Icarus (gate-level simulation)
+``HW_DSE_REQUIRE_CAMPAIGN=1`` deepagents installed (campaign tests; Python >= 3.11)
 =========================  ===================================================
 
 ``HW_DSE_L3_FULL=1`` additionally runs the full L3 sweep (minutes, CI only).
