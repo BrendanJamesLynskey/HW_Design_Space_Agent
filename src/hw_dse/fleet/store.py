@@ -26,8 +26,10 @@ spec:
     members' prompts.
 
 LangGraph's ``InMemoryStore`` is used (no persistence is needed: a fleet run
-is one process). Puts from parallel members are serialised by a lock, since
-the record of a design two members both evaluated is read-modify-written.
+is one process). Every access goes through one lock: puts, because the record
+of a design two members both evaluated is read-modify-written, and reads,
+because ``InMemoryStore.search`` iterates a dict that a parallel member's put
+may be resizing (phase-2 warm starts read while the other member writes).
 """
 
 from __future__ import annotations
@@ -63,13 +65,16 @@ def put_evaluations(store: Any, spec_name: str, member: str, records: list[dict[
 
 def evaluated(store: Any, spec_name: str) -> list[dict[str, Any]]:
     """Every distinct design the fleet has evaluated for ``spec_name`` (the stored records)."""
-    return [it.value["record"] for it in store.search(ns(spec_name, "evaluated"), limit=1_000_000)]
+    with _LOCK:
+        return [it.value["record"] for it in store.search(ns(spec_name, "evaluated"), limit=1_000_000)]
 
 
 def evaluation_counts(store: Any, spec_name: str) -> dict[str, int]:
     """Evaluations per member, repeats included (the budget accounting)."""
     out: dict[str, int] = {}
-    for it in store.search(ns(spec_name, "evaluated"), limit=1_000_000):
+    with _LOCK:
+        items = store.search(ns(spec_name, "evaluated"), limit=1_000_000)
+    for it in items:
         for m, n in it.value["by"].items():
             out[m] = out.get(m, 0) + int(n)
     return out
@@ -82,7 +87,8 @@ def put_lessons(store: Any, spec_name: str, lessons: dict[str, dict[str, Any]]) 
 
 
 def lessons(store: Any, spec_name: str) -> dict[str, dict[str, Any]]:
-    return {it.key: it.value for it in store.search(ns(spec_name, "lessons"), limit=1000)}
+    with _LOCK:
+        return {it.key: it.value for it in store.search(ns(spec_name, "lessons"), limit=1000)}
 
 
 WARM_START_MAX = 16  # stored front designs seeded into one phase-2 study

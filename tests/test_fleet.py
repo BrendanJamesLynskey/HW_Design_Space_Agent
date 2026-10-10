@@ -154,3 +154,50 @@ def test_infeasible_spec_keeps_the_whole_budget_searching(tmp_path: Path) -> Non
     res = fc.run_fleet(spec, lambda m, p: HeuristicArchitect(), seed=0, run_root=tmp_path)
     assert res["status"] == "infeasible" and res["selected"] is None and res["llm_declared_infeasible"]
     assert res["phase2_budgets"] == {"fsm": 100, "pipelined": 100}  # nothing feasible: equal shares
+
+
+def test_store_reads_are_safe_while_another_member_writes() -> None:
+    """Phase-2 warm starts read the Store while the other member's thread writes to it
+    (a 'dictionary changed size during iteration' race before reads took the lock)."""
+    import sys
+    import threading
+
+    spec = load_spec("specs/low_area_control.yaml")
+    store = fstore.new_store()
+    from hw_dse.explore import run_family_study
+    from hw_dse.families import full_box
+
+    recs = run_family_study("iterative", full_box("iterative"), spec, 20, 0)
+    errors: list[BaseException] = []
+    done = threading.Event()
+    n_writes = 3000
+
+    def writer() -> None:
+        try:
+            for i in range(n_writes):
+                fstore.put_evaluations(store, spec.name, "pipelined", [{**recs[i % len(recs)], "key": f"k{i}"}])
+        except BaseException as exc:  # noqa: BLE001
+            errors.append(exc)
+        finally:
+            done.set()
+
+    def reader() -> None:
+        try:
+            while not done.is_set():
+                fstore.evaluation_counts(store, spec.name)
+        except BaseException as exc:  # noqa: BLE001
+            errors.append(exc)
+
+    old = sys.getswitchinterval()
+    sys.setswitchinterval(1e-6)  # switch threads as often as possible
+    try:
+        threads = [threading.Thread(target=writer), threading.Thread(target=reader)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+    finally:
+        sys.setswitchinterval(old)
+    assert not errors, errors
+    assert fstore.evaluation_counts(store, spec.name) == {"pipelined": n_writes}
+    assert fstore.front_designs(store, spec, "iterative")
