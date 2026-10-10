@@ -212,12 +212,202 @@ def cmd_baselines_m4(_: argparse.Namespace) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Live runs: model check, key usage, ledger, the structured arm, the fleet A/B
+# ---------------------------------------------------------------------------
+
+M4_MODELS = ("qwen/qwen3.8-27b", "anthropic/claude-sonnet-5.5", "deepseek/deepseek-v4.1-flash")
+FPGA_AB_SPECS = ("low_area_control", "multiaxis_control")  # the A/B's FPGA specs (one plain, one system)
+
+
+def cmd_models_m4(_: argparse.Namespace) -> None:
+    """Check (free, no key needed) that each model is listed with tools and structured_outputs."""
+    import urllib.request
+
+    with urllib.request.urlopen("https://openrouter.ai/api/v1/models", timeout=60) as r:  # noqa: S310 - fixed URL
+        data = json.loads(r.read())["data"]
+    by_id = {m["id"]: m for m in data}
+    out: dict[str, Any] = {"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                           "endpoint": "GET https://openrouter.ai/api/v1/models", "n_models_listed": len(data),
+                           "required": ["tools", "structured_outputs"], "models": {}}
+    for mid in M4_MODELS:
+        m = by_id.get(mid)
+        sp = sorted((m or {}).get("supported_parameters") or [])
+        out["models"][mid] = {"listed": m is not None, "tools": "tools" in sp, "structured_outputs": "structured_outputs" in sp,
+                              "ok": m is not None and "tools" in sp and "structured_outputs" in sp,
+                              "pricing": (m or {}).get("pricing"), "context_length": (m or {}).get("context_length"),
+                              "supported_parameters": sp}
+        print(mid, out["models"][mid]["ok"])
+    MODELS_CHECK_M4.write_text(json.dumps(out, indent=1))
+    print(f"wrote {MODELS_CHECK_M4}")
+
+
+def cmd_key_usage_m4(args: argparse.Namespace) -> None:
+    """Record the key's usage and limit (free endpoint) under a tag; the key itself is never recorded."""
+    from run_eval import _key_usage  # type: ignore[import-not-found]
+
+    data = json.loads(KEY_USAGE_M4.read_text()) if KEY_USAGE_M4.exists() else {
+        "note": "OpenRouter GET /api/v1/key (free), read with the key from the environment; the key itself is never "
+                "recorded.", "m4_spend_cap_usd": M4_CAP, "snapshots": {}}
+    data["snapshots"][args.tag] = _key_usage()
+    KEY_USAGE_M4.write_text(json.dumps(data, indent=1))
+    print(args.tag, data["snapshots"][args.tag])
+
+
+def ledger_add(model: str, spec: str, seed: int, cost: float, arm: str, note: str = "") -> None:
+    with open(LEDGER, "a", encoding="utf-8") as fh:
+        fh.write(json.dumps({"model": model, "spec": spec, "seed": seed, "cost_usd": cost, "arm": arm,
+                             "ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "milestone": "m4",
+                             **({"note": note} if note else {})}) + "\n")
+
+
+def spend_m4() -> float:
+    return sum(float(r.get("cost_usd") or 0.0) for r in ledger("m4"))
+
+
+def cap_ok(model: str, arm: str, default: float, cap: float) -> bool:
+    prior = [float(r.get("cost_usd") or 0) for r in ledger("m4") if r["model"] == model and r.get("arm") == arm]
+    exp = statistics.mean(prior) if prior else default
+    spent = spend_m4()
+    if spent + 2 * exp > cap:
+        print(f"STOP: M4 spend ${spent:.4f} + 2x expected next {arm} run ${exp:.4f} would pass ${cap}")
+        return False
+    return True
+
+
+def any_spec(name: str) -> Spec:
+    from hw_dse.campaign.tools import spec_path
+
+    return load_spec(spec_path(name))
+
+
+def score_any(records: list[dict[str, Any]], spec: Spec, declared: bool | None,
+              selected: dict[str, Any] | None) -> dict[str, Any]:
+    """Score against the right ground truth: ASIC (M4), FPGA system (M3, simulated) or FPGA (M1/M2)."""
+    if spec.target_kind == "asic":
+        return score_m4(records, spec, declared, selected)
+    if spec.system is not None:
+        from run_eval import score_m3  # type: ignore[import-not-found]
+
+        return score_m3(records, spec, declared, selected)
+    from run_eval import load_gt  # type: ignore[import-not-found]
+
+    return score_run(records, spec, load_gt()[spec.name], declared_infeasible=declared, selected=selected)
+
+
+def _model_dir(model: str, reasoning: str | None) -> str:
+    return _slug(model) + (f"__reasoning-{reasoning}" if reasoning else "")
+
+
+def _row_common(res: dict[str, Any], name: str, seed: int, args: argparse.Namespace, arm: str, wall: float) -> dict[str, Any]:
+    s = any_spec(name)
+    sc = score_any(res["evaluations_ordered"], s, res["llm_declared_infeasible"], res["selected"])
+    return {"milestone": "m4", "arm": arm, "pilot": bool(args.pilot), "spec": name, "target": s.target, "seed": seed,
+            "provider": "openrouter", "model_requested": args.model, "models_served": res["models_served"],
+            "reasoning": args.reasoning or "provider default", "status": res["status"],
+            "llm_calls": res["llm"]["calls"], "llm_failures": res["llm"]["failures"],
+            "input_tokens": res["llm"]["input_tokens"], "output_tokens": res["llm"]["output_tokens"],
+            "cost_usd": res["llm"]["cost_usd"], "wall_s": round(wall, 1), "decisions": res["decisions"],
+            "l1_selected_key": (res.get("selected_l1") or {}).get("key"),
+            "l2_winner_changed": bool((res.get("l2") or {}).get("winner_changed")),
+            "l2_feedback": (res.get("l2_feedback") or {}).get("status"),
+            "back_annotation_winner_changed": bool((res.get("back_annotation") or {}).get("winner_changed")),
+            "failed": False, **sc}
+
+
+def cmd_agent_m4(args: argparse.Namespace) -> None:
+    """The structured graph, one run per (spec, seed), sequentially (wall-clock measured alone).
+    Default specs: the ASIC ones; ``--specs`` adds the A/B's FPGA specs (``--arm single``)."""
+    from hw_dse.agent.runner import run_agent
+
+    accuracy_table.preload()
+    arm = args.arm or "structured"
+    base = M4_DIRS["pilot"] if args.pilot else (M4_DIRS["agent"] if arm == "structured" else M4_DIRS["fleet_ab"])
+    outdir = base / (arm if arm != "structured" else "") / _model_dir(args.model, args.reasoning)
+    outdir.mkdir(parents=True, exist_ok=True)
+    names = args.specs.split(",") if args.specs else list(ASIC_SPECS)
+    for seed in SEEDS["m2"][: args.seeds]:
+        for name in names:
+            path = outdir / f"{name}_seed{seed}.json"
+            if path.exists() and not args.force:
+                print(f"skip (exists): {path.name}")
+                continue
+            if not cap_ok(args.model, "structured", args.expected_cost, args.max_spend):
+                return
+            s = any_spec(name)
+            t0 = time.time()
+            res = run_agent(spec=s, provider="openrouter", model=args.model, seed=seed, reasoning=args.reasoning,
+                            run_root=ROOT / "runs" / ("eval_m4_pilot" if args.pilot else "eval_m4") / arm)
+            wall = time.time() - t0
+            row = {**_row_common(res, name, seed, args, arm, wall), "rounds": res["rounds"],
+                   "coverage_rounds": res["coverage_rounds"], "structured_method": res["structured_method"],
+                   "run_dir": str(Path(res["run_dir"]).relative_to(ROOT)), "overrides": res["overrides"]}
+            ledger_add(args.model, name, seed, row["cost_usd"], "structured", "pilot" if args.pilot else arm)
+            path.write_text(json.dumps(row, indent=1, default=str))
+            print(f"[{arm}] {name} seed {seed}: {res['status']}, HV {row['hv_frac']}, regret {row['select_regret']}, "
+                  f"${row['cost_usd']:.4f}, {row['wall_s']}s", flush=True)
+
+
+def cmd_fleet_m4(args: argparse.Namespace) -> None:
+    """The fleet arm of the A/B: the code-orchestrated fleet at the spec's total budget, sequentially."""
+    from hw_dse.agent.llm import make_llm
+    from hw_dse.agent.trace import Tracer
+    from hw_dse.fleet.coordinator import run_fleet
+
+    accuracy_table.preload()
+    outdir = (M4_DIRS["pilot"] / "fleet" if args.pilot else M4_DIRS["fleet_ab"] / "fleet") / _model_dir(args.model, args.reasoning)
+    outdir.mkdir(parents=True, exist_ok=True)
+    names = args.specs.split(",") if args.specs else list(ASIC_SPECS + FPGA_AB_SPECS)
+    for seed in SEEDS["m2"][: args.seeds]:
+        for name in names:
+            path = outdir / f"{name}_seed{seed}.json"
+            if path.exists() and not args.force:
+                print(f"skip (exists): {path.name}")
+                continue
+            if not cap_ok(args.model, "fleet", args.expected_cost, args.max_spend):
+                return
+            s = any_spec(name)
+            root = ROOT / "runs" / ("fleet_m4_pilot" if args.pilot else "fleet_m4") / name / f"seed{seed}-{time.strftime('%Y%m%d-%H%M%S')}"
+
+            def factory(member: str, phase: int) -> Any:
+                return make_llm("openrouter", args.model, tracer=Tracer(), reasoning=args.reasoning)
+
+            t0 = time.time()
+            res = run_fleet(s, factory, seed=seed, run_root=root)
+            wall = time.time() - t0
+            row = {**_row_common(res, name, seed, args, "fleet", wall), "members": res["members"],
+                   "phase2_budgets": res["phase2_budgets"], "lessons": res["lessons"],
+                   "store_evaluations_by_member": res["store_evaluations_by_member"],
+                   "store_distinct_designs": res["store_distinct_designs"],
+                   "run_dir": str(root.relative_to(ROOT))}
+            ledger_add(args.model, name, seed, row["cost_usd"], "fleet", "pilot" if args.pilot else "")
+            path.write_text(json.dumps(row, indent=1, default=str))
+            print(f"[fleet] {name} seed {seed}: {res['status']}, HV {row['hv_frac']}, regret {row['select_regret']}, "
+                  f"evals {row['n_evals']}, ${row['cost_usd']:.4f}, {row['wall_s']}s", flush=True)
+
+
+# ---------------------------------------------------------------------------
 # Registration into run_eval.py
 # ---------------------------------------------------------------------------
 
 def register(sub: Any) -> None:
     sub.add_parser("ground-truth-m4").set_defaults(fn=cmd_ground_truth_m4)
     sub.add_parser("baselines-m4").set_defaults(fn=cmd_baselines_m4)
+    sub.add_parser("models-m4").set_defaults(fn=cmd_models_m4)
+    ku = sub.add_parser("key-usage-m4")
+    ku.add_argument("--tag", required=True)
+    ku.set_defaults(fn=cmd_key_usage_m4)
+    for nm, fn in (("agent-m4", cmd_agent_m4), ("fleet-m4", cmd_fleet_m4)):
+        p4 = sub.add_parser(nm)
+        p4.add_argument("--model", required=True)
+        p4.add_argument("--reasoning", default=None)
+        p4.add_argument("--seeds", type=int, default=5)
+        p4.add_argument("--specs", default="")
+        p4.add_argument("--arm", default=None, help="agent-m4: structured (default) or single (the A/B's FPGA specs)")
+        p4.add_argument("--pilot", action="store_true")
+        p4.add_argument("--force", action="store_true")
+        p4.add_argument("--max-spend", type=float, default=M4_CAP, help="M4 spend cap (USD) from the ledger")
+        p4.add_argument("--expected-cost", type=float, default=0.10)
+        p4.set_defaults(fn=fn)
 
 
 def report_m4(L: list[str]) -> None:  # filled in below as the M4 data lands

@@ -1,0 +1,12 @@
+{
+ "note": "OpenRouter GET /api/v1/key (free), read with the key from the environment; the key itself is never recorded.",
+ "m4_spend_cap_usd": 5.0,
+ "snapshots": {
+  "session_start_before_any_m4_call": {
+   "ts": "2026-10-10T16:23:17Z",
+   "usage_usd": 7.816263971,
+   "limit_usd": 15,
+   "limit_remaining_usd": 7.183736029
+  }
+ }
+}
