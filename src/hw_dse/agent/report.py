@@ -32,7 +32,7 @@ from pathlib import Path
 from typing import Any
 
 from hw_dse.agent.summary import merged_front
-from hw_dse.evaluate import METRIC_COLUMNS, fmt_metric
+from hw_dse.evaluate import ASIC_METRIC_COLUMNS, METRIC_COLUMNS, fmt_metric
 from hw_dse.families import REGISTRY
 from hw_dse.spec import Spec
 
@@ -46,6 +46,8 @@ VERDICT = {
     "no_feasible": "NO FEASIBLE DESIGN FOUND within the budget (the architect did not declare infeasibility)",
     "rejected": "spec rejected by the human; nothing explored",
     "l2_no_feasible": "NO SHORTLISTED DESIGN PASSES the simulated system constraints (L2)",
+    "l2_feedback_recovered": ("no L1-feasible design passed L2; the L2 -> L1 feedback corrected the bound, "
+                              "re-explored and found one"),
 }
 
 
@@ -59,7 +61,9 @@ def write_csv(path: Path, records: list[dict[str, Any]]) -> None:
     from hw_dse.agent.graph import order_evaluations
 
     params = ["data_width", "n_iter", "angle_guard", "frac_guard", "rounding", "k", "m"]
-    cols = ["eval_index", "round", "family", *params, *METRIC_COLUMNS, "feasible", "key",
+    # ASIC records (milestone 4) add their area columns; an FPGA CSV is unchanged.
+    metrics = [*METRIC_COLUMNS, *(c for c in ASIC_METRIC_COLUMNS if any(c in r for r in records))]
+    cols = ["eval_index", "round", "family", *params, *metrics, "feasible", "key",
             "provenance_estimate", "provenance_exact"]
     with open(path, "w", newline="", encoding="utf-8") as fh:
         w = csv.writer(fh)
@@ -67,7 +71,7 @@ def write_csv(path: Path, records: list[dict[str, Any]]) -> None:
         for i, r in enumerate(order_evaluations(records)):
             prov = r.get("provenance", {})
             row = [i, r.get("round", ""), r["family"], *[r.get(p, "") for p in params],
-                   *[r.get(c, "") for c in METRIC_COLUMNS], r.get("feasible", ""), r["key"],
+                   *[r.get(c, "") for c in metrics], r.get("feasible", ""), r["key"],
                    prov.get("luts", ""), prov.get("max_abs_err", "")]
             w.writerow(row)
 
@@ -108,7 +112,8 @@ def plot_pareto(path: Path, spec: Spec, records: list[dict[str, Any]], selected:
 def _metric_table(rec: dict[str, Any]) -> list[str]:
     prov = rec.get("provenance", {})
     lines = ["| metric | value | provenance |", "|---|---|---|"]
-    for m in ("luts", "ffs", "fmax_mhz", "throughput_msps", "latency_cycles", "latency_ns", "power_index",
+    area = ("area_um2", "gate_eq") if "area_um2" in rec else ("luts",)
+    for m in (*area, "ffs", "fmax_mhz", "throughput_msps", "latency_cycles", "latency_ns", "power_index",
               "max_abs_err", "max_abs_err_lsb", "rms_err", "rms_err_lsb", "accuracy_bits"):
         lines.append(f"| {m} | {fmt_metric(m, float(rec[m]))} | {prov.get(m, '')} |")
     return lines
@@ -135,6 +140,17 @@ def _back_annotation_lines(ba: dict[str, Any] | None) -> list[str]:
                  + ", ".join(f"`{Path(s).name}`" for s in ba["measured_sources"]) + "; nothing to compare.")
     elif ba["status"] != "compared":
         L.append(f"Back-annotation did not run ({ba['status']}).")
+    elif ba.get("target") == "asic":
+        L.append("| tool | area µm² est → meas | FFs est → meas | Fmax MHz est → meas |")
+        L.append("|---|---|---|---|")
+        for c in ba["comparisons"]:
+            cells = [f"{c[m]['estimate']:.0f} → {c[m]['measured']:.0f} ({c[m]['diff_pct']:+.1f}%)"
+                     for m in ("area_um2", "ffs", "fmax_mhz")]
+            L.append(f"| {c['provenance']} | " + " | ".join(cells) + " |")
+        L.append("")
+        flag = "**WINNER CHANGES**" if ba["winner_changed"] else "winner unchanged"
+        L.append(f"Winner check ({ba['n_front_designs_measured']} of {ba['n_front_designs']} front designs have "
+                 f"measurements): {flag}: {ba['why']}.")
     else:
         L.append("| tool | LUTs est → meas | FFs est → meas | Fmax MHz est → meas |")
         L.append("|---|---|---|---|")
@@ -215,6 +231,26 @@ def _l5_lines(l5: dict[str, Any] | None) -> list[str]:
     return L
 
 
+def _l2_feedback_lines(fb: dict[str, Any] | None) -> list[str]:
+    """Milestone 4: the L2 -> L1 feedback section (only when it ran)."""
+    if not fb:
+        return []
+    L = ["## L2 -> L1 feedback", "",
+         f"L2 found no passing design among the run's L1-feasible ones, so code corrected the L1 system bound by "
+         f"the ratios L2 measured and re-explored with a separate budget ({fb['n_evals']} evaluations, not counted "
+         f"against the spec's): **{fb['status']}**" + (f", selected `{fb['selected_key']}`." if fb["selected_key"] else "."),
+         ""]
+    for r in fb["rounds"]:
+        corr = "; ".join(f"{m}: " + ", ".join(
+            f"{cls} kappa {v['kappa_range'][0]:.2f}..{v['kappa_range'][1]:.2f} over rho "
+            f"{v['rho_range'][0]:.2f}..{v['rho_range'][1]:.2f} (n={v['n']})" if v["n"] else f"{cls}: bound kept"
+            for cls, v in per.items()) for m, per in r["corrections"].items())
+        L.append(f"- round {r['round']}: {corr}; {r['n_corrected_feasible']} new corrected-feasible designs, "
+                 f"{r['n_passing']} pass at L2")
+    L.append("")
+    return L
+
+
 def write_report(state: dict[str, Any], llm: Any) -> Path:
     run_dir = Path(state["run_dir"])
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -235,9 +271,12 @@ def write_report(state: dict[str, Any], llm: Any) -> Path:
     L.append(f"**Evaluations:** {len(records)} of {spec.budget.total_evals} budgeted, over {state.get('round', 0)} round(s).  ")
     L.append(f"**Spec intake:** {state.get('intake_mode', '?')}; confirmed before exploration.")
     L.append("")
+    est = ("analytical sky130_fd_sc_hd standard-cell cost model fitted to 57 Yosys + OpenSTA synthesis points "
+           "(eval/data/asic_calibration.md)" if spec.target_kind == "asic" else
+           "analytical Artix-7 cost model calibrated to two Vivado anchor points "
+           "(weak calibration; see the L5 refit in eval/data/)")
     L.append("> Provenance key. *exact*: bit-accurate golden model over the stated angle sweep, or the cycle "
-             "schedule. *estimate*: analytical Artix-7 cost model calibrated to two Vivado anchor points "
-             "(weak calibration; see the L5 refit in eval/data/). *measured*: real synthesis / place-and-route "
+             f"schedule. *estimate*: {est}. *measured*: real synthesis / place-and-route "
              "results, named by tool and version (back-annotation section). "
              "The LLM produced no numbers in this report; its plans and reasoning are quoted as text.")
     L.append("")
@@ -267,6 +306,7 @@ def write_report(state: dict[str, Any], llm: Any) -> Path:
         L.append("None.")
     L.append("")
     L += _l2_lines(state.get("l2"), spec)
+    L += _l2_feedback_lines(state.get("l2_feedback"))
     L += _back_annotation_lines(state.get("back_annotation"))
     L += _l5_lines(state.get("l5"))
     if front:
@@ -274,10 +314,11 @@ def write_report(state: dict[str, Any], llm: Any) -> Path:
         L.append("")
         L.append("Columns marked † are *estimates* (cost model); ‡ are *exact* (golden model / schedule).")
         L.append("")
-        L.append("| # | design | LUTs † | FFs † | MSPS † | latency cyc ‡ | power idx † | max err ‡ | acc. bits ‡ |")
+        akey, aname = ("area_um2", "area µm²") if spec.target_kind == "asic" else ("luts", "LUTs")
+        L.append(f"| # | design | {aname} † | FFs † | MSPS † | latency cyc ‡ | power idx † | max err ‡ | acc. bits ‡ |")
         L.append("|---|---|---|---|---|---|---|---|---|")
         for i, r in enumerate(front):
-            L.append(f"| {i} | `{r['key']}` | {r['luts']:.0f} | {r['ffs']:.0f} | {r['throughput_msps']:.1f} | "
+            L.append(f"| {i} | `{r['key']}` | {r[akey]:.0f} | {r['ffs']:.0f} | {r['throughput_msps']:.1f} | "
                      f"{r['latency_cycles']} | {r['power_index']:.3g} | {fmt_metric('max_abs_err', r['max_abs_err'])} | "
                      f"{r['accuracy_bits']:.2f} |")
         L.append("")

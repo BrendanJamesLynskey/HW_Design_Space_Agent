@@ -93,4 +93,6 @@ def run_agent(
         "back_annotation": state.get("back_annotation"),
         "l5": state.get("l5"),
         "l5_selected": state.get("l5_selected"),
+        "l2_feedback": state.get("l2_feedback"),
+        "l2_feedback_evaluations": state.get("l2_feedback_evaluations") or [],
     }

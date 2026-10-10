@@ -46,6 +46,11 @@ The graph, node by node::
     simulated numbers and the best passing design becomes the selection.
     For a spec without a system scenario it only attaches L2 facts to the
     report (milestone-2 behaviour is unchanged).
+``l2_feedback`` (milestone 4)
+    Runs only when L2 found no passing design among the run's L1-feasible
+    ones: corrects the L1 system bound by the ratios L2 measured (per
+    contract class) and re-explores with a separate, code-driven budget
+    (:mod:`hw_dse.l2.feedback`). The L1 evaluations are untouched.
 ``back_annotate``
     L5: measured data vs estimates for the selected design; flags a winner
     change.
@@ -189,6 +194,8 @@ class DSEState(TypedDict, total=False):
     l5: dict[str, Any] | None
     l5_evaluations: list[dict[str, Any]]
     l5_selected: dict[str, Any] | None
+    l2_feedback: dict[str, Any] | None
+    l2_feedback_evaluations: list[dict[str, Any]]
 
 
 def _cfg(config: RunnableConfig | None, key: str, default: Any = None) -> Any:
@@ -635,6 +642,29 @@ def build_graph(llm: StructuredLLM, checkpointer: Any = None) -> Any:
                 upd["status"] = "l2_no_feasible"
         return upd
 
+    def route_after_l2(state: DSEState, config: RunnableConfig) -> str:
+        from hw_dse.l2.feedback import fires
+
+        opts = _cfg(config, "l2_feedback") or {}
+        if opts.get("enabled", True) and fires(state.get("l2")):
+            return "l2_feedback"
+        return "back_annotate"
+
+    def l2_feedback(state: DSEState, config: RunnableConfig) -> dict[str, Any]:
+        from hw_dse.l2.feedback import DEFAULT_EVALS_PER_ROUND, DEFAULT_ROUNDS, feedback
+
+        spec = Spec.model_validate(state["spec"])
+        opts = _cfg(config, "l2_feedback") or {}
+        out = feedback(spec, state.get("evaluations", []), seed=int(state.get("seed", 0)),
+                       rounds=int(opts.get("rounds", DEFAULT_ROUNDS)),
+                       evals_per_round=int(opts.get("evals_per_round", DEFAULT_EVALS_PER_ROUND)))
+        recs = out.pop("evaluations")
+        upd: dict[str, Any] = {"l2_feedback": out, "l2_feedback_evaluations": recs}
+        if out["selected"] is not None:
+            upd["selected"] = out["selected"]
+            upd["status"] = "l2_feedback_recovered"
+        return upd
+
     def back_annotate(state: DSEState, config: RunnableConfig) -> dict[str, Any]:
         from hw_dse.agent.backannotate import back_annotate as annotate
 
@@ -650,7 +680,7 @@ def build_graph(llm: StructuredLLM, checkpointer: Any = None) -> Any:
     def route_after_back_annotate(state: DSEState, config: RunnableConfig) -> str:
         opts = _cfg(config, "back_annotate") or {}
         ba = state.get("back_annotation") or {}
-        if ba.get("winner_changed") and opts.get("reexplore", True):
+        if ba.get("winner_changed") and opts.get("reexplore", True) and ba.get("reexplore_available", True):
             return "l5_reexplore"
         return "report"
 
@@ -681,6 +711,7 @@ def build_graph(llm: StructuredLLM, checkpointer: Any = None) -> Any:
     g.add_node("analyse", analyse)
     g.add_node("select", select)
     g.add_node("l2_simulate", l2_simulate)
+    g.add_node("l2_feedback", l2_feedback)
     g.add_node("back_annotate", back_annotate)
     g.add_node("l5_reexplore", l5_reexplore)
     g.add_node("report", report)
@@ -691,7 +722,8 @@ def build_graph(llm: StructuredLLM, checkpointer: Any = None) -> Any:
     g.add_edge("explore_family", "analyse")
     g.add_conditional_edges("analyse", route_after_analyse, ["explore_family", "select", "report"])
     g.add_edge("select", "l2_simulate")
-    g.add_edge("l2_simulate", "back_annotate")
+    g.add_conditional_edges("l2_simulate", route_after_l2, ["l2_feedback", "back_annotate"])
+    g.add_edge("l2_feedback", "back_annotate")
     g.add_conditional_edges("back_annotate", route_after_back_annotate, ["l5_reexplore", "report"])
     g.add_edge("l5_reexplore", "report")
     g.add_edge("report", END)

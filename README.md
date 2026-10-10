@@ -102,6 +102,7 @@ graph TD;
 	analyse(analyse)
 	select(select)
 	l2_simulate(l2_simulate)
+	l2_feedback(l2_feedback)
 	back_annotate(back_annotate)
 	l5_reexplore(l5_reexplore)
 	report(report)
@@ -116,7 +117,9 @@ graph TD;
 	confirm_spec -.-> report;
 	explore_family --> analyse;
 	intake --> confirm_spec;
-	l2_simulate --> back_annotate;
+	l2_feedback --> back_annotate;
+	l2_simulate -.-> back_annotate;
+	l2_simulate -.-> l2_feedback;
 	l5_reexplore --> report;
 	propose -.-> explore_family;
 	select --> l2_simulate;
@@ -124,7 +127,6 @@ graph TD;
 	classDef default fill:#f2f0ff,line-height:1.2
 	classDef first fill-opacity:0
 	classDef last fill:#bfb6fc
-
 ```
 <!-- graph:end -->
 
