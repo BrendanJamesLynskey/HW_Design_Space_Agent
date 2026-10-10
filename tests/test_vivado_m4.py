@@ -4,7 +4,9 @@ Vivado is not run here. The exports are checked for what they ask Vivado to
 do; the collectors are run on the committed batch-2 reports (real Vivado
 output, re-labelled as if synthesised at 20 ns, to exercise the parser and
 the 1000 / (T - WNS) formula only) and on a power report written in Vivado's
-``report_power`` layout (a format sample, not a measurement).
+``report_power`` layout (a format sample, not a measurement), with the
+indented breakdown rows Vivado prints under Slice Logic, which must not be
+counted twice.
 """
 
 from __future__ import annotations
@@ -42,6 +44,9 @@ POWER_SAMPLE = """\
 +----------------+-----------+----------+-----------+-----------------+
 | Clocks         |     0.{clk} |        3 |       --- |             --- |
 | Slice Logic    |     0.{logic} |      300 |       --- |             --- |
+|   LUT as Logic |     0.{logic} |      120 |     63400 |            0.19 |
+|   Register     |    <0.001 |      180 |    126800 |            0.14 |
+|   CARRY4       |    <0.001 |       30 |     15850 |            0.19 |
 | Signals        |     0.{sig} |      500 |       --- |             --- |
 | I/O            |     0.009 |       52 |       106 |           49.06 |
 | Static Power   |     0.072 |          |           |                 |
@@ -83,7 +88,8 @@ def test_collect_20ns_uses_the_designs_own_period(tmp_path: Path) -> None:
 def test_power_report_parser_and_compare(tmp_path: Path) -> None:
     r = vivado_power.parse_report_power(POWER_SAMPLE.format(tot="93", dyn="21", clk="003", logic="004", sig="005"))
     assert r["dynamic_w"] == 0.021 and r["static_w"] == 0.072 and r["io_w"] == 0.009
-    assert r["core_w"] == pytest.approx(0.012) and r["confidence"] == "Low"
+    assert r["core_w"] == pytest.approx(0.012) and r["confidence"] == "Low"  # sub-rows not double-counted
+    assert r["slice_logic_w"] == 0.004
     assert vivado_power._w("<0.001") == 0.0005
     logs = tmp_path / "logs"
     for i, key in enumerate([vivado_power.REFERENCE_KEY,

@@ -75,8 +75,13 @@ def parse_report_power(text: str) -> dict[str, Any]:
     out["confidence"] = m.group(1) if m else ""
     sec = text.split("On-Chip Components", 1)[1] if "On-Chip Components" in text else ""
     core = 0.0
-    for row in re.finditer(r"^\|\s*([A-Za-z/ ]+?)\s*\|\s*([<0-9.]+)\s*\|", sec, re.M):
-        name, val = row.group(1).strip(), _w(row.group(2))
+    # Top-level rows have one space after the bar; Vivado indents the
+    # breakdown under them ("|   LUT as Logic |", "|   Register |" under
+    # Slice Logic), and those sub-rows are already in their parent's total.
+    for row in re.finditer(r"^\|( *)([A-Za-z/ ]+?)\s*\|\s*([<0-9.]+)\s*\|", sec, re.M):
+        if len(row.group(1)) > 1:
+            continue
+        name, val = row.group(2).strip(), _w(row.group(3))
         if name in _COMPONENTS:
             out[_COMPONENTS[name]] = val
         if name not in _NOT_CORE:
