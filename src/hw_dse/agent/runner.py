@@ -49,6 +49,7 @@ def run_agent(
     levers: dict[str, Any] | None = None,
     options: dict[str, Any] | None = None,
     tracer: Tracer | None = None,
+    store: Any = None,
 ) -> dict[str, Any]:
     """Run one fully automatic agent session and return its results.
 
@@ -58,7 +59,8 @@ def run_agent(
     for milestone-1 behaviour). ``options`` adds graph config (``l2``,
     ``back_annotate``, ``architect_notes``). ``tracer``: write the LLM trace
     there instead of a new ``llm_trace.jsonl`` in the run directory (the
-    campaign agent keeps one trace for all its calls).
+    campaign agent keeps one trace for all its calls). ``store``: the fleet's
+    shared LangGraph Store (milestone 4, :mod:`hw_dse.fleet`).
     """
     run_dir = new_run_dir(spec.name, run_root)
     tracer = tracer or Tracer(run_dir / "llm_trace.jsonl")
@@ -66,8 +68,9 @@ def run_agent(
         llm = make_llm(provider, model, tracer=tracer, reasoning=reasoning, method=method)
     else:
         llm.tracer = tracer
-    graph = build_graph(llm, sqlite_checkpointer(run_dir / "checkpoints.sqlite"))
-    config = {"configurable": {"thread_id": f"{spec.name}-{seed}", "auto_approve": True, "auto_select": True,
+    graph = build_graph(llm, sqlite_checkpointer(run_dir / "checkpoints.sqlite"), store=store)
+    member = ((options or {}).get("fleet") or {}).get("member")
+    config = {"configurable": {"thread_id": f"{spec.name}-{seed}" + (f"-{member}" if member else ""), "auto_approve": True, "auto_select": True,
                                "levers": levers or {}, **(options or {})},
               "recursion_limit": 100}
     state = graph.invoke({"spec": spec.model_dump(), "run_dir": str(run_dir), "seed": seed}, config)

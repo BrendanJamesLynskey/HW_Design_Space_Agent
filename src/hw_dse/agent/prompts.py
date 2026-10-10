@@ -117,6 +117,15 @@ advisory, not numbers to rely on):
 {notes}
 """
 
+FLEET_MEMBER = """
+You are member `{member}` of a fleet of architects working on this spec in
+parallel, each on its own families (code assigned them and merges the fronts).
+You may only use these families: {families}. Plans naming other families are
+cut by code. The evaluation budget above is your share.
+Facts from the fleet so far (written by code, from code-computed numbers):
+{lessons}
+"""
+
 ANALYSE = """Spec:
 {spec}
 

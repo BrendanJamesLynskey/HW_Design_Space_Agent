@@ -252,11 +252,23 @@ def _ranges_to_dict(family: str, ranges: list[ParamRange]) -> dict[str, object]:
     return out
 
 
-def validate_plan(plan: ExplorationPlan, round_budget: int) -> dict[str, Any]:
-    """Clamp ranges, dedupe families, split the round budget. Pure code."""
+def validate_plan(plan: ExplorationPlan, round_budget: int, allowed: list[str] | None = None) -> dict[str, Any]:
+    """Clamp ranges, dedupe families, split the round budget. Pure code.
+
+    ``allowed`` (milestone 4, a fleet member): families outside it are dropped
+    with a note; if none is left, every allowed family gets its full range."""
     notes: list[str] = []
     fams: list[FamilyPlan] = []
     seen: set[str] = set()
+    if allowed:
+        dropped = [fp.family for fp in plan.families if fp.family not in allowed]
+        if dropped:
+            notes.append(f"fleet member: dropped families outside its assignment {dropped} (allowed: {allowed})")
+        kept = [fp for fp in plan.families if fp.family in allowed]
+        if not kept:
+            notes.append("fleet member: no allowed family left; used every allowed family, full range")
+            kept = [FamilyPlan(family=f, why="code: fleet member fallback") for f in allowed]  # type: ignore[arg-type]
+        plan = plan.model_copy(update={"families": kept})
     for fp in plan.families:
         if fp.family in seen:
             notes.append(f"dropped duplicate family {fp.family}")
@@ -288,11 +300,13 @@ def validate_plan(plan: ExplorationPlan, round_budget: int) -> dict[str, Any]:
     return {"jobs": jobs, "rationale": plan.rationale, "notes": notes}
 
 
-def fallback_plan(decision: str, spec: Spec, records: list[dict[str, Any]], plan: dict[str, Any]) -> ExplorationPlan:
+def fallback_plan(decision: str, spec: Spec, records: list[dict[str, Any]], plan: dict[str, Any],
+                  allowed: list[str] | None = None) -> ExplorationPlan:
     """Deterministic next plan when the LLM asked to continue but gave none."""
     explored = [j["family"] for j in plan.get("jobs", [])]
+    universe = list(allowed) if allowed else list(REGISTRY)
     if decision == "add_family":
-        new = [f for f in REGISTRY if f not in explored][:1] or explored[:1]
+        new = [f for f in universe if f not in explored][:1] or explored[:1]
         return ExplorationPlan(families=[FamilyPlan(family=f, why="fallback: add unexplored family") for f in new],  # type: ignore[arg-type]
                                rationale="fallback plan (LLM gave none)")
     if decision == "refine":
@@ -304,7 +318,7 @@ def fallback_plan(decision: str, spec: Spec, records: list[dict[str, Any]], plan
                 families=[FamilyPlan(family=f, ranges=[ParamRange(**r) for r in rs], why="fallback: box around front")  # type: ignore[arg-type]
                           for f, rs in list(boxes.items())[:4]],
                 rationale="fallback plan (LLM gave none)")
-    return ExplorationPlan(families=[FamilyPlan(family=f, why="fallback: full range") for f in (explored or list(REGISTRY))[:4]],  # type: ignore[arg-type]
+    return ExplorationPlan(families=[FamilyPlan(family=f, why="fallback: full range") for f in (explored or universe)[:4]],  # type: ignore[arg-type]
                            rationale="fallback plan (LLM gave none)")
 
 
@@ -341,7 +355,8 @@ def coverage_plan(spec: Spec, records: list[dict[str, Any]], budget: int, levers
         # share (the average front family's) so a too-narrow first box is not
         # the end of a family.
         feas_fams = {r["family"] for r in records if r.get("feasible")}
-        unfeasible = [f for f in REGISTRY if f in {r["family"] for r in records} and f not in feas_fams]
+        unfeasible = [f for f in (levers.get("families_allowed") or REGISTRY)
+                      if f in {r["family"] for r in records} and f not in feas_fams]
         if levers.get("map_unfeasible_families") == "reachable":
             # Only families for which every constraint was met by at least one
             # design (not necessarily the same one): the box, not the family's
@@ -413,8 +428,18 @@ def order_evaluations(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
 # Graph
 # ---------------------------------------------------------------------------
 
-def build_graph(llm: StructuredLLM, checkpointer: Any = None) -> Any:
-    """Compile the DSE graph around one LLM. ``checkpointer`` may be None."""
+def build_graph(llm: StructuredLLM, checkpointer: Any = None, store: Any = None) -> Any:
+    """Compile the DSE graph around one LLM. ``checkpointer`` may be None.
+
+    ``store`` (milestone 4): a LangGraph ``BaseStore`` shared by the members of
+    a fleet (:mod:`hw_dse.fleet`). When the run is a fleet member
+    (``configurable.fleet``), every evaluation it makes is also written there,
+    so the coordinator and the other members see it. A single run passes none
+    and behaves exactly as before."""
+
+    def _allowed(config: RunnableConfig | None) -> list[str] | None:
+        fl = _cfg(config, "fleet") or {}
+        return list(fl.get("families") or []) or None
 
     def intake(state: DSEState) -> dict[str, Any]:
         if state.get("spec"):
@@ -448,13 +473,19 @@ def build_graph(llm: StructuredLLM, checkpointer: Any = None) -> Any:
         notes = _cfg(config, "architect_notes")
         if notes:  # milestone 3: advisory text from the campaign agent (never numbers it produced)
             user += prompts.CAMPAIGN_NOTES.format(notes=str(notes)[:2000])
+        fleet = _cfg(config, "fleet") or {}
+        allowed = _allowed(config)
+        if fleet:  # milestone 4: code-written assignment and lessons, never LLM text
+            user += prompts.FLEET_MEMBER.format(member=fleet.get("member", "?"), families=", ".join(allowed or []),
+                                               lessons=fleet.get("lessons") or "none yet")
+            levers = {**levers, "families_allowed": allowed}
         failure = None
         try:
             plan = llm.structured(ExplorationPlan, prompts.system_prompt(spec), user, node="propose", context=spec_context(spec))
         except StructuredOutputError as exc:
             failure = f"LLM produced no valid plan ({str(exc)[:200]}); used deterministic fallback: every family, full range"
-            plan = fallback_plan("widen", spec, [], {})
-        vp = validate_plan(plan, min(b.evals_per_round, _llm_budget(b.total_evals, levers)))
+            plan = fallback_plan("widen", spec, [], {}, allowed)
+        vp = validate_plan(plan, min(b.evals_per_round, _llm_budget(b.total_evals, levers)), allowed)
         if failure:
             vp["notes"].insert(0, failure)
         return {"plan": vp, "round": 0, "budget_used": 0, "hv_history": [], "llm_declared_infeasible": False,
@@ -469,16 +500,26 @@ def build_graph(llm: StructuredLLM, checkpointer: Any = None) -> Any:
             for i, job in enumerate(state["plan"]["jobs"])
         ]
 
-    def explore_family(payload: dict[str, Any]) -> dict[str, Any]:
+    def explore_family(payload: dict[str, Any], config: RunnableConfig) -> dict[str, Any]:
         spec = Spec.model_validate(payload["spec"])
         job = payload["job"]
         box = {k: tuple(v) for k, v in job["box"].items()}
         recs = run_family_study(job["family"], box, spec, job["n_trials"], payload["seed"], tag={"round": payload["round"]},
                                 seed_designs=job.get("seeds") or None)
+        fleet = _cfg(config, "fleet") or {}
+        if fleet:  # milestone 4: share every evaluation with the fleet through the graph's Store
+            from langgraph.config import get_store
+
+            from hw_dse.fleet.store import put_evaluations
+
+            store = get_store()
+            if store is not None:
+                put_evaluations(store, spec.name, fleet.get("member", "?"), recs)
         return {"evaluations": recs}
 
-    def analyse(state: DSEState) -> dict[str, Any]:
+    def analyse(state: DSEState, config: RunnableConfig) -> dict[str, Any]:
         spec = Spec.model_validate(state["spec"])
+        allowed = _allowed(config)
         b = spec.budget
         # Checkpoints from before milestone 2 carry no levers: behave as M1 did.
         levers = {**LEVERS_M1, **(state.get("levers") or {})}
@@ -500,7 +541,7 @@ def build_graph(llm: StructuredLLM, checkpointer: Any = None) -> Any:
         final = rnd >= b.max_rounds or llm_remaining < MIN_TRIALS_PER_FAMILY
         explored = sorted({r["family"] for r in records}, key=list(REGISTRY).index)
         summary, ctx = summarise(spec, records, round_no=rnd, max_rounds=b.max_rounds, budget_used=used, hv=hv,
-                                 hv_prev=hv_prev, explored=explored, final_round=final)
+                                 hv_prev=hv_prev, explored=explored, final_round=final, universe=allowed)
         n_feas = int(ctx["n_feasible"])
         gain = ctx["hv_gain"]
         overrides: list[str] = []
@@ -570,8 +611,8 @@ def build_graph(llm: StructuredLLM, checkpointer: Any = None) -> Any:
                 cov = coverage_plan(spec, records, min(b.evals_per_round, llm_remaining), levers)
                 if cov is None:
                     overrides.append("'map_front' with no feasible design to map: used the widen fallback instead")
-                    update["plan"] = validate_plan(fallback_plan("widen", spec, records, state.get("plan", {})),
-                                                   min(b.evals_per_round, llm_remaining))
+                    update["plan"] = validate_plan(fallback_plan("widen", spec, records, state.get("plan", {}), allowed),
+                                                   min(b.evals_per_round, llm_remaining), allowed)
                 else:
                     update["plan"] = cov
                     update["coverage_rounds"] = cov_rounds + 1
@@ -579,9 +620,9 @@ def build_graph(llm: StructuredLLM, checkpointer: Any = None) -> Any:
             else:
                 plan = dec.next_plan
                 if plan is None:
-                    plan = fallback_plan(decision, spec, records, state.get("plan", {}))
+                    plan = fallback_plan(decision, spec, records, state.get("plan", {}), allowed)
                     overrides.append(f"no next_plan given for '{decision}'; used deterministic fallback")
-                update["plan"] = validate_plan(plan, min(b.evals_per_round, llm_remaining))
+                update["plan"] = validate_plan(plan, min(b.evals_per_round, llm_remaining), allowed)
                 update["status"] = "running"
         update["rounds_log"] = [{
             "round": rnd,
@@ -727,4 +768,4 @@ def build_graph(llm: StructuredLLM, checkpointer: Any = None) -> Any:
     g.add_conditional_edges("back_annotate", route_after_back_annotate, ["l5_reexplore", "report"])
     g.add_edge("l5_reexplore", "report")
     g.add_edge("report", END)
-    return g.compile(checkpointer=checkpointer)
+    return g.compile(checkpointer=checkpointer, store=store)

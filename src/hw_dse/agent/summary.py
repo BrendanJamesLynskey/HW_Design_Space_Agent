@@ -93,6 +93,7 @@ def summarise(
     hv_prev: float | None,
     explored: list[str],
     final_round: bool,
+    universe: list[str] | None = None,
 ) -> tuple[str, dict[str, Any]]:
     """Compact text summary for the LLM, plus a context dict for fakes/routing."""
     n = len(records)
@@ -107,7 +108,7 @@ def summarise(
     L.append(f"Hypervolume of the feasible front: {hv:.4g} (gain this round: {gain_txt}).")
     L.append(f"Feasible designs: {len(feas)} of {n} evaluations ({len({r['key'] for r in feas})} unique).")
     L.append(f"Families explored so far: {', '.join(explored)}. Not yet explored: "
-             f"{', '.join(f for f in REGISTRY if f not in explored) or 'none'}.")
+             f"{', '.join(f for f in (universe or REGISTRY) if f not in explored) or 'none'}.")
     if spec.target_kind == "asic":
         L.append("Provenance: area/gate equivalents/FFs/Fmax/throughput/power are cost-model ESTIMATES (sky130 "
                  "standard cells, calibrated on Yosys + OpenSTA synthesis); errors/accuracy bits are EXACT "
