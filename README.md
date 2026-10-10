@@ -951,7 +951,7 @@ python scripts/worked_example_m3.py     # docs/worked_example_m3.md (Icarus opti
 pinned commit (the CI `asic` job does exactly this and caches the build):
 
 ```bash
-sudo apt install yosys cmake tcl-dev swig bison flex libeigen3-dev zlib1g-dev autoconf automake libtool
+sudo apt install yosys cmake tcl-dev swig bison flex libfl-dev libeigen3-dev zlib1g-dev autoconf automake libtool
 git clone https://github.com/The-OpenROAD-Project/cudd.git && git -C cudd checkout d47718fedea39fa2ef7d4907432b92b032a8ff72
 (cd cudd && autoreconf -fi; ./configure --prefix=/opt/eda/cudd && make -j4 && make install)
 git clone https://github.com/The-OpenROAD-Project/OpenSTA.git && git -C OpenSTA checkout d1e43c6f9f4e66cb59c3d7958a4aa7d1626b4614

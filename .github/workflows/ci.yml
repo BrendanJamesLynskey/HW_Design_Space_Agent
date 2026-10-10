@@ -167,7 +167,7 @@ jobs:
       - name: Install Yosys and the OpenSTA build dependencies
         run: |
           sudo apt-get update -q
-          sudo apt-get install -y -q yosys cmake tcl-dev swig bison flex libeigen3-dev zlib1g-dev autoconf automake libtool
+          sudo apt-get install -y -q yosys cmake tcl-dev swig bison flex libfl-dev libeigen3-dev zlib1g-dev autoconf automake libtool
           yosys -V
 
       - name: Cache OpenSTA
