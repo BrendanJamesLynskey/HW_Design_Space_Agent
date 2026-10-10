@@ -57,11 +57,11 @@ The flow, per design
    stimulus, and it is labelled that way.
 
 Optional place and route (OpenROAD) is **not** part of this flow. OpenROAD
-was not installable here: there is no apt package for Ubuntu 24.04, the
-conda package comes from a commercial channel and needs Python <= 3.10 and an
-old Qt, and the container route needs a Docker daemon this environment does
-not run. Place and route would also need a per-design floorplan and power
-grid. The prebuilt release ``.deb`` packages, pinned by URL and SHA-256, are
+was not installed here: there is no apt package for Ubuntu 24.04, the conda
+build installs only through Anaconda's commercial ``defaults`` channel, and
+the container route needs a Docker daemon this environment does not run.
+Place and route would also need tech/cell LEFs, a floorplan and a power grid
+per design. The prebuilt release ``.deb`` packages, pinned by URL and SHA-256, are
 the route to try next. See the README.
 
 Every row is *measured (yosys <ver> + OpenSTA <ver>, sky130_fd_sc_hd,
