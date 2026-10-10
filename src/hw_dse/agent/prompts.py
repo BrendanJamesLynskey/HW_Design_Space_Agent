@@ -15,7 +15,7 @@ so the prompt can never drift from what the explorer actually supports.
 from __future__ import annotations
 
 from hw_dse.families import registry_table
-from hw_dse.spec import METRIC_HELP, SYSTEM_METRICS, Spec
+from hw_dse.spec import METRIC_HELP, SYSTEM_METRICS, TARGET_ONLY_METRICS, Spec
 
 SYSTEM = f"""You are the hardware architect in a design-space exploration loop for a
 CORDIC sin/cos unit on an Artix-7 FPGA.
@@ -50,9 +50,27 @@ Notes:
   registry are clamped by code.
 
 Metrics:
-""" + "\n".join(f"- {k}: {v}" for k, v in METRIC_HELP.items() if k not in SYSTEM_METRICS)
+""" + "\n".join(f"- {k}: {v}" for k, v in METRIC_HELP.items()
+                if k not in SYSTEM_METRICS and k not in TARGET_ONLY_METRICS["asic"])
 # (The system metrics are listed only for specs that have a system scenario,
-# below, so a milestone-2 spec gets exactly the milestone-2 prompt.)
+# below, so a milestone-2 spec gets exactly the milestone-2 prompt. The ASIC
+# metrics of milestone 4 are left out of it for the same reason: an FPGA spec's
+# prompt is byte-identical to milestones 1-3, which the replay tests check.)
+
+# Milestone 4: the same architect role for the ASIC target. Only the target,
+# the cost-model wording and the metric list differ; the registry, the goal and
+# the notes are the FPGA prompt's own text.
+SYSTEM_ASIC = (
+    SYSTEM.split("Metrics:")[0]
+    .replace("CORDIC sin/cos unit on an Artix-7 FPGA.",
+             "CORDIC sin/cos unit as an ASIC in the open sky130 standard-cell library\n(sky130_fd_sc_hd, typical corner).")
+    .replace("analytical cost model gives LUT/FF/Fmax estimates",
+             "analytical cost model gives cell-area/FF/Fmax estimates")
+    .replace("invent LUTs, FFs, Fmax", "invent area, gate counts, FFs, Fmax")
+    + "Metrics:\n"
+    + "\n".join(f"- {k}: {v}" for k, v in METRIC_HELP.items()
+                if k not in SYSTEM_METRICS and k not in TARGET_ONLY_METRICS["fpga"])
+)
 
 SYSTEM_L2_ADDENDUM = """
 This spec also has a SYSTEM scenario (milestone 3): the CORDIC sits in a system
@@ -70,7 +88,8 @@ of a burst. System metrics:
 def system_prompt(spec: Spec) -> str:
     """The architect's system prompt: :data:`SYSTEM`, plus the L2 addendum for a
     spec with a system scenario (milestone-2 specs get :data:`SYSTEM` unchanged)."""
-    return SYSTEM if spec.system is None else SYSTEM + "\n" + SYSTEM_L2_ADDENDUM
+    base = SYSTEM_ASIC if spec.target_kind == "asic" else SYSTEM
+    return base if spec.system is None else base + "\n" + SYSTEM_L2_ADDENDUM
 
 INTAKE = """Turn this natural-language request into a structured spec draft.
 Only record requirements the text actually states; leave the rest empty.

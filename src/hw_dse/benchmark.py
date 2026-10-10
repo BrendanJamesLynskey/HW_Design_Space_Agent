@@ -32,7 +32,7 @@ cost ~1 GB); only front designs are turned back into full records.
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
@@ -66,6 +66,7 @@ class Grid:
     power_norm: float
     activity: float
     cost_model: Any  # the model the columns were computed with (set by build_grid, the only constructor)
+    extra_area: dict[str, np.ndarray] = field(default_factory=dict)  # M4: ASIC area_um2 / gate_eq columns
 
     def __len__(self) -> int:
         return int(self.family.size)
@@ -122,6 +123,9 @@ class Grid:
         return cols
 
     def _base_metrics(self, thr: np.ndarray, f_op: np.ndarray) -> dict[str, np.ndarray]:
+        return {**self.extra_area, **self._fpga_or_common(thr, f_op)}
+
+    def _fpga_or_common(self, thr: np.ndarray, f_op: np.ndarray) -> dict[str, np.ndarray]:
         return {
             "luts": self.luts,
             "ffs": self.ffs,
@@ -147,7 +151,10 @@ def all_designs() -> list[ArchConfig]:
 
 
 def build_grid(verbose: bool = False, cost_model: Any = None) -> Grid:
-    """Every registry design under ``cost_model`` (default: the M1 calibration)."""
+    """Every registry design under ``cost_model`` (default: the M1 calibration).
+
+    With the ASIC model (milestone 4) the ``luts`` column is NaN and the
+    ``area_um2`` / ``gate_eq`` columns are filled (``Grid.extra_area``)."""
     t0 = time.time()
     cm = cost_model or default_cost_model()
     designs = all_designs()
@@ -155,6 +162,7 @@ def build_grid(verbose: bool = False, cost_model: Any = None) -> Grid:
     cols = {c: np.zeros(n, dtype=np.int16) for c in (*PARAM_COLS, "rounding")}
     fam = np.zeros(n, dtype=np.int8)
     f = {k: np.zeros(n) for k in ("luts", "ffs", "fmax", "rpc", "lat", "sw", "err", "rms", "bits")}
+    extra: dict[str, np.ndarray] = {}
     for i, a in enumerate(designs):
         est = cm.estimate(a)
         acc = accuracy(a.numerics)
@@ -167,7 +175,10 @@ def build_grid(verbose: bool = False, cost_model: Any = None) -> Grid:
         cols["rounding"][i] = 1 if nm.rounding == "round" else 0
         cols["k"][i] = a.k
         cols["m"][i] = a.m
-        f["luts"][i], f["ffs"][i] = est.area["luts"], est.area["ffs"]
+        f["luts"][i], f["ffs"][i] = est.area.get("luts", np.nan), est.area["ffs"]
+        for k in ("area_um2", "gate_eq"):
+            if k in est.area:
+                extra.setdefault(k, np.zeros(n))[i] = est.area[k]
         f["fmax"][i], f["rpc"][i], f["lat"][i] = est.fmax_mhz, a.results_per_cycle, a.latency_cycles
         f["sw"][i] = est.switching_resources
         f["err"][i], f["rms"][i], f["bits"][i] = acc.max_abs, acc.rms, acc.accuracy_bits
@@ -188,6 +199,7 @@ def build_grid(verbose: bool = False, cost_model: Any = None) -> Grid:
         power_norm=cm.power_norm,
         activity=cm.src["activity_factor"],
         cost_model=cm,
+        extra_area=extra,
     )
 
 

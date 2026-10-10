@@ -1,0 +1,50 @@
+Startpoint: _760_ (rising edge-triggered flip-flop clocked by clk)
+Endpoint: _764_ (rising edge-triggered flip-flop clocked by clk)
+Path Group: reg2reg
+Path Type: max
+
+    Delay      Time   Description
+-------------------------------------------------------------
+   0.0000    0.0000   clock clk (rise edge)
+   0.0000    0.0000   clock network delay (ideal)
+   0.0000    0.0000 ^ _760_/CLK (sky130_fd_sc_hd__dfxtp_1)
+   1.0524    1.0524 ^ _760_/Q (sky130_fd_sc_hd__dfxtp_1)
+   0.3574    1.4098 ^ _423_/Y (sky130_fd_sc_hd__nor3b_1)
+   0.0759    1.4857 v _428_/Y (sky130_fd_sc_hd__a21oi_1)
+   0.3758    1.8616 v _429_/X (sky130_fd_sc_hd__mux2_1)
+   0.3643    2.2259 v _437_/X (sky130_fd_sc_hd__maj3_1)
+   0.3888    2.6147 v _439_/X (sky130_fd_sc_hd__maj3_1)
+   0.3886    3.0033 v _441_/X (sky130_fd_sc_hd__maj3_1)
+   0.3877    3.3910 v _443_/X (sky130_fd_sc_hd__maj3_1)
+   0.3817    3.7728 v _444_/X (sky130_fd_sc_hd__maj3_1)
+   0.1925    3.9653 ^ _458_/Y (sky130_fd_sc_hd__a31oi_1)
+   0.0800    4.0453 v _461_/Y (sky130_fd_sc_hd__a21oi_1)
+   0.1851    4.2304 ^ _465_/Y (sky130_fd_sc_hd__a211oi_1)
+   0.0829    4.3134 v _466_/Y (sky130_fd_sc_hd__o21ai_0)
+   0.0000    4.3134 v _764_/D (sky130_fd_sc_hd__dfxtp_1)
+             4.3134   data arrival time
+
+  10.0000   10.0000   clock clk (rise edge)
+   0.0000   10.0000   clock network delay (ideal)
+   0.0000   10.0000   clock reconvergence pessimism
+            10.0000 ^ _764_/CLK (sky130_fd_sc_hd__dfxtp_1)
+  -0.2253    9.7747   library setup time
+             9.7747   data required time
+-------------------------------------------------------------
+             9.7747   data required time
+            -4.3134   data arrival time
+-------------------------------------------------------------
+             5.4613   slack (MET)
+
+
+Group                    Internal    Switching      Leakage        Total
+                            Power        Power        Power        Power (Watts)
+------------------------------------------------------------------------
+Sequential           2.433244e-04 2.071601e-05 4.725634e-10 2.640409e-04  77.3%
+Combinational        4.357648e-05 3.374948e-05 8.813539e-10 7.732683e-05  22.7%
+Clock                0.000000e+00 0.000000e+00 0.000000e+00 0.000000e+00   0.0%
+Macro                0.000000e+00 0.000000e+00 0.000000e+00 0.000000e+00   0.0%
+Pad                  0.000000e+00 0.000000e+00 0.000000e+00 0.000000e+00   0.0%
+------------------------------------------------------------------------
+Total                2.869009e-04 5.446549e-05 1.353915e-09 3.413677e-04 100.0%
+                            84.0%        16.0%         0.0%
