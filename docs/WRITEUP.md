@@ -1,15 +1,16 @@
 # HW Design Space Agent: final technical report (M1–M4)
 
-<!-- sources: eval/results.md docs/writeup_facts.json -->
-
 This is the project's closing report. It is built from the data committed in this
-repository; `tests/test_writeup.py` checks that every number below appears, at the printed
-precision, in the source files named under each heading. Where a section reports a loss, the
+repository. Every number below is a named fact that `scripts/writeup_facts.py` computes from
+the committed data or reads from one named cell of a generated report
+(`docs/writeup_facts.json`); each section declares its facts, and `tests/test_writeup.py`
+checks every printed number against them at the printed precision, and that a changed digit
+fails the check. Where a section reports a loss, the
 loss comes first.
 
 ## The question
 
-<!-- sources: eval/results.md -->
+<!-- facts: grid_designs budget_evals -->
 
 Can a language model make hardware design-space exploration better, if it is never allowed to
 produce a number? The running problem is a CORDIC sin/cos unit with four architecture families
@@ -37,7 +38,7 @@ function.
 
 ## The ladder
 
-<!-- sources: eval/results.md docs/writeup_facts.json eval/data/asic_calibration.md eval/data/l3_verification.csv -->
+<!-- facts: golden_exhaustive_angles l3_rtl_configurations l3_rtl_runs l3_rtl_mismatches l3_gate_runs l3_gate_mismatches formal_pass formal_jobs l4_points vivado_designs asic_calibration_points asic_validation_points -->
 
 ```mermaid
 flowchart TD
@@ -60,7 +61,7 @@ of the reference configuration; the generated RTL matched the golden model in
 
 ## Milestone 1: the architect is a good selector and a bad mapper
 
-<!-- sources: eval/results.md -->
+<!-- facts: m1.hv_rel.dds_250msps.* m1.hv_rel.low_area_control.* m1.regret.low_area_control.qwen m1.regret.low_area_control.nsga2 m1.infeasible_evals_min m1.infeasible_evals_max budget_evals m1.hv_gain_rule_pct -->
 
 **Loss first.** The M1 agent mapped the Pareto front far worse than plain NSGA-II on two of
 three feasible specs: its HV fraction relative to NSGA-II was 0.32, 0.87 and 0.46 on
@@ -76,14 +77,14 @@ all of this was weak by construction: five constants solved from two Vivado anch
 
 ## Milestone 2: climbing the ladder, and fixing the mapper in code
 
-<!-- sources: eval/results.md eval/data/l5_refit_vivado-2025.2.md -->
+<!-- facts: m2.coverage_reserve_pct m2.hv_rel.* m2.regret.* yosys_fpga_version vivado_version vivado_designs m2.viv_* m2.refit_points -->
 
 **The levers.** M2 added deterministic whole-curve levers: a 40% reserve the LLM's own rounds
 may not spend once something is feasible, a front-mapping round that code runs with whatever
 is left, and a `map_front` decision the LLM may choose. They were tuned offline by replaying
 the recorded M1 decisions, without spending anything. Live, the front-mapping gap closed:
-agent HV relative to NSGA-II went to 1.02, 1.08 and 1.09 on `dds_250msps` and 0.97, 1.02 and
-0.99 on `low_area_control`.
+agent HV relative to NSGA-II went to 1.02, 1.08 and 1.09 on `dds_250msps`, 0.97, 1.02 and
+0.99 on `low_area_control` and 1.04, 1.05 and 0.96 on `high_precision`.
 
 **Losses.** The selection lead mostly survived but not everywhere: DeepSeek's regret rose on
 `dds_250msps` (+2.2% to +7.6%) and `low_area_control` (+1.6% to +5.1%), and Qwen on
@@ -93,13 +94,13 @@ narrow to reach the accuracy target; the front-mapping round then never revisite
 **The measurements.** The open-source flow (Yosys 0.68 + nextpnr-xilinx on the anchors' part)
 and, later, Vivado 2025.2 on 14 generated designs showed what the two-anchor model gets wrong.
 Its known biases against Vivado are `pipelined` Fmax low by 15–17%, `iterative` Fmax high by
-14–15%, and `unrolled_k` LUTs low by 37–40% at k = 3–4. A refit on 51 points was no better on
+14–16%, and `unrolled_k` LUTs low by 37–40% at k = 3–4. A refit on 51 points was no better on
 unseen Vivado points than the untouched M1 model, so the default never changed, and no spec's
 ground-truth winner moved under the refit.
 
 ## Milestone 3: the design in a system, and an LLM outer loop that gained nothing
 
-<!-- sources: eval/results.md docs/writeup_facts.json -->
+<!-- facts: m3.l2_traces m3.l2_traces_identical m3.l2_clock_edges m3.multiaxis.* m3.structured_runs m3.l2_reselect_structured m3.l2_reselect_campaign m3.campaigns m3.campaigns_single_run_dse_400 budget_evals m3.campaign_cost_ratio.* m3.qwen_campaign_failed m3.qwen_campaigns -->
 
 **L2.** A cycle-accurate model of each family's interface contract matched the generated RTL
 on 48/48 bursty traces (28,424 clock edges). SimPy models put the unit in a DDS, a control loop
@@ -107,7 +108,7 @@ and a bursty stream. On `multiaxis_control` only the simulation finds the winner
 designs pass the L1 bound, 51,244 the simulation, and the bound's winner misses the batch
 deadline. On `bursty_offload` a peak-rate floor would have done as well, and the DDS spec
 reduced to the throughput-only view. In the live runs L2 changed the L1 selection in 0 of 30
-structured runs.
+structured runs and in 4 of 65 campaign runs, all on `multiaxis_control`.
 
 **The campaign agent (loss).** An outer agent on LangChain Deep Agents could call the
 structured graph, single NSGA-II studies, the L2–L5 rungs and a memory. In 52 of 65 campaigns
@@ -121,26 +122,30 @@ experimental and off by default.
 
 ### An ASIC target on sky130
 
-<!-- sources: eval/data/asic_calibration.md eval/data/asic_synthesis.csv eval/data/ground_truth_m4.json eval/results.md docs/writeup_facts.json -->
+<!-- facts: asic.yosys_version asic.opensta_version asic.corner_temp_c asic.corner_v asic.clock_ns asic_calibration_points asic.loo_rms.area asic.loo_rms.ffs asic.loo_rms.fmax asic.loo_rms.power asic.loo_area.unrolled_k asic.loo_fmax.pipelined asic.loo_fmax.unrolled_k asic.loo_one_adder_area asic.t_bit_ns asic.power.* asic.multiaxis.winner_m asic.multiaxis.twin_m asic.multiaxis.deadline_us asic.low_area.* asic_area_ratio_pipelined_over_iterative_w16 anchor_w anchor_n asic.multiaxis.l1_bound_feasible asic.multiaxis.sim_feasible -->
 
 **The flow.** The same generated RTL goes through Yosys 0.33 and OpenSTA 3.1.0 against the
 `sky130_fd_sc_hd` library at its typical corner (25 °C, 1.80 V), with a 10 ns clock:
 cell area, flip-flops, the register-to-register path with the library's wire-load model, and
 vectorless power. There is no placement: these are post-synthesis numbers, the ASIC
-counterpart of the Vivado anchors, not of nextpnr's routed timing. OpenROAD could be installed
-only through a commercial conda channel and needs a per-design floorplan and power grid, so
-place and route stayed out of scope.
+counterpart of the Vivado anchors, not of nextpnr's routed timing. OpenROAD was not installed: it
+has no apt package for this Ubuntu, its conda build installs only through a commercial
+channel, there is no Docker daemon for the container, and it would need a floorplan and power
+grid per design, so place and route stayed out of scope.
 
 **The model.** The FPGA model's structural counts, re-weighted for standard cells and fitted
 to 57 synthesised designs. Leave-one-out RMS error: area 8.7%, flip-flops 4.6%, Fmax 10.6%,
-power against OpenSTA 5.8%; per family the worst is `unrolled_k` (area 12.8%, Fmax 12.5%).
+power against OpenSTA 5.8%. Per family, the worst area error is `unrolled_k`'s (12.8%) and the
+worst Fmax error `pipelined`'s (12.9%, with `unrolled_k` at 12.5%).
 One adder constant for every family fitted badly (14.8% on area); the FSM families needed
 their own. The fitted adder delay is linear in width, about 0.29 ns per bit: Yosys's default
 adder mapping ripples, which makes chained rotations expensive on this target.
 
-**Does the family ranking differ from the FPGA? No.** Three ASIC specs, each with an FPGA twin
-(the same constraints with area in LUTs + FFs, on the FPGA ground truth), rank the families in
-the same order on both targets. What moves is the best configuration inside a family. At
+**Does the family ranking differ from the FPGA? No, on thin evidence.** Three ASIC specs,
+each with an FPGA twin (the same constraints with area in LUTs + FFs, on the FPGA ground
+truth), rank the families in the same order on both targets. Only `asic_low_area` ranks all
+four families; on the other two only the pipelined families meet the rate, so each is a
+single pairwise comparison (`pipelined_m` ahead of `pipelined`). What moves is the best configuration inside a family. At
 50 MSPS the ASIC winner is `pipelined_m` with m=3 where the FPGA twin's is m=7; under the
 0.5 µs batch deadline of `asic_multiaxis_control` it is m=2 where the FPGA's is m=5. The slow
 ripple adders force shallower pipelining. The gaps shrink too: `pipelined` costs 4.17× the
@@ -153,7 +158,7 @@ simulation.
 
 ### The held-out check: where the ASIC model is wrong
 
-<!-- sources: eval/results.md eval/data/asic_validation.csv -->
+<!-- facts: asic.ho.fmax_* asic.ho.area_* asic.ho.multiaxis_* asic.ho.pipelined_* asic.ho.twin_* asic.power.twin_m asic.power.rate_msps -->
 
 **Loss first.** Nine ground-truth designs that the fit never saw (each spec's per-family optima,
 the FPGA twins' optima, the L1-bound pick) were synthesised. Area is within 5% on all nine; Fmax
@@ -161,12 +166,13 @@ is not, from −14.9% to +39.6%, the worst an `unrolled_k` design. Two consequen
 twin's m=7 winner for `asic_power_50msps` runs at 26.7 MHz on sky130 and cannot make 50 MSPS.
 And the model's winner for `asic_multiaxis_control` measures 72.2 MHz against an estimate of
 82.5 and then misses its deadline; of the nine, only plain `pipelined` W=17, N=14 (119.1 MHz)
-meets that spec with measured numbers. The ASIC back-annotation node flags exactly this case.
-It does not re-explore, because the default ASIC model is already the fit to every measurement.
+meets that spec with measured numbers. The ASIC back-annotation node flags exactly this case,
+but it does not re-explore: there is no ASIC L5 loop yet, and the nine held-out designs were
+kept out of the fit so that they remain a test.
 
 ### ASIC specs: the structured graph against the baselines
 
-<!-- sources: eval/results.md -->
+<!-- facts: asic.runs_per_model asic.regret.*.nsga2 asic.regret.*.sonnet asic.regret.*.deepseek asic.regret.*.qwen asic.regret_std.asic_power_50msps.nsga2 asic.hv.*.nsga2 asic.hv.*.sonnet asic.hv.*.deepseek asic.hv.*.qwen asic.multiaxis.regret_min asic.multiaxis.regret_max asic.l2_changed.sonnet -->
 
 Five seeds of the structured graph per model on the three ASIC specs, against NSGA-II and
 random search with the same budget (all scored on the ASIC ground truth, the system spec on
@@ -181,8 +187,10 @@ simulated feasibility). Every selected design met its spec (15/15 per model).
 The M2 pattern carries to the new target where the selection rule has a corner to aim at:
 on the power-driven spec every model's regret is a fraction of NSGA-II's (+54.0% ± 36.1):
 the architects narrow onto the pipelining depth that the selection rule rewards, where
-NSGA-II's union search keeps sampling every family. HV is at NSGA-II's level, not above it
-(0.754–0.794 against 0.812 on `asic_power_50msps`). **Loss:** on `asic_multiaxis_control`
+NSGA-II's union search keeps sampling every family. HV is lower than NSGA-II's on that spec
+(0.754–0.794 against 0.812), level with it on `asic_low_area` for Sonnet and DeepSeek (0.925
+and 0.923 against 0.922, Qwen 0.859) and between 0.820 and 0.864 against 0.837 on
+`asic_multiaxis_control`. **Loss:** on `asic_multiaxis_control`
 nobody gets close: NSGA-II and the three models all land 17.9–25.1% above the true winner,
 whose trick (two more iterations for a narrower angle path and a faster clock) sits in a
 corner the bound hides. L2 changed the L1 pick in 2 Sonnet runs.
@@ -241,7 +249,7 @@ machine running Qwen single-graph runs back to back would evaluate 605,084 desig
 
 ### L2 → L1 feedback
 
-<!-- sources: eval/data/l2_feedback_m4.json docs/writeup_facts.json -->
+<!-- facts: l2f.* l2f_v1.* budget_evals -->
 
 When L2 rejects every L1-feasible design of a run, the run spent its budget where the bound
 was wrong. The feedback measures the bound's error on every simulated design, fits a monotone
@@ -251,14 +259,19 @@ bound.
 
 It never fires on the committed specs: 0 of 92 recorded searches (M3 structured runs rebuilt
 from their archived evaluations, M3 campaign pools, NSGA-II and random on every system spec)
-and 0 of 50 live M4 runs found an L1-feasible set that L2 rejected whole. A spec was
-constructed where it does: bursts of 32 requests at 130 MS/s with p99 latency ≤ 0.4 µs.
-61,461 designs pass the bound and 447 pass the simulation, all plain `pipelined`; the cheaper
-`pipelined_m` designs the area objective prefers pass the bound and queue in simulation. It
-fired in 6 of 15 searches of 400 evaluations (NSGA-II, random and the rule-based architect),
-and the correction recovered a passing design in 6 of 6 (regret +19.5% ± 12.1 against the
-true winner). The ablation, the same re-exploration budget screened with the uncorrected bound,
-recovered in 2 of 6: it is the correction, not the extra evaluations.
+and 0 of 75 live M4 runs found an L1-feasible set that L2 rejected whole. A spec was
+constructed where it does: bursts of 32 requests at 130 MS/s, a sustained throughput floor of
+130 MS/s and p99 latency ≤ 0.4 µs. 37,882 designs pass the bound and 447 pass the simulation,
+all plain `pipelined`; the cheaper `pipelined_m` designs the area objective prefers pass the
+bound and queue in simulation. Of 15 searches of 400 evaluations (5 each of NSGA-II, random
+and the rule-based architect) it fired in 3, all random search: NSGA-II and the architect
+found one of the few passing designs on their own. The correction recovered a passing design
+in 3 of 3 (regret +17.3% ± 11.0 against the true winner); the ablation, the same
+re-exploration budget screened with the uncorrected bound, recovered in 1 of 3. That is
+evidence for the correction over the extra evaluations, on three cases.
+
+(The first version of this spec had a throughput floor of 1 MS/s; against a 130 MS/s stream
+that was a strawman, and with it the feedback fired in 6 of 15 searches.)
 
 ## The A/Bs, together
 
@@ -267,7 +280,7 @@ recovered in 2 of 6: it is the correction, not the extra evaluations.
 | A/B | milestone | result |
 |---|---|---|
 | LLM architect vs NSGA-II and random, 400 evaluations | M1 | better selection (lower regret on 8 of 9 model × spec cells), much worse front mapping |
-| the same, with code levers for the front | M2 | front mapping at parity (0.97–1.09 of NSGA-II's HV); the selection lead mostly kept |
+| the same, with code levers for the front | M2 | front mapping at parity (0.96–1.09 of NSGA-II's HV); the selection lead mostly kept |
 | structured graph vs an LLM campaign agent on top | M3 | no gain; 1.44–2.25× the cost; Qwen failed 4 of 30 |
 | memory on vs off (campaign agent) | M3 | no benefit visible at three seeds |
 | structured graph vs a code-orchestrated fleet, equal budget | M4 | the single graph has higher HV for every model; regret mixed; the fleet costs 1.4–1.6× |
@@ -285,7 +298,7 @@ comparisons are therefore made only between arms run in the same session.
 
 ## Limitations
 
-<!-- sources: eval/results.md eval/data/asic_calibration.md -->
+<!-- facts: fpga.fmax_err_vs_vivado_max asic.loo_rms.fmax asic.ho.fmax_err_max asic.clock_ns infeasible.rate_msps -->
 
 * **Every ground truth is a model's.** The FPGA one is the two-anchor M1 model, kept fixed so
   that four milestones are scored on the same answer; the ASIC one is the fitted sky130 model.
@@ -293,14 +306,17 @@ comparisons are therefore made only between arms run in the same session.
   10.6% leave-one-out and up to +39.6% on a held-out design), and specs whose winner sits
   closer to a constraint than that are only as settled as a measurement makes them.
 * **Post-synthesis timing on the ASIC**, one corner, a wire-load model, no buffering or
-  sizing, no clock tree, no place and route; ripple adders from Yosys's default mapping. A
+  sizing, no clock tree, no place and route; ripple adders from Yosys's default mapping. ABC
+  maps to a relaxed 10 ns delay target (`abc -D 10000`) with area recovery, so the Fmax
+  figures are those of an area-oriented netlist, not the fastest one the library allows. OpenSTA reports no clock
+  power (there is no clock tree to power), so the power numbers miss the clock network. A
   commercial flow would change the absolute numbers and could change the within-family
   optimum again.
 * **Power is a toggle-rate model everywhere.** On the FPGA nothing was measured (the
   `report_power` export is ready); on the ASIC the index reproduces OpenSTA's vectorless power,
   which assumes uniform activity.
 * **Small samples.** Five seeds per model and spec, two or three models, a handful of specs.
-  Day-to-day provider drift is visible in the data (below), so arms are compared only within
+  Day-to-day provider drift is visible in the data (above), so arms are compared only within
   one session.
 * **Single-lane designs only**; the 400 MSPS spec is infeasible by construction of the registry.
 * **The L2 → L1 feedback never fired on the committed specs**; its evidence is one
@@ -308,12 +324,13 @@ comparisons are therefore made only between arms run in the same session.
 
 ## What I would do next
 
-<!-- sources: eval/results.md -->
+<!-- facts: hp.vivado_constraint_ns hp.m infeasible.rate_msps -->
 
 1. Run the two Vivado exports locally: `high_precision` at a 20 ns constraint settles the
    post-synthesis view of m=8 and with it the deferred per-family-class path factor; the
    `report_power` run is the first measured FPGA power.
-2. Place and route on sky130 (OpenROAD) for the held-out designs, to see whether the ASIC
+2. Place and route on sky130 (OpenROAD, from its prebuilt release packages pinned by URL and
+   SHA-256, or a container image pinned by digest) for the held-out designs, to see whether the ASIC
    model's Fmax error is the wire-load model or the structure.
 3. Refit the ASIC model with the held-out points and an `unrolled_k` chain term, and add an
    ASIC L5 loop that re-explores under it, as the FPGA path does.
