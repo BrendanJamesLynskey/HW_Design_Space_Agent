@@ -12,7 +12,7 @@ as the L5 refit of the FPGA model is.
 What it estimates
 -----------------
 * **area** in um^2 (the sum of cell areas, as Yosys ``stat -liberty``
-  reports it) and in **gate equivalents** (area / NAND2_X1 area, 3.7536 um^2);
+  reports it) and in **gate equivalents** (area / the area of ``sky130_fd_sc_hd__nand2_1``, 3.7536 um^2);
 * **flip-flops**, the number of flip-flop cells;
 * the **critical path** (register to register, post-synthesis, the
   library's wire-load model) and Fmax = 1000 / path;
@@ -21,7 +21,8 @@ What it estimates
   reference ``iterative`` W=16 N=14 at 100 MHz = 1.0. Here the switching
   resources are a weighted sum of flip-flops and area whose weights are
   fitted to OpenSTA's vectorless ``report_power``. That makes the index a
-  faithful copy of *that* tool's estimate (0.6% RMS), which is itself only a
+  close copy of *that* tool's estimate (RMS error 5.3% in-sample, 5.8%
+  leave-one-out), which is itself only a
   toggle-rate model: it is a ranking aid with no unit, never watts.
 
 Structure (no constants in here)

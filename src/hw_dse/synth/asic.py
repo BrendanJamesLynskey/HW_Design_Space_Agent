@@ -16,8 +16,8 @@ default for sky130, at the **typical corner tt_025C_1v80** (TT process,
 file is public and small enough to fetch in CI (12.8 MB), and Yosys and
 OpenSTA read it directly. The file is pinned to a commit of
 OpenROAD-flow-scripts and checked by SHA-256 (:data:`LIB_SHA256`); the
-Google sky130 repositories ship only per-corner JSON, not merged ``.lib``
-files.
+upstream sky130 PDK repositories ship only per-corner JSON, not merged
+``.lib`` files.
 
 Cells marked do-not-use
 -----------------------
@@ -56,10 +56,13 @@ The flow, per design
    tool's estimate from a toggle-rate assumption, not a simulation of real
    stimulus, and it is labelled that way.
 
-Optional place and route (OpenROAD) is **not** part of this flow: OpenROAD
-was not installable natively here (no package for Ubuntu 24.04 in apt; the
-conda package needs Python <= 3.10 and an old Qt; the container route needs
-a Docker daemon this environment does not run). See the README.
+Optional place and route (OpenROAD) is **not** part of this flow. OpenROAD
+was not installable here: there is no apt package for Ubuntu 24.04, the
+conda package comes from a commercial channel and needs Python <= 3.10 and an
+old Qt, and the container route needs a Docker daemon this environment does
+not run. Place and route would also need a per-design floorplan and power
+grid. The prebuilt release ``.deb`` packages, pinned by URL and SHA-256, are
+the route to try next. See the README.
 
 Every row is *measured (yosys <ver> + OpenSTA <ver>, sky130_fd_sc_hd,
 tt_025C_1v80)*, stored with its command lines in
@@ -363,7 +366,7 @@ COLUMNS = (
     "clock_ns", "command", "source_log", "notes",
 )
 """Columns of ``eval/data/asic_synthesis.csv``. ``area_um2``: Yosys ``stat
--liberty`` cell area; ``gate_eq``: area / NAND2_X1 area; ``ffs``: flip-flop
+-liberty`` cell area; ``gate_eq``: area / ``nand2_1`` area; ``ffs``: flip-flop
 cells; ``critical_path_ns``/``fmax_mhz``: OpenSTA worst reg-to-reg path at the
 ``clock_ns`` constraint, wire-load model, no placement; ``power_*``: OpenSTA
 ``report_power`` at ``clock_ns``, vectorless (``power_kind`` says how)."""
