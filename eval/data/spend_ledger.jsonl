@@ -345,3 +345,7 @@
 {"model": "anthropic/claude-sonnet-5.5", "spec": "asic_multiaxis_control", "seed": 2, "cost_usd": 0.14728, "arm": "fleet", "ts": "2026-10-10T20:55:36", "milestone": "m4"}
 {"model": "anthropic/claude-sonnet-5.5", "spec": "asic_multiaxis_control", "seed": 3, "cost_usd": 0.151252, "arm": "fleet", "ts": "2026-10-10T20:56:28", "milestone": "m4"}
 {"model": "anthropic/claude-sonnet-5.5", "spec": "asic_multiaxis_control", "seed": 4, "cost_usd": 0.149116, "arm": "fleet", "ts": "2026-10-10T20:57:19", "milestone": "m4"}
+{"model": "qwen/qwen3.8-27b", "spec": "asic_low_area", "seed": 0, "cost_usd": 0.0120115595, "arm": "fleet", "ts": "2026-10-10T22:30:58", "milestone": "m4", "note": "v2"}
+{"model": "qwen/qwen3.8-27b", "spec": "asic_power_50msps", "seed": 0, "cost_usd": 0.009990035, "arm": "fleet", "ts": "2026-10-10T22:32:45", "milestone": "m4", "note": "v2"}
+{"model": "qwen/qwen3.8-27b", "spec": "asic_multiaxis_control", "seed": 0, "cost_usd": 0.0112748268, "arm": "fleet", "ts": "2026-10-10T22:34:40", "milestone": "m4", "note": "v2"}
+{"model": "qwen/qwen3.8-27b", "spec": "low_area_control", "seed": 0, "cost_usd": 0.008572702, "arm": "fleet", "ts": "2026-10-10T22:36:37", "milestone": "m4", "note": "v2"}

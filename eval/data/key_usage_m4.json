@@ -49,6 +49,12 @@
    "usage_usd": 11.645907149,
    "limit_usd": 15,
    "limit_remaining_usd": 3.3540928510000008
+  },
+  "before_fleet_v2_qwen": {
+   "ts": "2026-10-10T22:29:38Z",
+   "usage_usd": 11.645907149,
+   "limit_usd": 15,
+   "limit_remaining_usd": 3.3540928510000008
   }
  }
 }
