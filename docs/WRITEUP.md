@@ -115,7 +115,7 @@ ground-truth winner moved under the refit.
 
 ## Milestone 3: the design in a system, and an LLM outer loop that gained nothing
 
-<!-- facts: m3.l2_traces m3.l2_clock_edges m3.multiaxis.l1_bound_feasible
+<!-- facts: m3.l2_traces_identical m3.l2_traces m3.l2_clock_edges m3.multiaxis.l1_bound_feasible
      m3.multiaxis.sim_feasible m3.l2_reselect_structured m3.structured_runs
      m3.l2_reselect_campaign m3.campaigns m3.campaigns_single_run_dse_400 m3.campaigns
      budget_evals m3.campaign_cost_ratio.qwen m3.campaign_cost_ratio.deepseek
@@ -203,7 +203,7 @@ kept out of the fit so that they remain a test.
 
 ### ASIC specs: the structured graph against the baselines
 
-<!-- facts: asic.runs_per_model asic.regret.asic_low_area.nsga2
+<!-- facts: asic.meets_per_model_min asic.runs_per_model asic.regret.asic_low_area.nsga2
      asic.regret.asic_low_area.sonnet asic.regret.asic_low_area.deepseek
      asic.regret.asic_low_area.qwen asic.regret.asic_power_50msps.nsga2
      asic.regret.asic_power_50msps.sonnet asic.regret.asic_power_50msps.deepseek
@@ -273,7 +273,7 @@ corner the bound hides. L2 changed the L1 pick in 2 Sonnet runs.
      ab.paired.qwen.fleet_v2.regret.pairs ab.paired.qwen.fleet_v2.regret.sign_p
      ab.paired.qwen.fleet_v2.regret.mean_diff ab.paired.qwen.fix_effect.regret.mean_diff
      ab.paired.qwen.fix_effect.regret.t_p ab.qwen.fleet.cost_ratio ab.deepseek.fleet.cost_ratio
-     ab.sonnet.fleet.cost_ratio ab.qwen.fleet.failed_calls_qd ab.qwen.single.failed_calls_qd
+     ab.sonnet.fleet.cost_ratio ab.qwen.fleet.failed_calls_qd ab.qwen.single.failed_calls_qd ab.qwen.fleet_v2.failed_calls ab.qwen.fleet.failed_calls
      ab.qd.fleet.fsm_evals budget_evals ab.qwen.single_fsm_evals_vs_fleet
      ab.deepseek.single_fsm_evals_vs_fleet ab.sonnet.fleet.fsm_evals
      ab.sonnet.single_fsm_evals_vs_fleet ab.qwen.fleet.fsm_declared_infeasible
@@ -337,7 +337,13 @@ points on average, not significantly (p = 0.21). DeepSeek and Sonnet show no reg
 much per spec. Wall-clock is noisy (provider latency dominates; the arms ran at different
 times); the first fleet was slower for every model, the fixed one less so. No run in any arm
 failed to produce a spec-meeting design; the first fleet had more failed (retried) LLM
-calls, 17 against 3 over the Qwen and DeepSeek arms.
+calls, 17 against 3 over the Qwen and DeepSeek arms, and the fixed Qwen fleet had 0 (against
+7 before the fix).
+
+**A confound.** The fixed fleet ran hours after the single arm it is paired with, so provider
+drift (see below: large for Qwen) may affect the quality comparison as well as the
+wall-clock. Its regret is lower than the single graph's on every one of the five specs, which
+a uniform drift would not explain on its own, but the comparison is not same-session.
 
 What the records show, and what they do not. The fleet spends more of its budget on the
 FSM families than a single graph does: on average 180 of 400 evaluations for the Qwen and
@@ -458,8 +464,9 @@ comparisons are therefore made only between arms run in the same session.
 2. Place and route on sky130 (OpenROAD, from its prebuilt release packages pinned by URL and
    SHA-256, or a container image pinned by digest) for the held-out designs, to see whether the ASIC
    model's Fmax error is the wire-load model or the structure.
-3. Refit the ASIC model with the held-out points and an `unrolled_k` chain term, and add an
-   ASIC L5 loop that re-explores under it, as the FPGA path does.
+3. An ASIC measure-and-re-explore loop: synthesise the selected designs, re-select under the
+   measured numbers, as the FPGA path's L5 loop does. Then decide whether to refit with an
+   `unrolled_k` chain term, disclosed, keeping the held-out points held out.
 4. Multi-lane and polyphase families, so that the 400 MSPS spec has an answer.
 5. Treat provider drift as a first-class measurement: pin model snapshots where the provider
    allows it, and re-run a fixed reference set each session before comparing arms.
