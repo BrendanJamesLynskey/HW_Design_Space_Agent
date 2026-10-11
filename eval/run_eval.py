@@ -496,6 +496,9 @@ def cmd_report(_: argparse.Namespace) -> None:
                      f"HV {_ms([r['hv_frac']])}; run `{r['run_dir']}`")
         L.append("")
     report_m3(L)
+    from m4 import report_m4  # milestone 4 (eval/m4.py); appended, M1-M3 sections untouched
+
+    report_m4(L)
     RESULTS.write_text("\n".join(L) + "\n")
     print(f"wrote {RESULTS}")
 
@@ -983,6 +986,9 @@ def main() -> None:
         p3.add_argument("--max-spend", type=float, default=M3_CAP, help="M3 spend cap (USD) from the ledger")
         p3.add_argument("--expected-cost", type=float, default=0.10)
         p3.set_defaults(fn=fn)
+    from m4 import register as register_m4  # milestone 4 subcommands (eval/m4.py)
+
+    register_m4(sub)
     args = ap.parse_args()
     args.fn(args)
 

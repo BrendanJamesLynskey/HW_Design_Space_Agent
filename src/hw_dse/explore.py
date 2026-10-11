@@ -151,6 +151,7 @@ def _run(
     tag: dict[str, object],
     seeds: list[tuple[dict[str, ParamValue], dict[str, Range]]] | None = None,
     cost_model: object | None = None,
+    transform: Callable[[EvalRecord], EvalRecord] | None = None,
 ) -> list[EvalRecord]:
     directions = ["minimize" if o.direction == "min" else "maximize" for o in spec.objectives]
     study = optuna.create_study(directions=directions, sampler=_make_sampler(sampler, seed, n_trials))
@@ -161,6 +162,8 @@ def _run(
     def objective(trial: optuna.Trial) -> tuple[float, ...]:
         arch = design_of(trial)
         rec = evaluate(arch, spec, cost_model)  # type: ignore[arg-type]
+        if transform is not None:  # M4: e.g. the L2 -> L1 feedback's corrected system bounds
+            rec = transform(rec)
         rec.update(tag)
         rec["trial"] = trial.number
         records.append(rec)
@@ -189,13 +192,16 @@ def run_family_study(
     tag: dict[str, object] | None = None,
     seed_designs: list[dict[str, ParamValue]] | None = None,
     cost_model: object | None = None,
+    transform: Callable[[EvalRecord], EvalRecord] | None = None,
 ) -> list[EvalRecord]:
     """NSGA-II (default) over one family inside ``box``.
 
     ``seed_designs`` (parameter dicts of this family, already evaluated
     earlier in the run) warm-start NSGA-II; see :func:`_seed_study`.
     ``cost_model`` (default: the M1 calibration) lets the L5 re-exploration
-    search under a refitted calibration.
+    search under a refitted calibration. ``transform`` (milestone 4) rewrites
+    each record before its feasibility reaches NSGA-II (the L2 -> L1 feedback
+    uses it to screen with empirically corrected system bounds).
     """
     if family not in REGISTRY:
         raise KeyError(family)
@@ -207,7 +213,7 @@ def run_family_study(
 
     seeds = [({**d, "family": family}, box) for d in (seed_designs or [])]
     return _run(spec, n_trials, seed, sampler, design_of, {"source": f"study:{family}", **(tag or {})}, seeds,
-                cost_model=cost_model)
+                cost_model=cost_model, transform=transform)
 
 
 def union_box() -> dict[str, Range]:

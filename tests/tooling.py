@@ -11,6 +11,7 @@ failure so a broken install can never pass silently:
 ``HW_DSE_REQUIRE_FORMAL=1`` SymbiYosys + Yosys + a solver (formal checks)
 ``HW_DSE_REQUIRE_GATE=1``  Yosys + Icarus (gate-level simulation)
 ``HW_DSE_REQUIRE_CAMPAIGN=1`` deepagents installed (campaign tests; Python >= 3.11)
+``HW_DSE_REQUIRE_ASIC=1``  Yosys + OpenSTA + the sky130hd liberty (milestone 4)
 =========================  ===================================================
 
 ``HW_DSE_L3_FULL=1`` additionally runs the full L3 sweep (minutes, CI only).

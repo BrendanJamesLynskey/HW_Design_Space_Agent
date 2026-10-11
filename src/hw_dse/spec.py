@@ -51,6 +51,9 @@ MetricName = Literal[
     "max_abs_err",
     "rms_err",
     "accuracy_bits",
+    # Milestone 4: the ASIC target's area metrics (sky130_fd_sc_hd).
+    "area_um2",
+    "gate_eq",
     # Milestone 3: system-level metrics of the spec's `system` scenario.
     "sys_throughput_msps",
     "sys_p50_latency_us",
@@ -68,6 +71,19 @@ SYSTEM_METRICS: tuple[str, ...] = (
     "sys_utilisation", "sys_max_queue", "sys_sfdr_dbc", "sys_snr_db",
 )
 """Metrics that exist only for a spec with a ``system`` scenario (L2)."""
+
+TARGETS: dict[str, str] = {
+    "fpga-artix7": "fpga",
+    "asic-sky130hd": "asic",
+}
+"""Implementation targets (milestone 4 adds the ASIC one) and the cost-model
+family each uses (:func:`hw_dse.evaluate.cost_model_for`)."""
+
+TARGET_ONLY_METRICS: dict[str, tuple[str, ...]] = {
+    "fpga": ("luts", "luts_plus_ffs"),
+    "asic": ("area_um2", "gate_eq"),
+}
+"""Area metrics that exist on one target only (FFs exist on both)."""
 
 SYSTEM_CONSTRAINABLE: dict[str, str] = {
     "sys_throughput_msps": ">=",
@@ -94,6 +110,8 @@ METRIC_HELP: dict[str, str] = {
     "max_abs_err": "max |error| vs ideal sin/cos, absolute (exact)",
     "rms_err": "RMS error, absolute (exact)",
     "accuracy_bits": "-log2(max_abs_err) (exact)",
+    "area_um2": "ASIC: estimated standard-cell area in um^2 (sky130_fd_sc_hd)",
+    "gate_eq": "ASIC: estimated area in NAND2 gate equivalents (area / 3.7536 um^2)",
     "sys_throughput_msps": "system: results per microsecond the system actually gets (L1 bound, L2 simulated)",
     "sys_p50_latency_us": "system: median request latency, arrival to result, in us (L1 bound, L2 simulated)",
     "sys_p99_latency_us": "system: 99th-percentile request latency in us (L1 bound, L2 simulated)",
@@ -237,7 +255,7 @@ class Spec(BaseModel):
     name: str = Field(pattern=r"^[a-z0-9_\-]+$")
     description: str = ""
     function: Literal["sincos"] = "sincos"
-    target: Literal["fpga-artix7"] = "fpga-artix7"
+    target: Literal["fpga-artix7", "asic-sky130hd"] = "fpga-artix7"
     constraints: list[Constraint] = Field(default_factory=list)
     objectives: list[Objective] = Field(min_length=1, max_length=3)
     select_by: MetricName
@@ -260,9 +278,20 @@ class Spec(BaseModel):
             if c.metric in SYSTEM_METRICS and SYSTEM_CONSTRAINABLE.get(c.metric) != c.op:
                 raise ValueError(f"system constraint {c} must use {SYSTEM_CONSTRAINABLE.get(c.metric, 'no')} "
                                  "(the direction its L1 bound is optimistic in)")
+        kind = TARGETS[self.target]
+        used = [*names, self.select_by, *(c.metric for c in self.constraints)]
+        for other, metrics in TARGET_ONLY_METRICS.items():
+            bad = sorted({m for m in used if m in metrics}) if other != kind else []
+            if bad:
+                raise ValueError(f"{bad} exist only on the {other} target; this spec targets {self.target}")
         if self.budget.evals_per_round > self.budget.total_evals:
             raise ValueError("evals_per_round exceeds total_evals")
         return self
+
+    @property
+    def target_kind(self) -> str:
+        """``"fpga"`` or ``"asic"``."""
+        return TARGETS[self.target]
 
     def constraint_for(self, metric: str, op: str) -> Constraint | None:
         for c in self.constraints:
@@ -293,6 +322,8 @@ class Spec(BaseModel):
 
     def summary(self) -> str:
         lines = [f"spec {self.name}: {self.description.strip()}"]
+        if self.target != "fpga-artix7":  # (the FPGA summary is unchanged from M1-M3: replayed prompts depend on it)
+            lines.append(f"  target: {self.target}")
         lines += [f"  constraint: {c}" for c in self.constraints]
         lines += [f"  objective: {o.direction} {o.metric} (HV ref {o.ref:g})" for o in self.objectives]
         lines.append(f"  select: {self.select_direction} {self.select_by}")

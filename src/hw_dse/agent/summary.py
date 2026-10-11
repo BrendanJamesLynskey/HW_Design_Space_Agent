@@ -93,6 +93,7 @@ def summarise(
     hv_prev: float | None,
     explored: list[str],
     final_round: bool,
+    universe: list[str] | None = None,
 ) -> tuple[str, dict[str, Any]]:
     """Compact text summary for the LLM, plus a context dict for fakes/routing."""
     n = len(records)
@@ -107,9 +108,14 @@ def summarise(
     L.append(f"Hypervolume of the feasible front: {hv:.4g} (gain this round: {gain_txt}).")
     L.append(f"Feasible designs: {len(feas)} of {n} evaluations ({len({r['key'] for r in feas})} unique).")
     L.append(f"Families explored so far: {', '.join(explored)}. Not yet explored: "
-             f"{', '.join(f for f in REGISTRY if f not in explored) or 'none'}.")
-    L.append("Provenance: LUTs/FFs/Fmax/throughput/power are cost-model ESTIMATES (Artix-7, 2-anchor calibration); "
-             "errors/accuracy bits are EXACT (bit-accurate model).")
+             f"{', '.join(f for f in (universe or REGISTRY) if f not in explored) or 'none'}.")
+    if spec.target_kind == "asic":
+        L.append("Provenance: area/gate equivalents/FFs/Fmax/throughput/power are cost-model ESTIMATES (sky130 "
+                 "standard cells, calibrated on Yosys + OpenSTA synthesis); errors/accuracy bits are EXACT "
+                 "(bit-accurate model).")
+    else:
+        L.append("Provenance: LUTs/FFs/Fmax/throughput/power are cost-model ESTIMATES (Artix-7, 2-anchor calibration); "
+                 "errors/accuracy bits are EXACT (bit-accurate model).")
 
     L.append("\nConstraints (fraction of evaluations violating; best value any design achieved):")
     for c in spec.constraints:
@@ -122,7 +128,8 @@ def summarise(
     if front:
         L.append(f"\nPareto front (feasible, {len(front)} designs; showing up to {MAX_FRONT}), objectives: "
                  + ", ".join(f"{o.direction} {o.metric}" for o in spec.objectives))
-        cols = ["luts", "ffs", "throughput_msps", "max_abs_err", "power_index"]
+        cols = ["area_um2" if spec.target_kind == "asic" else "luts", "ffs", "throughput_msps", "max_abs_err",
+                "power_index"]
         for r in _spread(front, MAX_FRONT):
             L.append(f"- {r['family']} [{_params_str(r)}] " + ", ".join(
                 f"{c}={fmt_metric(c, float(r[c]))}" for c in dict.fromkeys(obj_names + cols)))

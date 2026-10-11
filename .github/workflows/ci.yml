@@ -142,3 +142,71 @@ jobs:
           HW_DSE_CHIPDB_DIR: build/chipdb
           HW_DSE_SYNTH_RUNNER: docker
         run: python scripts/run_l4_sweep.py --smoke
+
+  # Milestone 4: the ASIC target. Yosys 0.33 (Ubuntu 24.04 package) + OpenSTA
+  # built from a pinned commit (cached) + the pinned sky130_fd_sc_hd TT liberty
+  # (SHA-256 checked). HW_DSE_REQUIRE_ASIC makes the ASIC tests mandatory; the
+  # sweep is light enough to re-measure every committed row here and require
+  # identical numbers. The same job rebuilds the whole FPGA grid (15-30 s) and
+  # checks the M1/M2 ground truth has not moved.
+  asic:
+    name: ASIC (Yosys + OpenSTA on sky130hd) and the full FPGA ground truth
+    runs-on: ubuntu-24.04
+    env:
+      OPENSTA_COMMIT: d1e43c6f9f4e66cb59c3d7958a4aa7d1626b4614
+      CUDD_COMMIT: d47718fedea39fa2ef7d4907432b92b032a8ff72
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install Yosys and the OpenSTA build dependencies
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q yosys cmake tcl-dev swig bison flex libfl-dev libeigen3-dev zlib1g-dev autoconf automake libtool
+          yosys -V
+
+      - name: Cache OpenSTA
+        id: sta-cache
+        uses: actions/cache@v4
+        with:
+          path: /opt/eda
+          key: opensta-${{ env.OPENSTA_COMMIT }}-cudd-${{ env.CUDD_COMMIT }}-ubuntu-24.04
+
+      - name: Build CUDD and OpenSTA (pinned commits)
+        if: steps.sta-cache.outputs.cache-hit != 'true'
+        run: |
+          sudo mkdir -p /opt/eda && sudo chown "$USER" /opt/eda
+          git clone -q https://github.com/The-OpenROAD-Project/cudd.git /tmp/cudd
+          git -C /tmp/cudd checkout -q "$CUDD_COMMIT"
+          (cd /tmp/cudd && autoreconf -fi >/dev/null 2>&1 || true; ./configure -q --prefix=/opt/eda/cudd && make -j4 -s && make install -s)
+          git clone -q https://github.com/The-OpenROAD-Project/OpenSTA.git /tmp/OpenSTA
+          git -C /tmp/OpenSTA checkout -q "$OPENSTA_COMMIT"
+          cmake -S /tmp/OpenSTA -B /tmp/OpenSTA/build -DCUDD_DIR=/opt/eda/cudd -DCMAKE_INSTALL_PREFIX=/opt/eda/opensta \
+                -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF -DUSE_TCL_READLINE=OFF
+          cmake --build /tmp/OpenSTA/build -j4
+          cmake --install /tmp/OpenSTA/build
+
+      - name: Install
+        run: |
+          echo /opt/eda/opensta/bin >> "$GITHUB_PATH"
+          python -m pip install --upgrade pip
+          pip install -e '.[dev,openrouter]'
+
+      - name: Fetch the sky130_fd_sc_hd liberty (pinned, SHA-256 checked)
+        run: |
+          sta -version
+          python scripts/run_asic_sweep.py --fetch-lib
+
+      - name: ASIC tests (required), one-design smoke, re-measure every committed row
+        env:
+          HW_DSE_REQUIRE_ASIC: "1"
+          HW_DSE_GT_FULL: "1"
+        run: |
+          python -m pytest -v -rs tests/test_asic.py tests/test_m2_replay.py -k "asic or full_fpga or calibration"
+          python scripts/run_asic_sweep.py --smoke
+          python scripts/run_asic_sweep.py --check 57

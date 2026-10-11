@@ -68,6 +68,7 @@ METRIC_COLUMNS = (
     "rms_err_lsb",
     "accuracy_bits",
 )
+ASIC_METRIC_COLUMNS = ("area_um2", "gate_eq")  # milestone 4: present on ASIC records only
 
 
 @lru_cache(maxsize=1)
@@ -75,9 +76,35 @@ def default_cost_model() -> FpgaCostModel:
     return FpgaCostModel()
 
 
+@lru_cache(maxsize=1)
+def default_asic_cost_model() -> Any:
+    from hw_dse.models.cost_asic import AsicCostModel
+
+    return AsicCostModel()
+
+
+def cost_model_for(spec: Spec | None) -> CostModel:
+    """The default cost model of the spec's target (milestone 4).
+
+    An FPGA spec (every spec of milestones 1-3) gets the M1 two-anchor Artix-7
+    model, exactly as before; an ``asic-sky130hd`` spec gets
+    :class:`hw_dse.models.cost_asic.AsicCostModel`. Callers that pass a cost
+    model explicitly (the L5 refit, the measured-data re-scoring) are
+    unaffected.
+    """
+    if spec is not None and spec.target_kind == "asic":
+        return default_asic_cost_model()  # type: ignore[no-any-return]
+    return default_cost_model()
+
+
 def evaluate(arch: ArchConfig, spec: Spec | None = None, cost_model: CostModel | None = None) -> EvalRecord:
-    """All metrics for one design, plus feasibility against ``spec``."""
-    cm = cost_model or default_cost_model()
+    """All metrics for one design, plus feasibility against ``spec``.
+
+    The cost model defaults to the spec's target's (:func:`cost_model_for`).
+    An ASIC record has ``area_um2`` and ``gate_eq`` and no LUTs (``luts`` and
+    ``luts_plus_ffs`` are NaN, so nothing can mistake them for numbers); an
+    FPGA record is exactly what milestones 1-3 produced."""
+    cm = cost_model or cost_model_for(spec)
     acc = accuracy(arch.numerics)
     est = cm.estimate(arch)
     rpc = arch.results_per_cycle
@@ -105,10 +132,14 @@ def evaluate(arch: ArchConfig, spec: Spec | None = None, cost_model: CostModel |
         "rms_err_lsb": acc.rms_lsb,
         "accuracy_bits": acc.accuracy_bits,
     }
+    asic_area = [m for m in ("area_um2", "gate_eq") if m in est.area]
+    for m in asic_area:
+        rec[m] = est.area[m]
     exact = f"exact: bit-accurate model, {acc.sweep}"
     estimate = est.provenance
     rec["provenance"] = {
-        **{m: estimate for m in ("luts", "ffs", "luts_plus_ffs", "fmax_mhz", "throughput_msps", "latency_ns", "power_index")},
+        **{m: estimate for m in ("luts", "ffs", "luts_plus_ffs", "fmax_mhz", "throughput_msps", "latency_ns", "power_index",
+                                 *asic_area)},
         "latency_cycles": "exact: schedule",
         **{m: exact for m in ("max_abs_err", "max_abs_err_lsb", "rms_err", "rms_err_lsb", "accuracy_bits")},
     }
@@ -162,6 +193,6 @@ def fmt_metric(metric: str, v: float) -> str:
         return "n/a"
     if metric in ("max_abs_err", "rms_err"):
         return f"{v:.3g} (2^{math.log2(v):.2f})" if v > 0 else "0"
-    if metric in ("luts", "ffs", "luts_plus_ffs", "latency_cycles"):
+    if metric in ("luts", "ffs", "luts_plus_ffs", "latency_cycles", "area_um2", "gate_eq"):
         return f"{v:.0f}"
     return f"{v:.3g}"
