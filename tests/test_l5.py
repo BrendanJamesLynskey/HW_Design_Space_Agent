@@ -354,3 +354,55 @@ def test_committed_vivado_csvs_reproduce_from_their_reports(csv_name: str, logs:
     out = tmp_path / csv_name
     vp.collect(ROOT / "eval" / "data" / logs, out, "2025.2")
     assert filecmp.cmp(out, ROOT / "eval" / "data" / csv_name, shallow=False)
+
+
+def test_class_path_factor_recovers_two_class_factors() -> None:
+    """Synthetic data with one path factor for the FSM families and another for the
+    pipelined ones is fitted back by ``class_path=True``; Vivado stays at 1 for both."""
+    base = load_calibration()
+    truth = FpgaCostModel()
+    pts = recalibrate.anchor_points(base)
+    for fam, extra in (("iterative", {}), ("unrolled_k", {"k": 3}), ("pipelined", {}), ("pipelined_m", {"m": 3})):
+        factor = 1.6 if fam.startswith("pipelined") else 1.2
+        for w, n in ((10, 9), (14, 12), (18, 16), (22, 20), (26, 24)):
+            a = ArchConfig.from_params(fam, {"data_width": w, "n_iter": n, **extra})
+            e = truth.estimate(a)
+            pts.append(measured.MeasuredPoint("toolx", "1", "p", "generated", a, e.area["luts"], e.area["ffs"],
+                                              e.fmax_mhz / factor))
+    f = recalibrate.fit(pts, base, class_path=True)
+    assert f.tau["toolx"]["path_fsm"] == pytest.approx(1.2, rel=1e-3)
+    assert f.tau["toolx"]["path_pipelined"] == pytest.approx(1.6, rel=1e-3)
+    assert f.tau["vivado"]["path_fsm"] == f.tau["vivado"]["path_pipelined"] == 1.0
+    assert "path" in f.tau["toolx"]  # the single factor is still written, for readers of tool_corrections
+    single = recalibrate.fit(pts, base)
+    assert "path_fsm" not in single.tau["toolx"]
+
+
+def test_refit_twice_to_one_path_is_not_served_a_stale_calibration(tmp_path: Path,
+                                                                   monkeypatch: pytest.MonkeyPatch) -> None:
+    """``load_calibration`` caches by path: a refit that rewrites a YAML must clear it, or a
+    second candidate written to the same file is evaluated with the first one's constants."""
+    viv = _vivado_csv(tmp_path / "vivado.csv", [_row(VIVADO_POINTS[0], 230, 100, 120.0),
+                                                _row(VIVADO_POINTS[2], 650, 420, 180.0)])
+    monkeypatch.setattr(recalibrate, "REPO_ROOT", tmp_path)
+    reps = [recalibrate.refit([L4_CSV, viv], "same", impact=False, class_path=cp, cal_dir=tmp_path) for cp in (False, True)]
+    cal = load_calibration(str(tmp_path / "calibration_artix7_refit_same.yaml"))
+    assert cal["refit"]["class_path_factor"] is True and reps[1]["constants_refit"] == cal["fitted"]
+    fm = [[r["fmax_model"] for r in rep["residuals_after"]] for rep in reps]
+    assert fm[0] != fm[1]
+
+
+def test_committed_m4_refit_and_class_factor_decision() -> None:
+    """The milestone-4 refit: the class path factor was decided by the rule in
+    ``scripts/vivado_m4.py``; the default calibration is untouched and no winner changes."""
+    dec = json.loads((ROOT / "eval/data/l5_class_path_factor_m4.json").read_text())
+    assert dec["adopt"] == (dec["a_loo_improves"] and dec["b_m8_infeasible_m6_feasible"])
+    assert dec["a_loo_improves"] == (dec["vivado_fmax_loo_with"] < dec["vivado_fmax_loo_without"])
+    m = dec["msps_with"]
+    assert dec["b_m8_infeasible_m6_feasible"] == (m["m=8"] < 50 <= m["m=6"])
+    cal = load_calibration(str(ROOT / "src/hw_dse/models/calibration_artix7_refit_vivado-2025.2-m4.yaml"))
+    assert cal["refit"]["class_path_factor"] is dec["adopt"]
+    assert cal["id"] != load_calibration()["id"]  # never the default
+    rep = json.loads((ROOT / "eval/data/l5_refit_vivado-2025.2-m4.json").read_text())
+    assert not any(g["winner_changed"] for g in rep["ground_truth_impact"].values())
+    assert rep["n_fit_points"] == 53 and len(rep["report_only"]) == 16  # 16 post-route rows reported, not fitted

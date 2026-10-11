@@ -907,4 +907,55 @@ def report_m4(L: list[str]) -> None:
             f"{k} {v['ts']} ${v['usage_usd']:.4f}" for k, v in ku.items()) + ".\n")
 
 
-__all__ = ["register", "report_m4", "ASIC_SPECS", "LEDGER", "_ms", "_slim", "_slug", "ledger", "statistics", "Path"]
+def report_vivado_m4(L: list[str]) -> None:
+    """The local Vivado runs of milestone 4 and what they settled (appended; nothing above changes)."""
+    cmp_f, dec_f, refit_f = DATA / "vivado_m4_compare.json", DATA / "l5_class_path_factor_m4.json", \
+        DATA / "l5_refit_vivado-2025.2-m4.json"
+    if not (cmp_f.exists() and dec_f.exists() and refit_f.exists()):
+        return
+    cmp_, dec, rf = (json.loads(f.read_text()) for f in (cmp_f, dec_f, refit_f))
+    old = json.loads((DATA / "l5_refit_vivado-2025.2.json").read_text())
+    L.append("# 2026-10-11: the local Vivado runs (20 ns `high_precision`, `report_power`), compare and refit\n")
+    L.append("Generated from committed data like everything above (`eval/data/vivado_m4_compare.md`, "
+             "`l5_refit_vivado-2025.2-m4.md`, `l5_class_path_factor_m4.md`). *measured (vivado 2025.2)*, xc7a35tcpg236-1; "
+             "power is vectorless (12.5% default toggle, confidence Low). No LLM call and no eval re-run: the default "
+             "cost model and every ground truth above are unchanged.\n")
+    L.append("## `high_precision` at its own 20 ns clock (needs ≥ 50 MSPS)\n")
+    L.append("| design | flow | measured MSPS | meets | " + " | ".join(cmp_["high_precision_20ns"][0]["estimates_msps"]) + " |")
+    L.append("|---|---|---|---|" + "---|" * len(cmp_["high_precision_20ns"][0]["estimates_msps"]))
+    for r in cmp_["high_precision_20ns"]:
+        L.append(f"| m={r['key'].rsplit('m=', 1)[1]} | {r['fmax_kind'].split(' ')[0]} | {r['measured_msps']:.2f} | "
+                 f"{'yes' if r['meets_50msps'] else 'no'} | " + " | ".join(f"{v:.2f}" for v in r["estimates_msps"].values()) + " |")
+    L.append("\nModel columns are unrouted (post-synthesis scale).\n")
+    L.append("## Refit `vivado-2025.2-m4`: leave-one-out RMS error, Vivado points (%)\n")
+    L.append("| refit | Vivado points | LUT | FF | Fmax |")
+    L.append("|---|---|---|---|---|")
+    for name, r in (("`vivado-2025.2`", old), ("`vivado-2025.2-m4`", rf)):
+        v = r["loo_summary"]["all vivado"]
+        L.append(f"| {name} | {v['n']} | {v['luts_loo']} | {v['ffs_loo']} | {v['fmax_loo']} |")
+    changed = [s for s, g in rf["ground_truth_impact"].items() if g["winner_changed"]]
+    L.append(f"\nGround-truth winners changed under the m4 refit: {', '.join(changed) if changed else 'none'}.\n")
+    L.append("## Per-family-class path factor: the pre-set rule\n")
+    L.append(f"(a) Vivado Fmax leave-one-out {dec['vivado_fmax_loo_without']}% → {dec['vivado_fmax_loo_with']}%: "
+             f"{'holds' if dec['a_loo_improves'] else 'fails'}. (b) m=8 at {dec['msps_with']['m=8']:.2f} MSPS, m=6 at "
+             f"{dec['msps_with']['m=6']:.2f} (needs m=8 < 50 ≤ m=6): {'holds' if dec['b_m8_infeasible_m6_feasible'] else 'fails'}. "
+             f"**{'Adopted' if dec['adopt'] else 'Rejected'}.**\n")
+    pr = cmp_["post_route_over_post_synthesis"]["by_family"]
+    L.append("## Post-route / post-synthesis Fmax per family (Vivado)\n")
+    L.append("| family | designs | min | max | mean |")
+    L.append("|---|---|---|---|---|")
+    for fam, d in pr.items():
+        L.append(f"| {fam} | {d['n']} | {d['min']:.3f} | {d['max']:.3f} | {d['mean']:.3f} |")
+    L.append("\n## FPGA power index vs Vivado `report_power` (core power, 100 MHz)\n")
+    L.append("| stage | designs | Spearman | RMS log error |")
+    L.append("|---|---|---|---|")
+    for st in ("post-synthesis", "post-route"):
+        c = cmp_[f"power_{st}"]
+        L.append(f"| {st} | {c['n']} | {c['spearman']:.3f} | {c['rms_log_ratio_pct']:.1f}% |")
+    a = cmp_["power_activity_fit"]["rms_log_pct"]
+    L.append(f"\nPer-family activity factor (4 parameters, post-synthesis; a separate calibration, not the default): "
+             f"{a['per_family_in']:.1f}% in-sample, {a['per_family_loo']:.1f}% leave-one-out "
+             f"(one global scale: {a['global_scale_in']:.1f}% / {a['global_scale_loo']:.1f}%).\n")
+
+
+__all__ = ["register", "report_m4", "report_vivado_m4", "ASIC_SPECS", "LEDGER", "_ms", "_slim", "_slug", "ledger", "statistics", "Path"]

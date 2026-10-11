@@ -499,6 +499,9 @@ def cmd_report(_: argparse.Namespace) -> None:
     from m4 import report_m4  # milestone 4 (eval/m4.py); appended, M1-M3 sections untouched
 
     report_m4(L)
+    from m4 import report_vivado_m4  # the local Vivado runs (2026-10-11); appended, earlier sections untouched
+
+    report_vivado_m4(L)
     RESULTS.write_text("\n".join(L) + "\n")
     print(f"wrote {RESULTS}")
 

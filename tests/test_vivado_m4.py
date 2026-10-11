@@ -115,3 +115,42 @@ def test_compare_without_data_says_so(tmp_path: Path, monkeypatch: pytest.Monkey
     monkeypatch.setattr(vivado_m4, "COMPARE", tmp_path / "cmp")
     assert vivado_m4.compare() == {}
     assert "Neither" in (tmp_path / "cmp.md").read_text()
+
+
+def test_power_parser_rounds_to_the_printed_precision(tmp_path: Path) -> None:
+    """``core_w`` is a sum of printed values; it carries their precision, not binary float noise."""
+    r = vivado_power.parse_report_power(POWER_SAMPLE.format(tot="93", dyn="21", clk="001", logic="001", sig="007"))
+    assert repr(r["core_w"]) == "0.009"  # 0.001 + 0.001 + 0.007 = 0.009000000000000001 unrounded
+    sample = POWER_SAMPLE.format(tot="93", dyn="21", clk="003", logic="001", sig="000").replace("|     0.000 |", "|    <0.001 |")
+    # 0.003 + 0.001 + 0.0005 = 0.0045000000000000005 unrounded; "<0.001" counts 0.0005, so 4 places
+    assert repr(vivado_power.parse_report_power(sample)["core_w"]) == "0.0045"
+    # the committed CSV re-collects byte for byte from the committed reports, with no noisy digits
+    out = tmp_path / "power.csv"
+    vivado_m4.collect_power(ROOT / "eval/data/vivado_logs_m4_power", out)
+    assert out.read_bytes() == (ROOT / "eval/data/vivado_power.csv").read_bytes()
+    for row in vivado_power.load(out):
+        assert len(row["core_w"].split(".")[-1]) <= 4
+
+
+def test_power_activity_fit_is_a_separate_calibration() -> None:
+    import yaml
+
+    from hw_dse.evaluate import evaluate
+
+    act = vivado_power.fit_activity(vivado_power.load(ROOT / "eval/data/vivado_power.csv"))
+    assert act["parameters"] == 4 and act["n"] == 14
+    r = act["rms_log_pct"]
+    assert r["per_family_in"] <= r["per_family_loo"] and r["per_family_in"] < r["global_scale_in"]
+    cal = yaml.safe_load((ROOT / "src/hw_dse/models/power_activity_artix7_vivado-2025.2-m4.yaml").read_text())
+    assert cal["default"] is False and cal["mw_per_index_unit"] == act["mw_per_index_unit"]
+    # the default power index is unchanged: the reference design is 1.0 at 100 MHz
+    ref = evaluate(vivado_power.ArchConfig.from_key(vivado_power.REFERENCE_KEY))
+    assert ref["power_index"] * 100.0 / ref["f_op_mhz"] == pytest.approx(1.0)
+
+
+def test_post_route_ratios_cover_every_design_measured_both_ways() -> None:
+    pr = vivado_m4.post_route_ratios()
+    assert len(pr["designs"]) == 16 and set(pr["by_family"]) == {"iterative", "pipelined", "pipelined_m", "unrolled_k"}
+    m6 = next(d for d in pr["designs"] if d["key"].endswith("m=6") and d["period_ns"] == 20.0)
+    assert (m6["synth_mhz"], m6["route_mhz"]) == (65.39, 53.96)
+    assert pr["by_family"]["pipelined"]["max"] < 0.75 < pr["by_family"]["unrolled_k"]["min"]

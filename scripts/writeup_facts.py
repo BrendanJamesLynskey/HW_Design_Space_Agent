@@ -419,6 +419,21 @@ def facts() -> dict[str, Any]:  # noqa: PLR0915 - one flat registry, by write-up
 
     f["hp.vivado_constraint_ns"] = float(re.search(r"POINTS_20NS, ([\d.]+), power=False", (ROOT / "scripts" / "vivado_m4.py").read_text()).group(1))  # type: ignore[union-attr]
     f["hp.m"] = max(int(a.params()["m"]) for a in vivado_m4.POINTS_20NS)
+    hp = load_spec(ROOT / "specs" / "high_precision.yaml")
+    f["hp.need_msps"] = hp.min_throughput_msps
+    f["hp.m_control"] = min(int(a.params()["m"]) for a in vivado_m4.POINTS_20NS)
+    m20 = {(r["m"], r["fmax_kind"].split(" ")[0]): float(r["fmax_mhz"]) for r in _csv("vivado_measured_20ns.csv")}
+    f["hp.m8_20ns_synth_msps"], f["hp.m8_20ns_route_msps"] = m20[("8", "post-synthesis")], m20[("8", "post-route")]
+    f["hp.m6_20ns_synth_msps"], f["hp.m6_20ns_route_msps"] = m20[("6", "post-synthesis")], m20[("6", "post-route")]
+    f["hp.m6_20ns_route_loss_pct"] = (1 - f["hp.m6_20ns_route_msps"] / f["hp.m6_20ns_synth_msps"]) * 100
+    dec = json.loads((DATA / "l5_class_path_factor_m4.json").read_text())
+    f["class_factor.m8_msps"] = dec["msps_with"]["m=8"]
+    f["class_factor.vivado_fmax_loo_without"] = dec["vivado_fmax_loo_without"]
+    f["class_factor.vivado_fmax_loo_with"] = dec["vivado_fmax_loo_with"]
+    cmp_ = json.loads((DATA / "vivado_m4_compare.json").read_text())
+    f["fpga_power.spearman_synth"] = cmp_["power_post-synthesis"]["spearman"]
+    f["fpga_power.rms_synth_pct"] = cmp_["power_post-synthesis"]["rms_log_ratio_pct"]
+    f["fpga_power.activity_loo_pct"] = cmp_["power_activity_fit"]["rms_log_pct"]["per_family_loo"]
     f["infeasible.rate_msps"] = next(c.value for c in load_spec(ROOT / "specs" / "infeasible_dds_400msps.yaml").constraints
                                      if c.metric == "throughput_msps")
     # 10 significant digits: float sums differ in the last bit between Python versions

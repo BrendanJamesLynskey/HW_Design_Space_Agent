@@ -1,0 +1,262 @@
+{
+ "rule": "The rule, fixed before the 20 ns points were fitted: adopt the per-family-class\n    path factor into the milestone-4 refit (never the default) only if\n\n    (a) Vivado Fmax leave-one-out RMS improves on the milestone-4 refit without it, **and**\n    (b) it puts ``high_precision`` m=8 infeasible and m=6 feasible at 50 MSPS\n        (post-synthesis model throughput), as Vivado measures at 20 ns.\n\n    Otherwise reject it. Both sets of numbers are recorded either way.",
+ "vivado_fmax_loo_without": 12.2,
+ "vivado_fmax_loo_with": 7.0,
+ "a_loo_improves": true,
+ "msps_with": {
+  "m=8": 52.022,
+  "m=6": 67.834
+ },
+ "b_m8_infeasible_m6_feasible": false,
+ "adopt": false,
+ "msps_without": {
+  "m=8": 49.106,
+  "m=6": 63.98
+ },
+ "loo_summary_without": {
+  "all": {
+   "n": 53,
+   "luts_in": 11.2,
+   "ffs_in": 3.4,
+   "fmax_in": 12.5,
+   "luts_loo": 12.5,
+   "ffs_loo": 3.7,
+   "fmax_loo": 13.6
+  },
+  "all vivado": {
+   "n": 16,
+   "luts_in": 12.3,
+   "ffs_in": 3.0,
+   "fmax_in": 10.2,
+   "luts_loo": 14.4,
+   "ffs_loo": 3.6,
+   "fmax_loo": 12.2
+  },
+  "all yosys+nextpnr-xilinx": {
+   "n": 37,
+   "luts_in": 10.7,
+   "ffs_in": 3.6,
+   "fmax_in": 13.3,
+   "luts_loo": 11.5,
+   "ffs_loo": 3.8,
+   "fmax_loo": 14.2
+  },
+  "iterative": {
+   "n": 12,
+   "luts_in": 13.5,
+   "ffs_in": 6.1,
+   "fmax_in": 11.9,
+   "luts_loo": 14.9,
+   "ffs_loo": 6.7,
+   "fmax_loo": 13.5
+  },
+  "pipelined": {
+   "n": 13,
+   "luts_in": 3.3,
+   "ffs_in": 2.6,
+   "fmax_in": 17.0,
+   "luts_loo": 3.6,
+   "ffs_loo": 2.8,
+   "fmax_loo": 18.2
+  },
+  "pipelined_m": {
+   "n": 16,
+   "luts_in": 3.2,
+   "ffs_in": 1.6,
+   "fmax_in": 10.3,
+   "luts_loo": 3.4,
+   "ffs_loo": 1.7,
+   "fmax_loo": 11.0
+  },
+  "unrolled_k": {
+   "n": 12,
+   "luts_in": 18.6,
+   "ffs_in": 1.9,
+   "fmax_in": 9.4,
+   "luts_loo": 20.8,
+   "ffs_loo": 2.2,
+   "fmax_loo": 10.8
+  }
+ },
+ "tool_corrections_without": {
+  "vivado": {
+   "luts": 1.0,
+   "ffs": 1.0,
+   "path": 1.0
+  },
+  "yosys+nextpnr-xilinx": {
+   "luts": 1.042733,
+   "ffs": 1.030859,
+   "path": 1.42469
+  }
+ },
+ "ground_truth_without": {
+  "dds_250msps": {
+   "winner_m1": "pipelined:data_width=18,n_iter=15,angle_guard=1,frac_guard=0,rounding=round",
+   "winner_refit": "pipelined:data_width=18,n_iter=15,angle_guard=1,frac_guard=0,rounding=round",
+   "winner_changed": false,
+   "feasible_m1": 7064,
+   "feasible_refit": 12363,
+   "front_families_refit": {
+    "pipelined": 108
+   },
+   "best_throughput_refit": 315.2
+  },
+  "high_precision": {
+   "winner_m1": "pipelined_m:data_width=26,n_iter=22,angle_guard=0,frac_guard=0,rounding=round,m=6",
+   "winner_refit": "pipelined_m:data_width=26,n_iter=22,angle_guard=0,frac_guard=0,rounding=round,m=6",
+   "winner_changed": false,
+   "feasible_m1": 14171,
+   "feasible_refit": 14714,
+   "front_families_refit": {
+    "pipelined_m": 2
+   },
+   "best_throughput_refit": 315.2
+  },
+  "infeasible_dds_400msps": {
+   "winner_m1": null,
+   "winner_refit": null,
+   "winner_changed": false,
+   "feasible_m1": 0,
+   "feasible_refit": 0,
+   "front_families_refit": {},
+   "best_throughput_refit": 315.2
+  },
+  "low_area_control": {
+   "winner_m1": "iterative:data_width=15,n_iter=12,angle_guard=1,frac_guard=0,rounding=round",
+   "winner_refit": "iterative:data_width=15,n_iter=12,angle_guard=1,frac_guard=0,rounding=round",
+   "winner_changed": false,
+   "feasible_m1": 303056,
+   "feasible_refit": 303056,
+   "front_families_refit": {
+    "iterative": 145
+   },
+   "best_throughput_refit": 315.2
+  }
+ },
+ "loo_summary_with": {
+  "all": {
+   "n": 53,
+   "luts_in": 11.2,
+   "ffs_in": 3.4,
+   "fmax_in": 8.8,
+   "luts_loo": 12.5,
+   "ffs_loo": 3.7,
+   "fmax_loo": 9.8
+  },
+  "all vivado": {
+   "n": 16,
+   "luts_in": 12.3,
+   "ffs_in": 3.0,
+   "fmax_in": 5.5,
+   "luts_loo": 14.4,
+   "ffs_loo": 3.6,
+   "fmax_loo": 7.0
+  },
+  "all yosys+nextpnr-xilinx": {
+   "n": 37,
+   "luts_in": 10.7,
+   "ffs_in": 3.6,
+   "fmax_in": 9.9,
+   "luts_loo": 11.5,
+   "ffs_loo": 3.8,
+   "fmax_loo": 10.8
+  },
+  "iterative": {
+   "n": 12,
+   "luts_in": 13.5,
+   "ffs_in": 6.1,
+   "fmax_in": 7.5,
+   "luts_loo": 14.9,
+   "ffs_loo": 6.7,
+   "fmax_loo": 8.1
+  },
+  "pipelined": {
+   "n": 13,
+   "luts_in": 3.3,
+   "ffs_in": 2.6,
+   "fmax_in": 10.8,
+   "luts_loo": 3.6,
+   "ffs_loo": 2.8,
+   "fmax_loo": 11.7
+  },
+  "pipelined_m": {
+   "n": 16,
+   "luts_in": 3.2,
+   "ffs_in": 1.6,
+   "fmax_in": 7.7,
+   "luts_loo": 3.4,
+   "ffs_loo": 1.7,
+   "fmax_loo": 8.4
+  },
+  "unrolled_k": {
+   "n": 12,
+   "luts_in": 18.6,
+   "ffs_in": 1.9,
+   "fmax_in": 9.1,
+   "luts_loo": 20.8,
+   "ffs_loo": 2.2,
+   "fmax_loo": 10.7
+  }
+ },
+ "tool_corrections_with": {
+  "vivado": {
+   "luts": 1.0,
+   "ffs": 1.0,
+   "path": 1.0,
+   "path_fsm": 1.0,
+   "path_pipelined": 1.0
+  },
+  "yosys+nextpnr-xilinx": {
+   "luts": 1.042733,
+   "ffs": 1.030859,
+   "path": 1.359226,
+   "path_fsm": 1.183846,
+   "path_pipelined": 1.650928
+  }
+ },
+ "ground_truth_with": {
+  "dds_250msps": {
+   "winner_m1": "pipelined:data_width=18,n_iter=15,angle_guard=1,frac_guard=0,rounding=round",
+   "winner_refit": "pipelined:data_width=18,n_iter=15,angle_guard=1,frac_guard=0,rounding=round",
+   "winner_changed": false,
+   "feasible_m1": 7064,
+   "feasible_refit": 12363,
+   "front_families_refit": {
+    "pipelined": 108
+   },
+   "best_throughput_refit": 340.5
+  },
+  "high_precision": {
+   "winner_m1": "pipelined_m:data_width=26,n_iter=22,angle_guard=0,frac_guard=0,rounding=round,m=6",
+   "winner_refit": "pipelined_m:data_width=26,n_iter=22,angle_guard=0,frac_guard=0,rounding=round,m=8",
+   "winner_changed": true,
+   "feasible_m1": 14171,
+   "feasible_refit": 14752,
+   "front_families_refit": {
+    "pipelined_m": 1
+   },
+   "best_throughput_refit": 340.5
+  },
+  "infeasible_dds_400msps": {
+   "winner_m1": null,
+   "winner_refit": null,
+   "winner_changed": false,
+   "feasible_m1": 0,
+   "feasible_refit": 0,
+   "front_families_refit": {},
+   "best_throughput_refit": 340.5
+  },
+  "low_area_control": {
+   "winner_m1": "iterative:data_width=15,n_iter=12,angle_guard=1,frac_guard=0,rounding=round",
+   "winner_refit": "iterative:data_width=15,n_iter=12,angle_guard=1,frac_guard=0,rounding=round",
+   "winner_changed": false,
+   "feasible_m1": 303056,
+   "feasible_refit": 303056,
+   "front_families_refit": {
+    "iterative": 145
+   },
+   "best_throughput_refit": 340.5
+  }
+ }
+}
