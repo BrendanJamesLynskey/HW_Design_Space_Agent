@@ -28,15 +28,20 @@ design and a ``run_all.sh``, as ``scripts/vivado_points.py`` does.
 
 Then, once either CSV exists::
 
-    python scripts/vivado_m4.py compare      # -> eval/data/vivado_m4_compare.md / .json
     python scripts/vivado_m4.py refit        # the vivado-2025.2 refit plus the 20 ns rows -> name vivado-2025.2-m4
+    python scripts/vivado_m4.py compare      # -> eval/data/vivado_m4_compare.md / .json
 
 ``compare`` gives the ``high_precision`` verdict at 20 ns against every model
-(M1, the ``vivado-2025.2`` refit) and the power index against measured power.
+(M1, the ``vivado-2025.2`` refit and, once written, the ``vivado-2025.2-m4``
+refit), the post-route / post-synthesis Fmax ratio per family, the power index
+against measured power, and a per-family activity factor fitted to that power
+(written as a separate, non-default power calibration).
 ``refit`` reruns ``hw_dse.synth.recalibrate`` with the committed Vivado and
 Yosys/nextpnr CSVs plus the 20 ns rows (labelled tool version
 ``2025.2 (20 ns constraint)`` so they are kept apart from the 10 ns rows of the
-same designs); the default calibration is never touched.
+same designs), and decides the per-family-class path factor by the rule in
+:func:`decide_class_factor` (fixed before the 20 ns data was fitted); the
+default calibration is never touched.
 """
 
 from __future__ import annotations
@@ -63,6 +68,10 @@ CSV_20NS = DATA / "vivado_measured_20ns.csv"
 CSV_POWER = DATA / "vivado_power.csv"
 COMPARE = DATA / "vivado_m4_compare"
 VERSION_20NS = "2025.2 (20 ns constraint)"
+MODELS = ROOT / "src" / "hw_dse" / "models"
+CAL_M4 = MODELS / "calibration_artix7_refit_vivado-2025.2-m4.yaml"
+POWER_CAL = MODELS / "power_activity_artix7_vivado-2025.2-m4.yaml"
+CLASS_DECISION = DATA / "l5_class_path_factor_m4"
 
 
 def power_points() -> list[ArchConfig]:
@@ -156,6 +165,46 @@ def collect_power(directory: Path, out: Path, version: str = "2025.2") -> list[d
     return rows
 
 
+def post_route_ratios() -> dict[str, object]:
+    """Post-route / post-synthesis Fmax for every Vivado design measured both ways (10 ns and 20 ns runs)."""
+    pairs: dict[tuple[str, str], dict[str, float]] = {}
+    for c in (DATA / "vivado_measured.csv", DATA / "vivado_measured_2.csv", CSV_20NS):
+        if not c.exists():
+            continue
+        for p in measured.load(c):
+            if not p.fmax_mhz or p.rtl_source != "generated":
+                continue
+            period = 20.0 if p.tool_version == VERSION_20NS else 10.0
+            stage = "route" if p.extra.get("fmax_kind", "").lower().startswith("post-route") else "synth"
+            pairs.setdefault((p.arch.key(), f"{period:g}"), {"period_ns": period})[stage] = p.fmax_mhz
+    designs = [{"key": k, "family": ArchConfig.from_key(k).family, "period_ns": v["period_ns"], "synth_mhz": v["synth"],
+                "route_mhz": v["route"], "ratio": round(v["route"] / v["synth"], 4)}
+               for (k, _), v in sorted(pairs.items()) if "synth" in v and "route" in v]
+    by_family = {}
+    for fam in sorted({d["family"] for d in designs}):
+        r = [d["ratio"] for d in designs if d["family"] == fam]
+        by_family[fam] = {"n": len(r), "min": min(r), "max": max(r), "mean": round(sum(r) / len(r), 4)}
+    return {"designs": designs, "by_family": by_family} if designs else {}
+
+
+def write_power_calibration(act: dict[str, object]) -> None:
+    import yaml
+
+    cal = {"id": "artix7-xc7a35t-power-activity-vivado-2025.2-m4", "default": False,
+           "fitted_to": f"eval/data/vivado_power.csv, {act['stage']} core power at 100 MHz (1 ns resolution rows), "
+                        "Vivado 2025.2 report_power, vectorless (12.5% default toggle, confidence Low)",
+           "model": "measured core mW at 100 MHz = mw_per_index_unit[family] x power index at 100 MHz",
+           "default_activity": act["default_activity"], "mw_per_index_unit": act["mw_per_index_unit"],
+           "implied_activity": act["implied_activity"],
+           "rms_log_pct": {k: round(float(v), 2) for k, v in act["rms_log_pct"].items()},  # type: ignore[union-attr]
+           "n_designs": act["n"]}
+    POWER_CAL.write_text("# Per-family activity factor for the FPGA power index -- NOT the default.\n"
+                         "# Written by scripts/vivado_m4.py compare. The default index (calibration_artix7.yaml) keeps\n"
+                         "# one activity for every family. Fitted to Vivado's vectorless power estimate, not to real\n"
+                         "# switching activity: a calibration to the tool's power model, not to silicon.\n"
+                         + yaml.safe_dump(cal, sort_keys=False, width=110))
+
+
 def compare() -> dict[str, object]:
     """The high_precision verdict at 20 ns and the power-index check, from whichever CSV exists."""
     from hw_dse.evaluate import evaluate
@@ -170,7 +219,9 @@ def compare() -> dict[str, object]:
         spec = load_spec(ROOT / "specs" / "high_precision.yaml")
         need = spec.min_throughput_msps
         models = {"M1 (default)": FpgaCostModel(),
-                  "vivado-2025.2 refit": FpgaCostModel(str(ROOT / "src/hw_dse/models/calibration_artix7_refit_vivado-2025.2.yaml"))}
+                  "vivado-2025.2 refit": FpgaCostModel(str(MODELS / "calibration_artix7_refit_vivado-2025.2.yaml"))}
+        if CAL_M4.exists():
+            models["vivado-2025.2-m4 refit"] = FpgaCostModel(str(CAL_M4))
         rows = []
         for p in measured.load(CSV_20NS):
             est = {n: evaluate(p.arch, spec, m)["throughput_msps"] for n, m in models.items()}
@@ -182,6 +233,21 @@ def compare() -> dict[str, object]:
         for r in rows:
             L.append(f"| `{r['key']}` | {r['fmax_kind']} | {r['measured_msps']:.2f} | {'yes' if r['meets_50msps'] else 'no'} | "
                      + " | ".join(f"{v:.2f}" for v in r["estimates_msps"].values()) + " |")  # type: ignore[union-attr]
+        L.append("")
+        L.append("Model columns are unrouted estimates on Vivado's post-synthesis timing scale; compare them with the "
+                 "post-synthesis rows.\n")
+    pr = post_route_ratios() if CSV_20NS.exists() else {}
+    if pr:
+        rep["post_route_over_post_synthesis"] = pr
+        L += ["## Post-route / post-synthesis Fmax (Vivado 2025.2, every design measured both ways)\n",
+              "The cost model's timing scale is post-synthesis (the anchors'); routing is not modelled. Every model "
+              "throughput is therefore an unrouted figure, and this is how far routing moved each family.\n",
+              "| family | designs | post-route / post-synthesis Fmax (min – max) | mean |", "|---|---|---|---|"]
+        for fam, d in pr["by_family"].items():
+            L.append(f"| `{fam}` | {d['n']} | {d['min']:.3f} – {d['max']:.3f} | {d['mean']:.3f} |")
+        L += ["", "| design | constraint | post-synthesis MHz | post-route MHz | ratio |", "|---|---|---|---|---|"]
+        for d in pr["designs"]:
+            L.append(f"| `{d['key']}` | {d['period_ns']:g} ns | {d['synth_mhz']:.2f} | {d['route_mhz']:.2f} | {d['ratio']:.3f} |")
         L.append("")
     if CSV_POWER.exists():
         rows_p = vivado_power.load(CSV_POWER)
@@ -200,6 +266,31 @@ def compare() -> dict[str, object]:
                 L.append(f"| `{d['key']}` | {d['power_index_100mhz']:.3f} | {d['measured_core_mw_100mhz']:.2f} | "
                          f"{d['measured_relative']:.3f} | {d['ratio_index_to_measured']:.3f} |")
             L.append("")
+        act = vivado_power.fit_activity(rows_p, "post-synthesis")
+        rep["power_activity_fit"] = act
+        write_power_calibration(act)
+        r = act["rms_log_pct"]
+        L += ["## Per-family activity factor (a separate power calibration, not the default)\n",
+              f"Fitted to the {act['n']} post-synthesis core-power rows above: measured mW at 100 MHz ≈ s_family × "
+              f"power index ({act['parameters']} parameters, log least squares). Written to "
+              f"`{POWER_CAL.relative_to(ROOT)}`; the default power index is unchanged (activity "
+              f"{act['default_activity']} for every family). **Fitted to Vivado's vectorless estimate** (default toggle "
+              "rate, confidence Low), not to real switching activity.\n",
+              "| family | mW per index unit | implied activity (default 0.125) |", "|---|---|---|"]
+        for fam in act["mw_per_index_unit"]:
+            L.append(f"| `{fam}` | {act['mw_per_index_unit'][fam]:.3f} | {act['implied_activity'][fam]:.4f} |")
+        L += ["", "| power model | parameters | RMS log error in-sample | leave-one-out |", "|---|---|---|---|",
+              f"| default index, normalised to the reference design | 0 | {r['default_index_reference_normalised']:.1f}% | — |",
+              f"| default index × one fitted scale | 1 | {r['global_scale_in']:.1f}% | {r['global_scale_loo']:.1f}% |",
+              f"| per-family activity | {act['parameters']} | {r['per_family_in']:.1f}% | {r['per_family_loo']:.1f}% |",
+              "", f"Spearman rank correlation with measured power: default {act['spearman_default']:.3f}, "
+              f"per-family {act['spearman_fit']:.3f}.\n",
+              "| design | family | index | measured mW | fitted / measured | leave-one-out / measured |",
+              "|---|---|---|---|---|---|"]
+        for d in act["designs"]:
+            L.append(f"| `{d['key']}` | {d['family']} | {d['power_index_100mhz']:.3f} | {d['measured_core_mw_100mhz']:.2f} | "
+                     f"{d['ratio_fit_to_measured']:.3f} | {d['ratio_loo_to_measured']:.3f} |")
+        L.append("")
     if len(L) == 2:
         L.append("Neither `eval/data/vivado_measured_20ns.csv` nor `eval/data/vivado_power.csv` exists yet.")
     COMPARE.with_suffix(".md").write_text("\n".join(L) + "\n")
@@ -208,17 +299,105 @@ def compare() -> dict[str, object]:
     return rep
 
 
-def refit() -> None:
+def high_precision_msps(cal_path: Path) -> dict[str, float]:
+    """Model throughput of the two 20 ns designs (m=6, m=8) under a calibration (unrouted, post-synthesis scale)."""
+    from hw_dse.evaluate import evaluate
+    from hw_dse.models.cost_fpga import FpgaCostModel
+    from hw_dse.spec import load_spec
+
+    spec, cm = load_spec(ROOT / "specs" / "high_precision.yaml"), FpgaCostModel(str(cal_path))
+    return {f"m={a.m}": round(float(evaluate(a, spec, cm)["throughput_msps"]), 3) for a in POINTS_20NS}
+
+
+def decide_class_factor(without: dict, with_: dict, msps_with: dict[str, float], need_msps: float = 50.0) -> dict:
+    """The rule, fixed before the 20 ns points were fitted: adopt the per-family-class
+    path factor into the milestone-4 refit (never the default) only if
+
+    (a) Vivado Fmax leave-one-out RMS improves on the milestone-4 refit without it, **and**
+    (b) it puts ``high_precision`` m=8 infeasible and m=6 feasible at 50 MSPS
+        (post-synthesis model throughput), as Vivado measures at 20 ns.
+
+    Otherwise reject it. Both sets of numbers are recorded either way."""
+    loo_without = without["loo_summary"]["all vivado"]["fmax_loo"]
+    loo_with = with_["loo_summary"]["all vivado"]["fmax_loo"]
+    a = loo_with < loo_without
+    b = msps_with["m=8"] < need_msps <= msps_with["m=6"]
+    return {"rule": decide_class_factor.__doc__, "vivado_fmax_loo_without": loo_without, "vivado_fmax_loo_with": loo_with,
+            "a_loo_improves": a, "msps_with": msps_with, "b_m8_infeasible_m6_feasible": b, "adopt": a and b}
+
+
+def refit() -> dict[str, object]:
+    import tempfile
+
     from hw_dse.synth.recalibrate import markdown, refit as do_refit
 
     csvs = [DATA / "vivado_measured.csv", DATA / "vivado_measured_2.csv", DATA / "l4_synthesis.csv",
             DATA / "vivado_spotcheck.csv"]
     if CSV_20NS.exists():
         csvs.insert(2, CSV_20NS)
-    rep = do_refit(csvs, "vivado-2025.2-m4")
+    cand, msps = {}, {}
+    with tempfile.TemporaryDirectory() as tmp:  # the two candidates; only the decided one is committed
+        for cp in (False, True):  # a directory each: calibrations are cached by path
+            d = Path(tmp) / ("class" if cp else "single")
+            d.mkdir()
+            cand[cp] = do_refit(csvs, "vivado-2025.2-m4", class_path=cp, cal_dir=d)
+            msps[cp] = high_precision_msps(d / "calibration_artix7_refit_vivado-2025.2-m4.yaml")
+    dec = decide_class_factor(cand[False], cand[True], msps[True])
+    dec["msps_without"] = msps[False]
+    for cp, tag in ((False, "without"), (True, "with")):
+        dec[f"loo_summary_{tag}"] = cand[cp]["loo_summary"]
+        dec[f"tool_corrections_{tag}"] = cand[cp]["tool_corrections"]
+        dec[f"ground_truth_{tag}"] = cand[cp]["ground_truth_impact"]
+    rep = do_refit(csvs, "vivado-2025.2-m4", class_path=dec["adopt"])
     (DATA / "l5_refit_vivado-2025.2-m4.md").write_text(markdown(rep))
     (DATA / "l5_refit_vivado-2025.2-m4.json").write_text(json.dumps(rep, indent=1, default=str))
-    print("wrote eval/data/l5_refit_vivado-2025.2-m4.md / .json (the default calibration is unchanged)")
+    CLASS_DECISION.with_suffix(".json").write_text(json.dumps(dec, indent=1))
+    CLASS_DECISION.with_suffix(".md").write_text(class_decision_markdown(dec))
+    print(f"class path factor: {'ADOPTED' if dec['adopt'] else 'REJECTED'} (a={dec['a_loo_improves']}, "
+          f"b={dec['b_m8_infeasible_m6_feasible']}); wrote eval/data/l5_refit_vivado-2025.2-m4.md / .json and "
+          f"{CLASS_DECISION.name}.md / .json (the default calibration is unchanged)")
+    return dec
+
+
+def class_decision_markdown(dec: dict) -> str:
+    def yn(x: bool) -> str:
+        return "**yes**" if x else "**no**"
+
+    L = ["# The per-family-class path factor: decision on the milestone-4 data\n",
+         "Generated by `python scripts/vivado_m4.py refit`. Both candidates are the `vivado-2025.2-m4` refit "
+         "(the `vivado-2025.2` points plus the two 20 ns post-synthesis rows); they differ only in whether "
+         "Yosys/nextpnr gets one path factor or one per family class (FSM / pipelined; Vivado = 1 for both). "
+         "Neither is the default.\n",
+         "## The rule (fixed before the 20 ns points were fitted)\n",
+         "Adopt it into the milestone-4 refit only if (a) Vivado Fmax leave-one-out RMS improves on the refit "
+         "without it **and** (b) it puts `high_precision` m=8 infeasible and m=6 feasible at 50 MSPS "
+         "(post-synthesis model throughput), as Vivado measures at 20 ns. Otherwise reject it.\n",
+         "## The numbers\n",
+         "| check | without the class factor | with it | holds? |", "|---|---|---|---|",
+         f"| (a) Vivado Fmax leave-one-out RMS | {dec['vivado_fmax_loo_without']}% | {dec['vivado_fmax_loo_with']}% | "
+         f"{yn(dec['a_loo_improves'])} |",
+         f"| (b) m=8 model MSPS (measured 49.88 post-synthesis at 20 ns) | {dec['msps_without']['m=8']:.2f} | "
+         f"{dec['msps_with']['m=8']:.2f} | {yn(dec['b_m8_infeasible_m6_feasible'])} |",
+         f"| (b) m=6 model MSPS (measured 65.39) | {dec['msps_without']['m=6']:.2f} | {dec['msps_with']['m=6']:.2f} | |",
+         "", f"**Outcome: {'adopted' if dec['adopt'] else 'rejected'}.**\n",
+         "History: the first run of this decision printed ADOPTED. That was a bug, not the rule: "
+         "`load_calibration` caches by path, and both candidates were written to one path, so the second "
+         "candidate was scored with the first one's constants (identical m=8/m=6 throughputs with and without "
+         "the factor). The bug was confirmed and fixed (`recalibrate.refit` clears the cache after writing; "
+         "a test covers it), and the rule text was not changed. A later revision counts the 20 ns rows once, "
+         "since they duplicate the 10 ns rows; the outcome did not change.\n",
+         "## Leave-one-out RMS error, in-sample → leave-one-out (%)\n",
+         "| group | points | LUT | FF | Fmax without | Fmax with |", "|---|---|---|---|---|---|"]
+    for g, s in dec["loo_summary_without"].items():
+        w = dec["loo_summary_with"][g]
+        L.append(f"| {g} | {s['n']} | {s['luts_in']} → {s['luts_loo']} | {s['ffs_in']} → {s['ffs_loo']} | "
+                 f"{s['fmax_in']} → {s['fmax_loo']} | {w['fmax_in']} → {w['fmax_loo']} |")
+    L += ["", "## Ground truth under each candidate\n", "| spec | winner (M1) | without | with |", "|---|---|---|---|"]
+    for s, g in dec["ground_truth_without"].items():
+        h = dec["ground_truth_with"][s]
+        L.append(f"| {s} | `{g['winner_m1']}` | `{g['winner_refit']}`{' (changed)' if g['winner_changed'] else ''} | "
+                 f"`{h['winner_refit']}`{' (changed)' if h['winner_changed'] else ''} |")
+    return "\n".join(L) + "\n"
 
 
 def main() -> None:

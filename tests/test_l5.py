@@ -249,7 +249,7 @@ def test_post_route_vivado_rows_are_reported_not_fitted_and_duplicates_count_onc
     viv = [p for p in fit_rows if p.tool == "vivado"]
     assert sorted(p.arch.family for p in viv) == ["iterative", "pipelined"]  # spot-check counted once
     assert dropped == [{"tool": "vivado 2025.2", "key": pipe.key(), "csv": "spot.csv", "kept_from": "full.csv",
-                        "disagree_pct": {}, "missing_in_one": []}]
+                        "stage": "post-synthesis", "disagree_pct": {}, "missing_in_one": []}]
     assert {p.tool for p in report_only} == {"vivado post-route"} and len(report_only) == 2
     cal_dir = tmp_path / "models"
     cal_dir.mkdir()
@@ -354,3 +354,90 @@ def test_committed_vivado_csvs_reproduce_from_their_reports(csv_name: str, logs:
     out = tmp_path / csv_name
     vp.collect(ROOT / "eval" / "data" / logs, out, "2025.2")
     assert filecmp.cmp(out, ROOT / "eval" / "data" / csv_name, shallow=False)
+
+
+def test_class_path_factor_recovers_two_class_factors() -> None:
+    """Synthetic data with one path factor for the FSM families and another for the
+    pipelined ones is fitted back by ``class_path=True``; Vivado stays at 1 for both."""
+    base = load_calibration()
+    truth = FpgaCostModel()
+    pts = recalibrate.anchor_points(base)
+    for fam, extra in (("iterative", {}), ("unrolled_k", {"k": 3}), ("pipelined", {}), ("pipelined_m", {"m": 3})):
+        factor = 1.6 if fam.startswith("pipelined") else 1.2
+        for w, n in ((10, 9), (14, 12), (18, 16), (22, 20), (26, 24)):
+            a = ArchConfig.from_params(fam, {"data_width": w, "n_iter": n, **extra})
+            e = truth.estimate(a)
+            pts.append(measured.MeasuredPoint("toolx", "1", "p", "generated", a, e.area["luts"], e.area["ffs"],
+                                              e.fmax_mhz / factor))
+    f = recalibrate.fit(pts, base, class_path=True)
+    assert f.tau["toolx"]["path_fsm"] == pytest.approx(1.2, rel=1e-3)
+    assert f.tau["toolx"]["path_pipelined"] == pytest.approx(1.6, rel=1e-3)
+    assert f.tau["vivado"]["path_fsm"] == f.tau["vivado"]["path_pipelined"] == 1.0
+    assert "path" in f.tau["toolx"]  # the single factor is still written, for readers of tool_corrections
+    single = recalibrate.fit(pts, base)
+    assert "path_fsm" not in single.tau["toolx"]
+
+
+def test_refit_twice_to_one_path_is_not_served_a_stale_calibration(tmp_path: Path,
+                                                                   monkeypatch: pytest.MonkeyPatch) -> None:
+    """``load_calibration`` caches by path: a refit that rewrites a YAML must clear it, or the
+    report of a second refit written to the same file is computed with the first one's constants.
+    Uses only arguments ``refit`` has always had, so it fails on the stale cache itself."""
+    import shutil
+
+    cal_dir = tmp_path / "models"
+    cal_dir.mkdir()
+    base = cal_dir / "calibration_artix7.yaml"
+    base.write_text((ROOT / "src/hw_dse/models/calibration_artix7.yaml").read_text())
+    monkeypatch.setattr(recalibrate, "REPO_ROOT", tmp_path)
+    out = cal_dir / "calibration_artix7_refit_same.yaml"
+    for i, fmax in enumerate((120.0, 260.0)):  # two different data sets, one output path
+        viv = _vivado_csv(tmp_path / f"vivado{i}.csv", [_row(VIVADO_POINTS[0], 230, 100, fmax),
+                                                        _row(VIVADO_POINTS[2], 650, 420, 180.0)])
+        rep = recalibrate.refit([L4_CSV, viv], "same", base_path=base, impact=False)
+    fresh_path = tmp_path / "fresh.yaml"  # a path never loaded: no cache can answer for it
+    shutil.copy(out, fresh_path)
+    fresh = FpgaCostModel(str(fresh_path))
+    viv_rows = [r for r in rep["residuals_after"] if r["tool"] == "vivado" and r["rtl_source"] == "generated"]
+    assert viv_rows
+    for r in viv_rows:  # Vivado's tool factor is 1: the report's model Fmax is the YAML's model Fmax
+        assert r["fmax_model"] == round(fresh.estimate(ArchConfig.from_key(r["key"])).fmax_mhz, 1)
+    assert load_calibration(str(out))["fitted"] == rep["constants_refit"]
+
+
+def test_constraint_relabelled_rerun_is_counted_once(tmp_path: Path) -> None:
+    """A design re-synthesised under another clock constraint (tool version
+    ``2025.2 (20 ns constraint)``) is the same design: counted once per tool release and
+    Fmax stage, the first CSV's row kept, the drop disclosed."""
+    hp = ArchConfig.from_key("pipelined_m:data_width=26,n_iter=22,angle_guard=0,frac_guard=0,rounding=round,m=8")
+    a = _vivado_csv(tmp_path / "a.csv", [_row(hp, 1783, 307, 49.88), _row(hp, 1783, 307, 46.46, kind="post-route")])
+    b = _vivado_csv(tmp_path / "b.csv", [{**_row(hp, 1783, 307, 49.88), "tool_version": "2025.2 (20 ns constraint)"},
+                                         {**_row(hp, 1777, 307, 48.31, kind="post-route"),
+                                          "tool_version": "2025.2 (20 ns constraint)"}])
+    fit_rows, report_only, dropped = recalibrate.split_rows([a, b])
+    assert len(fit_rows) == 1 and fit_rows[0].tool_version == "2025.2"
+    assert len(report_only) == 1 and report_only[0].fmax_mhz == 46.46
+    assert {d["stage"] for d in dropped} == {"post-synthesis", "post-route"} and all(d["kept_from"] == "a.csv" for d in dropped)
+    assert recalibrate.tool_release("2025.2 (20 ns constraint)") == "2025.2"
+    # the committed 20 ns twins are counted once in the m4 refit
+    rep = json.loads((ROOT / "eval/data/l5_refit_vivado-2025.2-m4.json").read_text())
+    twins = [d for d in rep["duplicates_dropped"] if d["csv"] == "vivado_measured_20ns.csv"]
+    assert len(twins) == 4 and all(d["kept_from"] == "vivado_measured_2.csv" for d in twins)
+
+
+def test_committed_m4_refit_and_class_factor_decision() -> None:
+    """The milestone-4 refit: the class path factor was decided by the rule in
+    ``scripts/vivado_m4.py``; the default calibration is untouched and no winner changes."""
+    dec = json.loads((ROOT / "eval/data/l5_class_path_factor_m4.json").read_text())
+    assert dec["adopt"] == (dec["a_loo_improves"] and dec["b_m8_infeasible_m6_feasible"])
+    assert dec["a_loo_improves"] == (dec["vivado_fmax_loo_with"] < dec["vivado_fmax_loo_without"])
+    m = dec["msps_with"]
+    assert dec["b_m8_infeasible_m6_feasible"] == (m["m=8"] < 50 <= m["m=6"])
+    cal = load_calibration(str(ROOT / "src/hw_dse/models/calibration_artix7_refit_vivado-2025.2-m4.yaml"))
+    assert cal["refit"]["class_path_factor"] is dec["adopt"]
+    assert cal["id"] != load_calibration()["id"]  # never the default
+    rep = json.loads((ROOT / "eval/data/l5_refit_vivado-2025.2-m4.json").read_text())
+    assert not any(g["winner_changed"] for g in rep["ground_truth_impact"].values())
+    assert rep["n_fit_points"] == 51 and len(rep["report_only"]) == 14  # the 20 ns twins are counted once
+    old = json.loads((ROOT / "eval/data/l5_refit_vivado-2025.2.json").read_text())
+    assert rep["constants_refit"] == old["constants_refit"]  # so the fit is the vivado-2025.2 one

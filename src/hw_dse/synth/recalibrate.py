@@ -37,6 +37,14 @@ For a design x measured by tool T::
 * The report includes a **leave-one-out** check: each generated-RTL point
   refitted without itself and predicted, the honest measure of how the
   refit generalises.
+* Optional **per-family-class path factor** (``class_path=True``): each
+  non-reference tool gets two path factors, one for the FSM families
+  (``iterative``, ``unrolled_k``) and one for the pipelined ones
+  (``pipelined``, ``pipelined_m``), because Vivado's Fmax advantage over
+  nextpnr differs between the two classes. Vivado stays at 1 for both, so the
+  extra parameter is constrained by open-source data only. Off by default;
+  ``scripts/vivado_m4.py refit`` decides whether the milestone-4 refit uses
+  it, by a rule fixed in code (``decide_class_factor``).
 
 Which rows are fitted (:func:`split_rows`, :func:`refit`):
 
@@ -67,6 +75,7 @@ import copy
 import dataclasses
 import json
 import math
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -80,6 +89,19 @@ from hw_dse.rtl.generator import REPO_ROOT
 from hw_dse.synth.measured import MeasuredPoint, load
 
 REFERENCE_TOOL = "vivado"
+PATH_CLASSES = ("fsm", "pipelined")
+"""Family classes of the optional class path factor: ``pipelined`` and
+``pipelined_m`` are ``pipelined`` (:attr:`ArchConfig.is_pipelined`), the
+FSM families ``iterative`` and ``unrolled_k`` are ``fsm``."""
+
+
+def path_class(arch: ArchConfig) -> str:
+    return "pipelined" if arch.is_pipelined else "fsm"
+
+
+def tau_path(t: dict[str, float], arch: ArchConfig) -> float:
+    """A tool's path factor for ``arch``: its class factor if the fit has one, else the single factor."""
+    return t.get(f"path_{path_class(arch)}", t["path"])
 MIN_FAMILY_POINTS = 3 * len(("c_arith", "c_ff", "t_logic_ns"))  # ~3 points per free parameter
 CONST_NAMES = ("c_arith", "c_mux", "c_ff", "t_logic_ns", "t_mux_ns")
 
@@ -112,7 +134,8 @@ def _nnls(a: np.ndarray, b: np.ndarray) -> np.ndarray:
 class Fit:
     constants: dict[str, float]  # global
     per_family: dict[str, dict[str, float]]
-    tau: dict[str, dict[str, float]]  # tool -> {"luts","ffs","path"}
+    tau: dict[str, dict[str, float]]  # tool -> {"luts","ffs","path"} (+ "path_fsm", "path_pipelined" with class_path)
+    class_path: bool = False
 
     def calibration(self, base: dict[str, Any], name: str, points: list[MeasuredPoint], sources: list[str]) -> dict[str, Any]:
         cal = copy.deepcopy(base)
@@ -127,7 +150,9 @@ class Fit:
             "sources": sources,
             "method": "hw_dse.synth.recalibrate: relative least squares, per-family constants where a family has "
                       f">= {MIN_FAMILY_POINTS} points, one multiplicative correction per tool and metric "
-                      f"({REFERENCE_TOOL} = 1)",
+                      f"({REFERENCE_TOOL} = 1)" + ("; the path correction split by family class (FSM / pipelined; "
+                                                   f"{REFERENCE_TOOL} = 1 for both)" if self.class_path else ""),
+            "class_path_factor": self.class_path,
         }
         return cal
 
@@ -157,7 +182,7 @@ def tool_weights(points: list[MeasuredPoint]) -> list[float]:
 
 def _alternate(points: list[MeasuredPoint], feats: list[dict[str, float]], group: Any, coef: dict[str, dict[str, float]],
                free: dict[str, tuple[str, ...]], tau: dict[str, dict[str, float]], iters: int,
-               weights: list[float]) -> dict[str, set[str]]:
+               weights: list[float], class_path: bool = False) -> dict[str, set[str]]:
     """Alternate (a) weighted non-negative LSQ for each group's *free*
     constants given the tool factors (the other constants are held fixed and
     move to the right-hand side) and (b) weighted closed-form tool factors
@@ -190,7 +215,7 @@ def _alternate(points: list[MeasuredPoint], feats: list[dict[str, float]], group
             held = [c for c in ("t_logic_ns", "t_mux_ns") if c not in use]
             rows, rhs = [], []
             for i in idx:
-                tgt = 1000.0 / points[i].fmax_mhz / tau[points[i].tool]["path"]  # type: ignore[operator]
+                tgt = 1000.0 / points[i].fmax_mhz / tau_path(tau[points[i].tool], points[i].arch)  # type: ignore[operator]
                 rows.append([sw[i] * feats[i][key[c]] / tgt for c in use])
                 rhs.append(sw[i] * (1.0 - (feats[i]["fixed"] + sum(coef[g][c] * feats[i][key[c]] for c in held)) / tgt))
             coef[g].update(dict(zip(use, _nnls(np.array(rows), np.array(rhs)))))
@@ -204,10 +229,16 @@ def _alternate(points: list[MeasuredPoint], feats: list[dict[str, float]], group
                 rw = [(w, pr[k] / meas_of(p)) for p, pr, w in zip(points, pred, weights) if p.tool == tl and meas_of(p)]
                 if rw:
                     tau[tl][metric] = sum(w * r for w, r in rw) / sum(w * r * r for w, r in rw)
+            if class_path:  # one path factor per family class (the single "path" above is kept for readers)
+                for c in PATH_CLASSES:
+                    rw = [(w, pr[2] / (1000.0 / p.fmax_mhz)) for p, pr, w in zip(points, pred, weights)
+                          if p.tool == tl and p.fmax_mhz and path_class(p.arch) == c]
+                    if rw:
+                        tau[tl][f"path_{c}"] = sum(w * r for w, r in rw) / sum(w * r * r for w, r in rw)
     return fitted
 
 
-def fit(points: list[MeasuredPoint], base: dict[str, Any], iters: int = 60) -> Fit:
+def fit(points: list[MeasuredPoint], base: dict[str, Any], iters: int = 60, class_path: bool = False) -> Fit:
     """Two passes, every tool weighted equally (:func:`tool_weights`):
     (1) one pooled set of all five constants -> the global constants;
     (2) for each family with at least MIN_FAMILY_POINTS points, its own
@@ -219,9 +250,10 @@ def fit(points: list[MeasuredPoint], base: dict[str, Any], iters: int = 60) -> F
     if REFERENCE_TOOL not in tools:
         raise ValueError("need at least one Vivado point (the calibration anchors) to fix the scale")
     w = tool_weights(points)
-    tau = {t: {"luts": 1.0, "ffs": 1.0, "path": 1.0} for t in tools}
+    tau = {t: {"luts": 1.0, "ffs": 1.0, "path": 1.0, **({f"path_{c}": 1.0 for c in PATH_CLASSES} if class_path else {})}
+           for t in tools}
     pooled = {"_global": dict(base["fitted"])}
-    _alternate(points, feats, lambda p: "_global", pooled, {"_global": CONST_NAMES}, tau, iters, w)
+    _alternate(points, feats, lambda p: "_global", pooled, {"_global": CONST_NAMES}, tau, iters, w, class_path)
     glob = {k: float(v) for k, v in pooled["_global"].items()}
     fams = sorted({p.arch.family for p in points})
     per_fam = [f for f in fams if sum(p.arch.family == f for p in points) >= MIN_FAMILY_POINTS]
@@ -231,9 +263,9 @@ def fit(points: list[MeasuredPoint], base: dict[str, Any], iters: int = 60) -> F
         return p.arch.family if p.arch.family in per_fam else "_global"
 
     free = {"_global": (), **{f: PER_FAMILY_CONSTANTS for f in per_fam}}
-    fitted = _alternate(points, feats, group, coef, free, tau, iters, w)
+    fitted = _alternate(points, feats, group, coef, free, tau, iters, w, class_path)
     per_family = {f: {k: float(coef[f][k]) for k in CONST_NAMES if k in fitted[f]} for f in per_fam}
-    return Fit({k: glob[k] for k in CONST_NAMES}, per_family, tau)
+    return Fit({k: glob[k] for k in CONST_NAMES}, per_family, tau, class_path)
 
 
 def predict(f: Fit, p: MeasuredPoint, src: dict[str, float]) -> tuple[float, float, float | None]:
@@ -241,17 +273,18 @@ def predict(f: Fit, p: MeasuredPoint, src: dict[str, float]) -> tuple[float, flo
     c = {**f.constants, **f.per_family.get(p.arch.family, {})}
     t = f.tau.get(p.tool, {"luts": 1.0, "ffs": 1.0, "path": 1.0})
     luts, ffs, path = _predict_raw(p, _features(p, src), c)
-    return luts * t["luts"], ffs * t["ffs"], 1000.0 / (path * t["path"])
+    return luts * t["luts"], ffs * t["ffs"], 1000.0 / (path * tau_path(t, p.arch))
 
 
-def leave_one_out(points: list[MeasuredPoint], base: dict[str, Any], targets: list[int]) -> list[dict[str, Any]]:
+def leave_one_out(points: list[MeasuredPoint], base: dict[str, Any], targets: list[int],
+                  class_path: bool = False) -> list[dict[str, Any]]:
     """Refit without each target point in turn and predict it: an
     out-of-sample check on how well the refit generalises."""
     src = base["source_constants"]
     out = []
     for i in targets:
         p = points[i]
-        f = fit(points[:i] + points[i + 1:], base, iters=30)
+        f = fit(points[:i] + points[i + 1:], base, iters=30, class_path=class_path)
         luts, ffs, fmax = predict(f, p, src)
         out.append({"family": p.arch.family, "key": p.arch.key(), "tool": p.tool,
                     "luts_err_pct": (luts / p.luts - 1) * 100, "ffs_err_pct": (ffs / p.ffs - 1) * 100,
@@ -273,7 +306,7 @@ def residuals(points: list[MeasuredPoint], model: FpgaCostModel, tau: dict[str, 
         e = model.estimate(p.arch)
         t = (tau or {}).get(p.tool, {"luts": 1.0, "ffs": 1.0, "path": 1.0})
         luts, ffs = e.area["luts"] * t["luts"], e.area["ffs"] * t["ffs"]
-        fmax = 1000.0 / (e.critical_path_ns * t["path"])
+        fmax = 1000.0 / (e.critical_path_ns * tau_path(t, p.arch))
         out.append({
             "tool": p.tool, "rtl_source": p.rtl_source, "key": p.arch.key(),
             "luts_meas": p.luts, "luts_model": round(luts, 1), "luts_err_pct": round((luts / p.luts - 1) * 100, 1),
@@ -327,6 +360,16 @@ DUPLICATE_TOLERANCE = 0.005
 """Relative difference above which a dropped duplicate row is flagged as disagreeing with the kept one."""
 
 
+def tool_release(version: str) -> str:
+    """The tool release without a run label: ``2025.2 (20 ns constraint)`` -> ``2025.2``.
+
+    The same design synthesised by the same release under a different clock
+    constraint is the same design measured again, not a new point: it is
+    counted once (the row from the CSV given first wins, and the report says
+    whether the two agree), so a re-run cannot double a design's weight."""
+    return re.sub(r"\s*\([^)]*\)\s*$", "", version.strip())
+
+
 def is_post_route(p: MeasuredPoint) -> bool:
     return p.extra.get("fmax_kind", "").strip().lower().startswith("post-route")
 
@@ -337,8 +380,9 @@ def split_rows(measured_csvs: list[Path]) -> tuple[list[MeasuredPoint], list[Mea
     * The calibration anchors and the eval's cost model are on Vivado's
       *post-synthesis* scale, so Vivado rows measured post-route are
       reported (as tool ``vivado post-route``, no tool factor) but not fitted.
-    * The same design measured twice by the same tool, tool version and flow
-      (e.g. the review's spot-check and the full Vivado run) is counted once:
+    * The same design measured twice by the same tool, tool release and flow
+      (e.g. the review's spot-check and the full Vivado run, or a re-run at
+      another clock constraint, see :func:`tool_release`) is counted once:
       the row from the CSV given first wins. If the two rows disagree by more
       than :data:`DUPLICATE_TOLERANCE` on any metric, or one row has a metric
       the other lacks, the report says so.
@@ -347,12 +391,13 @@ def split_rows(measured_csvs: list[Path]) -> tuple[list[MeasuredPoint], list[Mea
     fit_rows, report_only, dropped = [], [], []
     for c in measured_csvs:
         for p in load(c):
-            k = (p.tool, p.tool_version, p.rtl_source, p.arch.key(), is_post_route(p))
+            k = (p.tool, tool_release(p.tool_version), p.rtl_source, p.arch.key(), is_post_route(p))
             if k in seen:
                 kept_csv, kept = seen[k]
                 pairs = (("luts", kept.luts, p.luts), ("ffs", kept.ffs, p.ffs), ("fmax_mhz", kept.fmax_mhz, p.fmax_mhz))
                 diffs = {m: round((b / a - 1) * 100, 2) for m, a, b in pairs if a and b and abs(b / a - 1) > DUPLICATE_TOLERANCE}
                 dropped.append({"tool": f"{p.tool} {p.tool_version}", "key": p.arch.key(), "csv": c.name,
+                                "stage": "post-route" if is_post_route(p) else "post-synthesis",
                                 "kept_from": kept_csv, "disagree_pct": diffs,
                                 "missing_in_one": [m for m, a, b in pairs if bool(a) != bool(b)]})
                 continue
@@ -365,7 +410,10 @@ def split_rows(measured_csvs: list[Path]) -> tuple[list[MeasuredPoint], list[Mea
 
 
 def refit(measured_csvs: list[Path], name: str, base_path: Path = CALIBRATION_FILE, impact: bool = True,
-          include_reference_rtl: bool = False) -> dict[str, Any]:
+          include_reference_rtl: bool = False, class_path: bool = False, cal_dir: Path | None = None) -> dict[str, Any]:
+    """Fit, write the calibration YAML (next to ``base_path``, or into
+    ``cal_dir`` for a candidate that is evaluated but not committed) and
+    return the report."""
     base = load_calibration(str(base_path))
     pts_all, report_only, dropped = split_rows(measured_csvs)
     # Open-source rows synthesised from the *reference* RTL measure Yosys's
@@ -377,21 +425,23 @@ def refit(measured_csvs: list[Path], name: str, base_path: Path = CALIBRATION_FI
     viv_gen = {p.arch.key() for p in pts_all if p.tool == REFERENCE_TOOL and p.rtl_source == "generated"}
     anchors = [a for a in anchor_points(base) if a.arch.key() not in viv_gen]
     fit_pts = anchors + [p for p in pts_all if p.rtl_source == "generated" or include_reference_rtl]
-    f = fit(fit_pts, base)
+    f = fit(fit_pts, base, class_path=class_path)
     loo_idx = [i for i, p in enumerate(fit_pts) if p.rtl_source == "generated"]
-    loo = leave_one_out(fit_pts, base, loo_idx) if loo_idx else []
+    loo = leave_one_out(fit_pts, base, loo_idx, class_path) if loo_idx else []
     cal = f.calibration(base, name, fit_pts, [str(c.relative_to(REPO_ROOT)) if c.is_absolute() and REPO_ROOT in c.parents
                                               else str(c) for c in measured_csvs])
-    out_path = base_path.with_name(f"calibration_artix7_refit_{name}.yaml")
+    out_path = (cal_dir or base_path.parent) / f"calibration_artix7_refit_{name}.yaml"
+    shown = out_path.relative_to(REPO_ROOT) if REPO_ROOT in out_path.parents else out_path
     header = (f"# Refitted calibration '{name}' written by hw_dse.synth.recalibrate -- NOT the default.\n"
               f"# The default cost model still uses {base_path.name}. Load this one with\n"
-              f"#   FpgaCostModel('{out_path.relative_to(REPO_ROOT)}')\n")
+              f"#   FpgaCostModel('{shown}')\n")
     out_path.write_text(header + yaml.safe_dump(cal, sort_keys=False, width=110))
+    load_calibration.cache_clear()  # it caches by path: a rewritten file must not be served stale
     eval_pts = anchor_points(base) + pts_all + report_only
     before = residuals(eval_pts, FpgaCostModel(str(base_path)))
     after = residuals(eval_pts, FpgaCostModel(str(out_path)), f.tau)
     report: dict[str, Any] = {
-        "name": name, "calibration_file": str(out_path.relative_to(REPO_ROOT)), "base": base["id"],
+        "name": name, "calibration_file": str(shown), "base": base["id"], "class_path_factor": class_path,
         "constants_m1": base["fitted"], "constants_refit": cal["fitted"], "per_family": cal["fitted_per_family"],
         "tool_corrections": cal["tool_corrections"], "n_fit_points": len(fit_pts),
         "summary_before": summary_by_tool(before), "summary_after": summary_by_tool(after),
@@ -430,8 +480,13 @@ def markdown(rep: dict[str, Any]) -> str:
         L.append(f"| {k} | {rep['constants_m1'][k]:.4f} | {rep['constants_refit'][k]:.4f} |")
     L.append("\nPer-family overrides: " + (", ".join(f"`{f}`: " + ", ".join(f"{k}={v:.4f}" for k, v in d.items())
                                                 for f, d in rep["per_family"].items()) or "none"))
+    def path_txt(d: dict[str, float]) -> str:
+        if "path_fsm" in d:
+            return f"path ×{d['path_fsm']:.3f} (FSM families) / ×{d['path_pipelined']:.3f} (pipelined families)"
+        return f"path ×{d['path']:.3f}"
+
     L.append("\nTool corrections (measured ≈ factor × model, Vivado = 1): " + "; ".join(
-        f"`{t}`: LUT ×{d['luts']:.3f}, FF ×{d['ffs']:.3f}, path ×{d['path']:.3f}" for t, d in rep["tool_corrections"].items()))
+        f"`{t}`: LUT ×{d['luts']:.3f}, FF ×{d['ffs']:.3f}, {path_txt(d)}" for t, d in rep["tool_corrections"].items()))
     L.append("\nFit: every tool carries equal total weight; per-family overrides only for c_arith, c_ff and "
              f"t_logic_ns, for families with >= {MIN_FAMILY_POINTS} points. Vivado anchors used: "
              + (", ".join(f"`{k}`" for k in rep.get("anchors_used", [])) or "none (superseded by generated-RTL Vivado rows)"))
@@ -442,7 +497,8 @@ def markdown(rep: dict[str, Any]) -> str:
         bad = [f"{m} {v:+.2f}%" for m, v in d.get("disagree_pct", {}).items()]
         bad += [f"{m} missing in one row" for m in d.get("missing_in_one", [])]
         agree = "**they disagree**: " + ", ".join(bad) if bad else f"they agree within {DUPLICATE_TOLERANCE:.1%}"
-        L.append(f"\nCounted once: `{d['key']}` ({d['tool']}) is in both `{d['kept_from']}` (kept) and `{d['csv']}` "
+        stage = f", {d['stage']}" if "stage" in d else ""
+        L.append(f"\nCounted once: `{d['key']}` ({d['tool']}{stage}) is in both `{d['kept_from']}` (kept) and `{d['csv']}` "
                  f"(dropped); {agree}.")
     if rep.get("loo_summary"):
         L.append("\n## Out-of-sample check: leave-one-out RMS error (generated-RTL points)\n")
