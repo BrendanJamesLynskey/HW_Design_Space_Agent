@@ -75,6 +75,7 @@ import copy
 import dataclasses
 import json
 import math
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -359,6 +360,16 @@ DUPLICATE_TOLERANCE = 0.005
 """Relative difference above which a dropped duplicate row is flagged as disagreeing with the kept one."""
 
 
+def tool_release(version: str) -> str:
+    """The tool release without a run label: ``2025.2 (20 ns constraint)`` -> ``2025.2``.
+
+    The same design synthesised by the same release under a different clock
+    constraint is the same design measured again, not a new point: it is
+    counted once (the row from the CSV given first wins, and the report says
+    whether the two agree), so a re-run cannot double a design's weight."""
+    return re.sub(r"\s*\([^)]*\)\s*$", "", version.strip())
+
+
 def is_post_route(p: MeasuredPoint) -> bool:
     return p.extra.get("fmax_kind", "").strip().lower().startswith("post-route")
 
@@ -369,8 +380,9 @@ def split_rows(measured_csvs: list[Path]) -> tuple[list[MeasuredPoint], list[Mea
     * The calibration anchors and the eval's cost model are on Vivado's
       *post-synthesis* scale, so Vivado rows measured post-route are
       reported (as tool ``vivado post-route``, no tool factor) but not fitted.
-    * The same design measured twice by the same tool, tool version and flow
-      (e.g. the review's spot-check and the full Vivado run) is counted once:
+    * The same design measured twice by the same tool, tool release and flow
+      (e.g. the review's spot-check and the full Vivado run, or a re-run at
+      another clock constraint, see :func:`tool_release`) is counted once:
       the row from the CSV given first wins. If the two rows disagree by more
       than :data:`DUPLICATE_TOLERANCE` on any metric, or one row has a metric
       the other lacks, the report says so.
@@ -379,12 +391,13 @@ def split_rows(measured_csvs: list[Path]) -> tuple[list[MeasuredPoint], list[Mea
     fit_rows, report_only, dropped = [], [], []
     for c in measured_csvs:
         for p in load(c):
-            k = (p.tool, p.tool_version, p.rtl_source, p.arch.key(), is_post_route(p))
+            k = (p.tool, tool_release(p.tool_version), p.rtl_source, p.arch.key(), is_post_route(p))
             if k in seen:
                 kept_csv, kept = seen[k]
                 pairs = (("luts", kept.luts, p.luts), ("ffs", kept.ffs, p.ffs), ("fmax_mhz", kept.fmax_mhz, p.fmax_mhz))
                 diffs = {m: round((b / a - 1) * 100, 2) for m, a, b in pairs if a and b and abs(b / a - 1) > DUPLICATE_TOLERANCE}
                 dropped.append({"tool": f"{p.tool} {p.tool_version}", "key": p.arch.key(), "csv": c.name,
+                                "stage": "post-route" if is_post_route(p) else "post-synthesis",
                                 "kept_from": kept_csv, "disagree_pct": diffs,
                                 "missing_in_one": [m for m, a, b in pairs if bool(a) != bool(b)]})
                 continue
@@ -484,7 +497,8 @@ def markdown(rep: dict[str, Any]) -> str:
         bad = [f"{m} {v:+.2f}%" for m, v in d.get("disagree_pct", {}).items()]
         bad += [f"{m} missing in one row" for m in d.get("missing_in_one", [])]
         agree = "**they disagree**: " + ", ".join(bad) if bad else f"they agree within {DUPLICATE_TOLERANCE:.1%}"
-        L.append(f"\nCounted once: `{d['key']}` ({d['tool']}) is in both `{d['kept_from']}` (kept) and `{d['csv']}` "
+        stage = f", {d['stage']}" if "stage" in d else ""
+        L.append(f"\nCounted once: `{d['key']}` ({d['tool']}{stage}) is in both `{d['kept_from']}` (kept) and `{d['csv']}` "
                  f"(dropped); {agree}.")
     if rep.get("loo_summary"):
         L.append("\n## Out-of-sample check: leave-one-out RMS error (generated-RTL points)\n")

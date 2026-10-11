@@ -376,7 +376,7 @@ What the data says:
   (WNS −0.050 ns, 0.24% short; relaxing the constraint did not move it) and 48.31 MSPS
   post-route (3.4% short), while **m=6 meets it in both** (65.39 post-synthesis, 53.96
   post-route, +7.9%). The M1 model, both refits and the measurement agree on the verdict
-  (M1 predicts 62.5 / 48.0 MSPS; the `vivado-2025.2-m4` refit 64.0 / 49.1).
+  (M1 predicts 62.5 / 48.0 MSPS; the refit 63.7 / 48.9).
 * **Generated vs reference RTL in Vivado, both families.** Area agrees within 4%
   (`iterative` +3% LUT / +1% FF; `pipelined` −3% / −4%), Fmax does not, and in opposite
   directions: generated `iterative` is **13% slower** (172.8 vs 198.3 MHz), generated
@@ -452,13 +452,19 @@ counts with **no Fmax** when nextpnr-xilinx is unavailable.
   leave-one-out), almost all from Yosys/nextpnr (the three Vivado `pipelined` points are at
   −9 to −10%). **No spec's ground-truth winner changes** and `unrolled_k` reaches no front,
   so the eval was not re-run.
-* **Refit `vivado-2025.2-m4`** (M4, `eval/data/l5_refit_vivado-2025.2-m4.md`; 53 points:
-  the 51 above plus the two `high_precision` designs synthesised at 20 ns, kept apart from
-  their 10 ns rows by tool version). Leave-one-out on the 16 Vivado points: LUT 14.4%, FF
-  3.6%, Fmax 12.2% (`vivado-2025.2` on its 14: 15.4 / 3.7 / 12.5%); M1 on the same 16
-  points, out of sample by construction: 14.5 / 2.9 / 11.0%. It predicts 64.0 / 49.1 MSPS
-  for m=6 / m=8 (measured 65.39 / 49.88 post-synthesis), so it agrees with the 20 ns
-  verdict, and **no spec's ground-truth winner changes**. Not the default.
+* **Refit `vivado-2025.2-m4`** (M4, `eval/data/l5_refit_vivado-2025.2-m4.md`): the
+  `vivado-2025.2` inputs plus the 20 ns CSV. **The 20 ns rows add no new point.** Their
+  post-synthesis rows are identical to the 10 ns ones (m=6 1784 LUT / 392 FF / 65.39 MHz,
+  m=8 1783 / 307 / 49.88), so the refit counts each design once per tool release and Fmax
+  stage, whatever the constraint label (`recalibrate.tool_release`), and keeps the 10 ns
+  row. The report lists the four dropped twins, including the two post-route ones that
+  disagree (m=6 −11.2%, m=8 +4.0% Fmax). Counted once, it is the same 51 points with the
+  same constants as `vivado-2025.2`. Vivado leave-one-out is LUT 15.4% / FF 3.7% / Fmax
+  12.5% on the 14 designs, against M1's 15.4 / 3.1 / 11.7%. It predicts 63.7 / 48.9 MSPS
+  for m=6 / m=8 (measured 65.39 / 49.88 post-synthesis at 20 ns), so it agrees with the
+  20 ns verdict, and **no spec's ground-truth winner changes**. Not the default. An
+  earlier version of this refit fitted the twins as extra points (53 points, "12.2% on 16")
+  and so double-weighted two designs. That figure is not comparable with the 14-design one.
 * **The per-family-class path factor: decided, and rejected.** One nextpnr path factor for
   the FSM families and one for the pipelined ones (Vivado = 1 for both). It had been
   deferred until m=8 was synthesised at a 20 ns constraint, with a prediction of 52.5 MHz
@@ -467,8 +473,8 @@ counts with **no Fmax** when nextpnr-xilinx is unavailable.
   `vivado-2025.2-m4` refit only if (a) Vivado Fmax leave-one-out improves **and** (b) it
   puts m=8 infeasible and m=6 feasible at 50 MSPS post-synthesis, as measured. Result
   (`eval/data/l5_class_path_factor_m4.md`): (a) holds, Vivado Fmax leave-one-out
-  **12.2% → 7.0%** (factors ×1.18 FSM, ×1.65 pipelined; all 53 points 13.6 → 9.8%);
-  (b) fails, it predicts **52.0 MSPS for m=8** (+4.3% against 49.88 measured) and so moves
+  **12.5% → 7.4%** (factors ×1.18 FSM, ×1.67 pipelined; all 51 points 14.1 → 10.0%);
+  (b) fails, it predicts **52.5 MSPS for m=8** (+5.3% against 49.88 measured) and so moves
   the refit's `high_precision` winner to m=8, a design Vivado measures infeasible at its own
   clock. **Rejected**; the committed m4 refit has one path factor per tool. It remains the
   better average Fmax model, which is why the rule asked for both conditions.
@@ -929,7 +935,7 @@ python scripts/vivado_m4.py compare   # -> eval/data/vivado_m4_compare.md/.json:
   0.48–0.85× post-route) and plain `pipelined` high (1.07–1.18× / 1.14–1.27×). A per-family
   activity factor (4 parameters, fitted to the post-synthesis rows) cuts the error to
   10.2% in-sample and **13.9% leave-one-out** (one global scale: 18.8 / 20.4%); implied
-  activity 0.110 (`pipelined`) to 0.163 (`unrolled_k`) against the default 0.125. It is
+  activity 0.110 (`pipelined`) to 0.162 (`unrolled_k`) against the default 0.125. It is
   written as a separate calibration
   (`src/hw_dse/models/power_activity_artix7_vivado-2025.2-m4.yaml`), **not the default**,
   and it is fitted to Vivado's vectorless estimate, not to real switching activity.
@@ -1359,8 +1365,8 @@ fleet $0.0158.
   reason to replace it: against the 14 measured Vivado designs (generated RTL,
   post-synthesis) it is off by 15.4% RMS on LUTs, 3.1% on FFs and 11.7% on Fmax, and the
   `vivado-2025.2` refit predicts unseen Vivado points no better (15.4 / 3.7 / 12.5%
-  leave-one-out; the `vivado-2025.2-m4` refit, with the two 20 ns points, 14.4 / 3.6 /
-  12.2% on 16 points, where M1 is 14.5 / 2.9 / 11.0%). It also gets the one decision the
+  leave-one-out; the `vivado-2025.2-m4` refit is the same fit, because its 20 ns rows
+  duplicate the 10 ns ones and are counted once). It also gets the one decision the
   measurements test right (`high_precision`: m=6 feasible, m=8 not, now measured at the
   spec's own 20 ns clock). Its known biases: generated `pipelined` Fmax
   −15 to −17%, `iterative` Fmax +14 to +16%, `unrolled_k` LUTs −37 to −40% at k=3–4.
@@ -1373,8 +1379,8 @@ fleet $0.0158.
   apart with per-tool factors, which assume one multiplicative factor per tool and metric
   for the whole space; for Fmax that does not hold across FSM and pipelined designs. A
   per-family-class path factor fits it better on average (Vivado Fmax leave-one-out
-  12.2 → 7.0% in the `vivado-2025.2-m4` refit) but was **rejected** by a rule fixed before
-  the 20 ns data was fitted: it predicts `high_precision` m=8 feasible (52.0 MSPS), which
+  12.5 → 7.4%) but was **rejected** by a rule fixed before the 20 ns data was fitted: it
+  predicts `high_precision` m=8 feasible (52.5 MSPS), which
   Vivado measures infeasible at its own clock (49.88). See the L5 section.
 - **Vivado post-synthesis Fmax is the cost model's timing scale**, as for the anchors, and
   routing is not modelled: **every model throughput is an unrouted figure.** Post-route
@@ -1383,12 +1389,12 @@ fleet $0.0158.
   (`eval/data/vivado_m4_compare.md`, every Vivado design measured both ways). The
   `high_precision` winner m=6 at its own 20 ns clock goes from **65.39 MSPS post-synthesis
   to 53.96 post-route** (−17%; at 10 ns it routed to 60.76), so its real margin over
-  50 MSPS is 7.9%, not the 25–28% the models' unrouted 62.5–64.0 MSPS suggest. Vivado
+  50 MSPS is 7.9%, not the 25–27% the models' unrouted 62.5–63.7 MSPS suggest. Vivado
   points: 14 generated designs, 3–4 per family, mostly at N=14, plus the two
   `high_precision` designs at 20 ns.
 - **Feasibility margins can be thinner than any model's error.** `high_precision`'s m=8
   misses 50 MSPS at its own 20 ns clock by 0.24% post-synthesis and 3.4% post-route; the
-  models' errors there are −3.8% (M1) to +4.3% (the rejected class factor), so only the
+  models' errors there are −3.8% (M1) to +5.3% (the rejected class factor), so only the
   measurement decides it. Specs whose winner sits that close to a constraint are only as
   settled as a measurement at the spec's own clock makes them.
 - **The `unrolled_k` area model is structurally off**: Vivado LUTs jump 2.2× from k=2 to

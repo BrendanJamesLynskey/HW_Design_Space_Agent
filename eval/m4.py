@@ -933,6 +933,11 @@ def report_vivado_m4(L: list[str]) -> None:
     for name, r in (("`vivado-2025.2`", old), ("`vivado-2025.2-m4`", rf)):
         v = r["loo_summary"]["all vivado"]
         L.append(f"| {name} | {v['n']} | {v['luts_loo']} | {v['ffs_loo']} | {v['fmax_loo']} |")
+    twins = [d for d in rf.get("duplicates_dropped", []) if "20 ns" in d["tool"]]
+    if twins:
+        L.append(f"\nThe 20 ns rows are counted once ({len(twins)} rows dropped; each design is kept from its 10 ns "
+                 "row, whose post-synthesis figures are identical), so the m4 refit has the same points and constants as "
+                 "`vivado-2025.2`.")
     changed = [s for s, g in rf["ground_truth_impact"].items() if g["winner_changed"]]
     L.append(f"\nGround-truth winners changed under the m4 refit: {', '.join(changed) if changed else 'none'}.\n")
     L.append("## Per-family-class path factor: the pre-set rule\n")

@@ -380,6 +380,12 @@ def class_decision_markdown(dec: dict) -> str:
          f"{dec['msps_with']['m=8']:.2f} | {yn(dec['b_m8_infeasible_m6_feasible'])} |",
          f"| (b) m=6 model MSPS (measured 65.39) | {dec['msps_without']['m=6']:.2f} | {dec['msps_with']['m=6']:.2f} | |",
          "", f"**Outcome: {'adopted' if dec['adopt'] else 'rejected'}.**\n",
+         "History: the first run of this decision printed ADOPTED. That was a bug, not the rule: "
+         "`load_calibration` caches by path, and both candidates were written to one path, so the second "
+         "candidate was scored with the first one's constants (identical m=8/m=6 throughputs with and without "
+         "the factor). The bug was confirmed and fixed (`recalibrate.refit` clears the cache after writing; "
+         "a test covers it), and the rule text was not changed. A later revision counts the 20 ns rows once, "
+         "since they duplicate the 10 ns rows; the outcome did not change.\n",
          "## Leave-one-out RMS error, in-sample → leave-one-out (%)\n",
          "| group | points | LUT | FF | Fmax without | Fmax with |", "|---|---|---|---|---|---|"]
     for g, s in dec["loo_summary_without"].items():

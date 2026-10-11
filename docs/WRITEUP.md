@@ -468,8 +468,8 @@ comparisons are therefore made only between arms run in the same session.
 1. A routed timing scale and real switching activity on the FPGA. The local Vivado runs are
    done: `high_precision` misses 50 MSPS at its own 20 ns clock with m=8 (49.88 MSPS
    post-synthesis, 48.31 post-route), so the per-family-class path factor, which predicted
-   it feasible (52.0), was rejected by its pre-set rule even though it cut Vivado Fmax
-   leave-one-out from 12.2% to 7.0%. The winner m=6 loses 17% to routing (65.39 → 53.96
+   it feasible (52.5), was rejected by its pre-set rule even though it cut Vivado Fmax
+   leave-one-out from 12.5% to 7.4%. The winner m=6 loses 17% to routing (65.39 → 53.96
    MSPS), which no model here sees, and the measured power is vectorless. Next: a
    post-route timing calibration of its own, and power from simulated switching activity.
 2. Place and route on sky130 (OpenROAD, from its prebuilt release packages pinned by URL and

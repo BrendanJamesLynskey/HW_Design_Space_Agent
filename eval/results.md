@@ -727,10 +727,10 @@ Generated from committed data like everything above (`eval/data/vivado_m4_compar
 
 | design | flow | measured MSPS | meets | M1 (default) | vivado-2025.2 refit | vivado-2025.2-m4 refit |
 |---|---|---|---|---|---|---|
-| m=6 | post-synthesis | 65.39 | yes | 62.52 | 63.74 | 63.98 |
-| m=6 | post-route | 53.96 | yes | 62.52 | 63.74 | 63.98 |
-| m=8 | post-synthesis | 49.88 | no | 48.00 | 48.93 | 49.11 |
-| m=8 | post-route | 48.31 | no | 48.00 | 48.93 | 49.11 |
+| m=6 | post-synthesis | 65.39 | yes | 62.52 | 63.74 | 63.74 |
+| m=6 | post-route | 53.96 | yes | 62.52 | 63.74 | 63.74 |
+| m=8 | post-synthesis | 49.88 | no | 48.00 | 48.93 | 48.93 |
+| m=8 | post-route | 48.31 | no | 48.00 | 48.93 | 48.93 |
 
 Model columns are unrouted (post-synthesis scale).
 
@@ -739,13 +739,15 @@ Model columns are unrouted (post-synthesis scale).
 | refit | Vivado points | LUT | FF | Fmax |
 |---|---|---|---|---|
 | `vivado-2025.2` | 14 | 15.4 | 3.7 | 12.5 |
-| `vivado-2025.2-m4` | 16 | 14.4 | 3.6 | 12.2 |
+| `vivado-2025.2-m4` | 14 | 15.4 | 3.7 | 12.5 |
+
+The 20 ns rows are counted once (4 rows dropped; each design is kept from its 10 ns row, whose post-synthesis figures are identical), so the m4 refit has the same points and constants as `vivado-2025.2`.
 
 Ground-truth winners changed under the m4 refit: none.
 
 ## Per-family-class path factor: the pre-set rule
 
-(a) Vivado Fmax leave-one-out 12.2% → 7.0%: holds. (b) m=8 at 52.02 MSPS, m=6 at 67.83 (needs m=8 < 50 ≤ m=6): fails. **Rejected.**
+(a) Vivado Fmax leave-one-out 12.5% → 7.4%: holds. (b) m=8 at 52.51 MSPS, m=6 at 68.48 (needs m=8 < 50 ≤ m=6): fails. **Rejected.**
 
 ## Post-route / post-synthesis Fmax per family (Vivado)
 

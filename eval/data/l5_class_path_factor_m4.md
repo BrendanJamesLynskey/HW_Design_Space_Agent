@@ -10,23 +10,25 @@ Adopt it into the milestone-4 refit only if (a) Vivado Fmax leave-one-out RMS im
 
 | check | without the class factor | with it | holds? |
 |---|---|---|---|
-| (a) Vivado Fmax leave-one-out RMS | 12.2% | 7.0% | **yes** |
-| (b) m=8 model MSPS (measured 49.88 post-synthesis at 20 ns) | 49.11 | 52.02 | **no** |
-| (b) m=6 model MSPS (measured 65.39) | 63.98 | 67.83 | |
+| (a) Vivado Fmax leave-one-out RMS | 12.5% | 7.4% | **yes** |
+| (b) m=8 model MSPS (measured 49.88 post-synthesis at 20 ns) | 48.93 | 52.51 | **no** |
+| (b) m=6 model MSPS (measured 65.39) | 63.74 | 68.48 | |
 
 **Outcome: rejected.**
+
+History: the first run of this decision printed ADOPTED. That was a bug, not the rule: `load_calibration` caches by path, and both candidates were written to one path, so the second candidate was scored with the first one's constants (identical m=8/m=6 throughputs with and without the factor). The bug was confirmed and fixed (`recalibrate.refit` clears the cache after writing; a test covers it), and the rule text was not changed. A later revision counts the 20 ns rows once, since they duplicate the 10 ns rows; the outcome did not change.
 
 ## Leave-one-out RMS error, in-sample → leave-one-out (%)
 
 | group | points | LUT | FF | Fmax without | Fmax with |
 |---|---|---|---|---|---|
-| all | 53 | 11.2 → 12.5 | 3.4 → 3.7 | 12.5 → 13.6 | 8.8 → 9.8 |
-| all vivado | 16 | 12.3 → 14.4 | 3.0 → 3.6 | 10.2 → 12.2 | 5.5 → 7.0 |
-| all yosys+nextpnr-xilinx | 37 | 10.7 → 11.5 | 3.6 → 3.8 | 13.3 → 14.2 | 9.9 → 10.8 |
-| iterative | 12 | 13.5 → 14.9 | 6.1 → 6.7 | 11.9 → 13.5 | 7.5 → 8.1 |
-| pipelined | 13 | 3.3 → 3.6 | 2.6 → 2.8 | 17.0 → 18.2 | 10.8 → 11.7 |
-| pipelined_m | 16 | 3.2 → 3.4 | 1.6 → 1.7 | 10.3 → 11.0 | 7.7 → 8.4 |
-| unrolled_k | 12 | 18.6 → 20.8 | 1.9 → 2.2 | 9.4 → 10.8 | 9.1 → 10.7 |
+| all | 51 | 11.4 → 12.7 | 3.5 → 3.8 | 12.9 → 14.1 | 9.0 → 10.0 |
+| all vivado | 14 | 13.1 → 15.4 | 3.1 → 3.7 | 10.3 → 12.5 | 5.8 → 7.4 |
+| all yosys+nextpnr-xilinx | 37 | 10.8 → 11.5 | 3.6 → 3.9 | 13.8 → 14.7 | 9.9 → 10.8 |
+| iterative | 12 | 13.6 → 14.9 | 6.1 → 6.7 | 11.7 → 13.3 | 7.4 → 8.1 |
+| pipelined | 13 | 3.3 → 3.6 | 2.6 → 2.9 | 17.8 → 19.0 | 10.6 → 11.5 |
+| pipelined_m | 14 | 3.4 → 3.6 | 1.6 → 1.7 | 11.1 → 11.9 | 8.1 → 9.0 |
+| unrolled_k | 12 | 18.7 → 20.9 | 2.1 → 2.3 | 9.4 → 10.7 | 9.3 → 10.9 |
 
 ## Ground truth under each candidate
 
