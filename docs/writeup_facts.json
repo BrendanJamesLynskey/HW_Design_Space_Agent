@@ -267,6 +267,7 @@
  "asic.loo_rms.power": 5.8,
  "asic.low_area.pipelined_ratio": 4.17,
  "asic.low_area.pipelined_ratio_fpga": 4.99,
+ "asic.meets_per_model_min": 15,
  "asic.multiaxis.deadline_us": 0.5,
  "asic.multiaxis.l1_bound_feasible": 8533,
  "asic.multiaxis.regret_max": 25.1,

@@ -38,7 +38,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 WRITEUP = ROOT / "docs" / "WRITEUP.md"
 FACTS = ROOT / "docs" / "writeup_facts.json"
-NUM = re.compile(r"(?<![\w.^/\-−+])[-+−]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)*(?!\w)")
+NUM = re.compile(r"(?<![\w.^\-−+])[-+−]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)*(?!\w)")  # "48/48": both checked
 NOT_NUMBERS = (re.compile(r"Sonnet \d+\.\d+"), re.compile(r"^\s*\d+\.\s", re.M), re.compile(r"\b[Pp]hase \d\b"))
 
 

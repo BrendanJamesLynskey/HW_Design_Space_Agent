@@ -287,6 +287,7 @@ def facts() -> dict[str, Any]:  # noqa: PLR0915 - one flat registry, by write-up
         f[f"asic.regret_std.{spec}.nsga2"] = num(tmp, rg.strip(), spec, 1, 1)
     meets = [nums(cell(tmp, "| model | runs | selected meets spec", f"`{MODELS[m]}`", 2)) for m in MODELS]
     f["asic.runs_per_model"] = int(meets[0][1])
+    f["asic.meets_per_model_min"] = int(min(x[0] for x in meets))
     assert all(x[0] == x[1] for x in meets)
     f["asic.l2_changed.sonnet"] = int(num(tmp, "| model | runs | selected meets spec", f"`{MODELS['sonnet']}`", 3))
     f["asic.multiaxis.regret_min"] = min(f[f"asic.regret.asic_multiaxis_control.{m}"] for m in ("nsga2", *MODELS))
